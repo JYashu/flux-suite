@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "Flux Screenshot",
+  "version": "1.0",
+  "description": "Bridge extension for capturing viewport screenshots.",
+  
+  "permissions": [
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  
+  "background": {
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
+  },
+  
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ],
+  
+  "action": {
+    "default_title": "Flux Screenshot"
+  },
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "ss-helper@flux-suite.com",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
+    }
+  }
+}
