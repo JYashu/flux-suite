@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FluxKit Sync
 // @namespace    https://github.com/JYashu
-// @version      1.0.0
+// @version      1.1.0
 // @description  Universal Cloud Storage & Sync Engine.
 // @author       JYashu
 // @license      Apache-2.0
@@ -35,6 +35,13 @@
     const AllProviders = ['GitHub Gist', 'GitHub Repo', 'WebDAV', 'Dropbox', 'OneDrive'];
 
     const CAPABILITIES = {
+      'Local': { 
+        maxFileSize: 500 * 1024 * 1024, // 500MB (Browser Blob Limit)
+        totalQuota: 5 * 1024 * 1024 * 1024, // 5GB 
+        allowsNativeFiles: true, 
+        allowsScreenshots: true, 
+        requiresBatchedBase64: false 
+      },
       'GitHub Gist': {
         maxFileSize: 0.95 * 1024 * 1024, totalQuota: 20 * 1024 * 1024,
         allowsNativeFiles: false, allowsScreenshots: true, requiresBatchedBase64: true
@@ -48,11 +55,11 @@
         allowsNativeFiles: true, allowsScreenshots: true, requiresBatchedBase64: false
       },
       'Dropbox': {
-        maxFileSize: 50 * 1024 * 1024, totalQuota: 2 * 1024 * 1024 * 1024,
+        maxFileSize: 150 * 1024 * 1024, totalQuota: 2 * 1024 * 1024 * 1024,
         allowsNativeFiles: true, allowsScreenshots: true, requiresBatchedBase64: false
       },
       'OneDrive': {
-        maxFileSize: 4 * 1024 * 1024, totalQuota: 5 * 1024 * 1024 * 1024,
+        maxFileSize: 250 * 1024 * 1024, totalQuota: 5 * 1024 * 1024 * 1024,
         allowsNativeFiles: true, allowsScreenshots: true, requiresBatchedBase64: false
       }
     };
@@ -98,6 +105,15 @@
           }
           return true;
         },
+        delete: async (profile, filename) => {
+          try {
+            await githubGist.deleteFile(profile.gistId, profile.token, filename);
+          } catch (e) {
+            if (e.status === 422 || e.status === 404) return true;
+            throw e;
+          }
+          return true;
+        },
         handshake: async (data, options) => {
           if (!data.token || data.token.length < 10) throw new Error('Please enter a valid API token.');
           const isTokenValid = await githubGist.verifyCredentials(data.token);
@@ -109,52 +125,6 @@
             const isAccessValid = await githubGist.verifyGistAccess(data.token, data.gistId);
             if (!isAccessValid) throw new Error('Could not access Gist ID.');
           }
-        }
-      },
-      'WebDAV': {
-        fetch: async (profile, options) => {
-          const namespace = profile.namespace || 'SyncData';
-          const subFolder = profile.subFolder || '';
-          const folderPath = [namespace, subFolder].filter(Boolean).join('/');
-          const targetUrl = await webdav.ensureDirectory(profile.url, folderPath, profile.username, profile.password);
-          if (options.filename) {
-            const isText = options.filename.match(/\.(json|txt|md|csv|xml|js|css|html)$/i);
-            const responseType = isText ? 'text' : 'blob';
-            const content = await webdav.fetchFile(targetUrl, profile.username, profile.password, options.filename, responseType);
-            return { files: content ? { [options.filename]: { content } } : {} };
-          }
-          return await webdav.fetchAllFiles(targetUrl, profile.username, profile.password);
-        },
-        upload: async (profile, filesToUpload, onProgress) => {
-          const namespace = profile.namespace || '';
-          const subFolder = profile.subFolder || '';
-          const folderPath = [namespace, subFolder].filter(Boolean).join('/');
-          const targetUrl = await webdav.ensureDirectory(profile.url, folderPath, profile.username, profile.password);
-
-          const entries = Object.entries(filesToUpload);
-          const CONCURRENCY_LIMIT = 5;
-
-          for (let i = 0; i < entries.length; i += CONCURRENCY_LIMIT) {
-            const chunk = entries.slice(i, i + CONCURRENCY_LIMIT);
-            await Promise.all(chunk.map(async ([filename, data]) => {
-                try {
-                  await webdav.uploadFile(targetUrl, profile.username, profile.password, filename, data.content);
-                  if (onProgress) onProgress(filename);
-                } catch (err) {
-                  console.error("Batch upload failed for", filename);
-                  throw err;
-                }
-              }
-            ));
-          }
-          return true;
-        },
-        handshake: async (data, options) => {
-          if (!data.url || !data.username || !data.password) throw new Error('URL, Username, and Password are required.');
-          const isValid = await webdav.verifyCredentials(data.url, data.username, data.password);
-          if (!isValid) throw new Error('WebDAV authentication failed. Check URL and credentials.');
-          if (!data.subFolder || data.subFolder.trim() === '') data.subFolder = options.defaultSubFolder || '';
-          data.namespace = options.namespace || '';
         }
       },
       'GitHub Repo': {
@@ -183,7 +153,7 @@
           const { owner, repo } = await githubRepo.ensureRepo(profile.token, namespace);
 
           const entries = Object.entries(filesToUpload);
-          const CONCURRENCY_LIMIT = 3;
+          const CONCURRENCY_LIMIT = 1;
 
           for (let i = 0; i < entries.length; i += CONCURRENCY_LIMIT) {
             const chunk = entries.slice(i, i + CONCURRENCY_LIMIT);
@@ -197,6 +167,22 @@
                 }
               }
             ));
+          }
+          return true;
+        },
+        delete: async (profile, filename) => {
+          const namespace = profile.namespace || 'SyncData';
+          const subFolder = profile.subFolder || '';
+          const safeRepoName = namespace.replace(/\s+/g, '-');
+
+          const user = await githubRepo.request('GET', '/user', profile.token);
+          if (!user) return true; // Auth failed, let it pass so queue drops it
+
+          try {
+            await githubRepo.deleteFile(profile.token, user.login, safeRepoName, subFolder, filename);
+          } catch(e) {
+            if (e.status === 404 || e.status === 409) return true; // Already deleted
+            throw e;
           }
           return true;
         },
@@ -214,6 +200,75 @@
           } catch (err) {
             throw new Error(`Failed to access/create repo: ${err.message}`);
           }
+        }
+      },
+      'WebDAV': {
+        fetch: async (profile, options) => {
+          const namespace = profile.namespace || 'SyncData';
+          const subFolder = profile.subFolder || '';
+          const folderPath = [namespace, subFolder].filter(Boolean).join('/');
+          const targetUrl = await webdav.ensureDirectory(profile.url, folderPath, profile.username, profile.password);
+          if (options.filename) {
+            const isText = options.filename.match(/\.(json|txt|md|csv|xml|js|css|html)$/i);
+            const responseType = isText ? 'text' : 'blob';
+            const content = await webdav.fetchFile(targetUrl, profile.username, profile.password, options.filename, responseType);
+            return { files: content ? { [options.filename]: { content } } : {} };
+          }
+          return await webdav.fetchAllFiles(targetUrl, profile.username, profile.password);
+        },
+        upload: async (profile, filesToUpload, onProgress) => {
+          const namespace = profile.namespace || '';
+          const subFolder = profile.subFolder || '';
+          const folderPath = [namespace, subFolder].filter(Boolean).join('/');
+          const targetUrl = await webdav.ensureDirectory(profile.url, folderPath, profile.username, profile.password);
+
+          const subDirs = new Set();
+          for (const filename of Object.keys(filesToUpload)) {
+            if (filename.includes('/')) {
+              subDirs.add(filename.split('/').slice(0, -1).join('/'));
+            }
+          }
+          for (const dir of subDirs) {
+            await webdav.ensureDirectory(targetUrl, dir, profile.username, profile.password);
+          }
+
+          const entries = Object.entries(filesToUpload);
+          const CONCURRENCY_LIMIT = 5;
+
+          for (let i = 0; i < entries.length; i += CONCURRENCY_LIMIT) {
+            const chunk = entries.slice(i, i + CONCURRENCY_LIMIT);
+            await Promise.all(chunk.map(async ([filename, data]) => {
+                try {
+                  await webdav.uploadFile(targetUrl, profile.username, profile.password, filename, data.content);
+                  if (onProgress) onProgress(filename);
+                } catch (err) {
+                  console.error("Batch upload failed for", filename);
+                  throw err;
+                }
+              }
+            ));
+          }
+          return true;
+        },
+        delete: async (profile, filename) => {
+          const namespace = profile.namespace || '';
+          const subFolder = profile.subFolder || '';
+          const folderPath = [namespace, subFolder].filter(Boolean).join('/');
+          
+          let targetUrl = profile.url.replace(/\/$/, '');
+          if (folderPath) {
+            targetUrl += '/' + folderPath.split('/').map(encodeURIComponent).join('/');
+          }
+          
+          await webdav.deleteFile(targetUrl, profile.username, profile.password, filename);
+          return true;
+        },
+        handshake: async (data, options) => {
+          if (!data.url || !data.username || !data.password) throw new Error('URL, Username, and Password are required.');
+          const isValid = await webdav.verifyCredentials(data.url, data.username, data.password);
+          if (!isValid) throw new Error('WebDAV authentication failed. Check URL and credentials.');
+          if (!data.subFolder || data.subFolder.trim() === '') data.subFolder = options.defaultSubFolder || '';
+          data.namespace = options.namespace || '';
         }
       },
       'Dropbox': {
@@ -264,6 +319,15 @@
               if (onProgress) onProgress(filename);
             }));
           }
+          return true;
+        },
+        delete: async (profile, filename) => {
+          const validToken = await Providers['Dropbox'].ensureValidToken(profile);
+          const namespace = profile.namespace || 'UniversalNotes';
+          const subFolder = profile.subFolder || '';
+          const basePath = `/${namespace}${subFolder ? '/' + subFolder : ''}`.replace(/\/+/g, '/').replace(/\/$/, '');
+          const filePath = `${basePath}/${filename}`.replace(/\/+/g, '/');
+          await dropbox.deleteFile(validToken, filePath);
           return true;
         },
         handshake: async (data, options) => {
@@ -339,6 +403,15 @@
           }
           return true;
         },
+        delete: async (profile, filename) => {
+          const validToken = await Providers['OneDrive'].ensureValidToken(profile);
+          const namespace = profile.namespace || 'UniversalNotes';
+          const subFolder = profile.subFolder || '';
+          const basePath = `/${namespace}${subFolder ? '/' + subFolder : ''}`.replace(/\/+/g, '/').replace(/\/$/, '');
+          const filePath = `${basePath}/${filename}`.replace(/\/+/g, '/');
+          await onedrive.deleteFile(validToken, filePath);
+          return true;
+        },
         handshake: async (data, options) => {
           data.appKey = (data.appKey || '').trim();
           data.appSecret = (data.appSecret || '').trim();
@@ -371,8 +444,8 @@
     };
 
     function getCapabilities(profile) {
-      const provider = profile?.provider || 'GitHub Gist';
-      const defaults = CAPABILITIES[provider] || CAPABILITIES['GitHub Gist'];
+      const provider = profile?.provider || 'Local';
+      const defaults = CAPABILITIES[provider] || CAPABILITIES['Local'];
       return {
         ...defaults,
         maxFileSize: profile?.maxFileSize || defaults.maxFileSize,
@@ -397,14 +470,18 @@
 
     async function fetch(profile, options = {}) {
       if (!profile) throw new Error("No profile provided");
-      const provider = profile.provider || 'GitHub Gist';
+      const provider = profile.provider || 'Local';
       if (!Providers[provider]) throw new Error(`Unknown provider: ${provider}`);
-      return await Providers[provider].fetch(profile, options);
+      try {
+        return await Providers[provider].fetch(profile, options);
+      } catch (err) {
+        throw handleApiError(err, provider);
+      }
     }
 
     async function upload(profile, payload, defaultFilename = "data.json", onProgress) {
       if (!profile) throw new Error("No profile provided");
-      const provider = profile.provider || 'GitHub Gist';
+      const provider = profile.provider || 'Local';
       const handler = Providers[provider];
       if (!handler) throw new Error(`Unknown provider: ${provider}`);
       const limits = getCapabilities(profile);
@@ -433,7 +510,27 @@
         throw new Error(`QUOTA_EXCEEDED: Payload is ${mb}MB. Maximum for ${provider} is ${limitMb}MB.`);
       }
 
-      return await handler.upload(profile, filesToUpload, onProgress);
+      try {
+        return await handler.upload(profile, filesToUpload, onProgress);
+      } catch (err) {
+        throw handleApiError(err, provider);
+      }
+    }
+
+    async function deleteAsset(profile, filename) {
+      if (!profile) throw new Error("No profile provided");
+      const provider = profile.provider || 'Local';
+      const handler = Providers[provider];
+      
+      if (!handler || !handler.delete) {
+        throw new Error(`Unknown provider or delete not supported: ${provider}`);
+      }
+
+      try {
+        return await handler.delete(profile, filename);
+      } catch (err) {
+        throw handleApiError(err, provider);
+      }
     }
 
     class Editor {
@@ -1008,7 +1105,7 @@
           hintWrapper.appendChild(FluxKit.utils.createHTMLElement('span', {
             innerHTML: `<span style="display: flex; margin-top: -1px;">${FluxKit.ui.icons.info}</span><span>Setup Guide</span>`,
             style: 'cursor: help; color: var(--wiz-text); opacity: 0.7; text-decoration: none; display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; line-height: 1; transition: all 0.2s;',
-            dataset: { tooltipInteractive: 'true', fxkswTooltip: `${popoverDetails}` },
+            fxkswPopover: `${popoverDetails}`,
             eventListener: {
                mouseover: function() { this.style.opacity = '1'; this.style.color = 'var(--wiz-accent-bg)'; },
                mouseout: function() { this.style.opacity = '0.7'; this.style.color = 'var(--wiz-text)'; }
@@ -1038,14 +1135,14 @@
           const inputToken = FluxKit.utils.createHTMLElement('input', {
             class: 'flx-wiz-input', placeholder: 'Enter API Token (Needs "gist" scope)',
             value: this.data.token || '', type: 'password',
-            dataset: { fxkswTooltip: 'Classic PAT requires the "gist" scope. Fine-grained tokens currently do not support Gists.' },
+            fxkswTooltip: 'Classic PAT requires the "gist" scope. Fine-grained tokens currently do not support Gists.',
             eventListener: { input: (e) => { this.data.token = e.target.value }}
           });
 
           const inputGistID = FluxKit.utils.createHTMLElement('input', {
             class: 'flx-wiz-input', placeholder: 'Existing Gist ID (Optional)',
             value: this.data.gistId || '',
-            dataset: { fxkswTooltip:'Leave blank to auto-create a new Gist, or paste an existing ID to connect.' },
+            fxkswTooltip:'Leave blank to auto-create a new Gist, or paste an existing ID to connect.',
             eventListener: { input: (e) => { this.data.gistId = e.target.value }}
           });
 
@@ -1067,7 +1164,7 @@
           const inputToken = FluxKit.utils.createHTMLElement('input', {
             class: 'flx-wiz-input', placeholder: 'Enter API Token (Needs "repo" scope)',
             value: this.data.token || '', type: 'password',
-            dataset: { fxkswTooltip:'Classic PAT: check "repo". Fine-grained: needs "Contents" and "Administration" (Read/Write) on All Repos.' },
+            fxkswTooltip:'Classic PAT: check "repo". Fine-grained: needs "Contents" and "Administration" (Read/Write) on All Repos.',
             eventListener: { input: (e) => { this.data.token = e.target.value }}
           });
           wrapper.appendChild(inputToken);
@@ -1082,12 +1179,12 @@
                 FluxKit.utils.createHTMLElement('span', {
                   textContent: `${this.options.namespace} /`,
                   style: 'font-size: 13px; opacity: 0.7; white-space: nowrap;',
-                  dataset: { fxkswTooltip:'Base Repository Name (Locked by Script)' }
+                  fxkswTooltip:'Base Repository Name (Locked by Script)'
                 }),
                 FluxKit.utils.createHTMLElement('input', {
                   class: 'flx-wiz-input', style: 'margin: 0; flex-grow: 1;',
                   placeholder: `Folder Path ${placeholderSuffix}`, value: this.data.subFolder || '',
-                  dataset: { fxkswTooltip:'The subfolder path inside the repository where data will be saved.' },
+                  fxkswTooltip:'The subfolder path inside the repository where data will be saved.',
                   eventListener: { input: (e) => { this.data.subFolder = e.target.value }}
                 })
               ]
@@ -1096,13 +1193,13 @@
             wrapper.appendChild(FluxKit.utils.createHTMLElement('input', {
               class: 'flx-wiz-input', placeholder: 'Repository Name (e.g., SyncData)',
               value: this.data.namespace || '',
-              dataset: { fxkswTooltip:'The name of the repository. SyncWizard will create it as Private if it does not exist.' },
+              fxkswTooltip:'The name of the repository. SyncWizard will create it as Private if it does not exist.',
               eventListener: { input: (e) => { this.data.namespace = e.target.value }}
             }));
             wrapper.appendChild(FluxKit.utils.createHTMLElement('input', {
               class: 'flx-wiz-input', placeholder: `Folder Path ${placeholderSuffix}`,
               value: this.data.subFolder || '',
-              dataset: { fxkswTooltip:'The specific folder inside the repository to use.' },
+              fxkswTooltip:'The specific folder inside the repository to use.',
               eventListener: { input: (e) => { this.data.subFolder = e.target.value }}
             }));
           }
@@ -1121,7 +1218,7 @@
           const urlInput = FluxKit.utils.createHTMLElement('input', {
             class: 'flx-wiz-input', placeholder: 'WebDAV URL (e.g., https://nextcloud.com/remote.php/webdav/)',
             value: this.data.url || '',
-            dataset: { fxkswTooltip:'The base WebDAV URL for your server (must start with http:// or https://).' },
+            fxkswTooltip:'The base WebDAV URL for your server (must start with http:// or https://).',
             eventListener: { input: (e) => { this.data.url = e.target.value }}
           });
 
@@ -1132,13 +1229,13 @@
 
           const userInput = FluxKit.utils.createHTMLElement('input', {
             class: 'flx-wiz-input', placeholder: 'Username', value: this.data.username || '',
-            dataset: { fxkswTooltip:'Your WebDAV username.' },
+            fxkswTooltip:'Your WebDAV username.',
             eventListener: { input: (e) => { this.data.username = e.target.value }}
           });
 
           const passInput = FluxKit.utils.createHTMLElement('input', {
             class: 'flx-wiz-input', placeholder: 'App Password', type: 'password', value: this.data.password || '',
-            dataset: { fxkswTooltip:'Highly recommended to generate an App Password in your server settings rather than using your main account password.' },
+            fxkswTooltip:'Highly recommended to generate an App Password in your server settings rather than using your main account password.',
             eventListener: { input: (e) => { this.data.password = e.target.value }}
           });
 
@@ -1154,10 +1251,10 @@
             wrapper.appendChild(FluxKit.utils.createHTMLElement('div', {
               style: 'display: flex; align-items: center; gap: 6px; margin: 8px 0;',
               children: [
-                FluxKit.utils.createHTMLElement('span', { textContent: `${this.options.namespace} /`, style: 'font-size: 13px; opacity: 0.7; white-space: nowrap;', dataset: { fxkswTooltip:'Base Directory (Locked by Script)' } }),
+                FluxKit.utils.createHTMLElement('span', { textContent: `${this.options.namespace} /`, style: 'font-size: 13px; opacity: 0.7; white-space: nowrap;', fxkswTooltip:'Base Directory (Locked by Script)' }),
                 FluxKit.utils.createHTMLElement('input', {
                   class: 'flx-wiz-input', style: 'margin: 0; flex-grow: 1;', placeholder: `Folder Path ${placeholderSuffix}`,
-                  value: this.data.subFolder || '', dataset: { fxkswTooltip:'The relative subfolder where your data will be nested.' },
+                  value: this.data.subFolder || '', fxkswTooltip:'The relative subfolder where your data will be nested.',
                   eventListener: { input: (e) => { this.data.subFolder = e.target.value }}
                 })
               ]
@@ -1165,7 +1262,7 @@
           } else {
             wrapper.appendChild(FluxKit.utils.createHTMLElement('input', {
               class: 'flx-wiz-input', placeholder: `Folder Path ${placeholderSuffix}`,
-              value: this.data.subFolder || '', dataset: { fxkswTooltip:'The folder path on your WebDAV server where files will be uploaded.' },
+              value: this.data.subFolder || '', fxkswTooltip:'The folder path on your WebDAV server where files will be uploaded.',
               eventListener: { input: (e) => { this.data.subFolder = e.target.value }}
             }));
           }
@@ -1195,7 +1292,7 @@
 
             const getCodeBtn = FluxKit.utils.createHTMLElement('button', {
               class: 'flx-wiz-btn', style: 'width: 100%; text-align: center; margin-top: 4px;', textContent: 'Get Auth Code',
-              dataset: { fxkswTooltip:'Clicking this opens Dropbox so you can authorize the app and get the final code.' },
+              fxkswTooltip:'Clicking this opens Dropbox so you can authorize the app and get the final code.',
               eventListener: (e) => {
                 e.preventDefault();
                 if (!this.data.appKey) return alert('Enter your App Key first.');
@@ -1214,7 +1311,7 @@
 
             const inputAuthCode = FluxKit.utils.createHTMLElement('input', {
               class: 'flx-wiz-input', placeholder: 'Authorization Code', value: this.data.authCode || '',
-              dataset: { fxkswTooltip:'Paste the authorization code generated from the Dropbox popup here.' },
+              fxkswTooltip:'Paste the authorization code generated from the Dropbox popup here.',
               eventListener: { input: (e) => { this.data.authCode = e.target.value }}
             });
             wrapper.appendChild(inputAuthCode);
@@ -1232,11 +1329,11 @@
               children: [
                 FluxKit.utils.createHTMLElement('span', {
                   textContent: `/${this.options.namespace}/`, style: 'font-size: 13px; opacity: 0.7; white-space: nowrap;',
-                  dataset: { fxkswTooltip:'Base App Folder (Locked by Script)' }
+                  fxkswTooltip:'Base App Folder (Locked by Script)'
                 }),
                 FluxKit.utils.createHTMLElement('input', {
                   class: 'flx-wiz-input', style: 'margin: 0; flex-grow: 1;', placeholder: `Subfolder ${placeholderSuffix}`,
-                  value: this.data.subFolder || '', dataset: { fxkswTooltip:'The subfolder inside your Dropbox App folder.' },
+                  value: this.data.subFolder || '', fxkswTooltip:'The subfolder inside your Dropbox App folder.',
                   eventListener: { input: (e) => { this.data.subFolder = e.target.value }}
                 })
               ]
@@ -1244,12 +1341,12 @@
           } else {
             wrapper.appendChild(FluxKit.utils.createHTMLElement('input', {
               class: 'flx-wiz-input', placeholder: 'App Folder Name (e.g., SyncData)',
-              value: this.data.namespace || '', dataset: { fxkswTooltip:'The name of the folder created in Apps/ on your Dropbox.' },
+              value: this.data.namespace || '', fxkswTooltip:'The name of the folder created in Apps/ on your Dropbox.',
               eventListener: { input: (e) => { this.data.namespace = e.target.value }}
             }));
             wrapper.appendChild(FluxKit.utils.createHTMLElement('input', {
               class: 'flx-wiz-input', placeholder: `Subfolder ${placeholderSuffix}`,
-              value: this.data.subFolder || '', dataset: { fxkswTooltip:'An optional subfolder to keep files organized.' },
+              value: this.data.subFolder || '', fxkswTooltip:'An optional subfolder to keep files organized.',
               eventListener: { input: (e) => { this.data.subFolder = e.target.value }}
             }));
           }
@@ -1276,13 +1373,13 @@
 
             const inputSecret = FluxKit.utils.createHTMLElement('input', {
               class: 'flx-wiz-input', placeholder: 'Client Secret (Required for Web-type apps)', type: 'password',
-              value: this.data.appSecret || '', dataset: { fxkswTooltip:'If Azure demands a secret, generate one in Certificates & Secrets.' },
+              value: this.data.appSecret || '', fxkswTooltip:'If Azure demands a secret, generate one in Certificates & Secrets.',
               eventListener: { input: (e) => { this.data.appSecret = e.target.value }}
             });
 
             const getCodeBtn = FluxKit.utils.createHTMLElement('button', {
               class: 'flx-wiz-btn', style: 'width: 100%; text-align: center; margin-top: 4px;', textContent: 'Get Auth Code',
-              dataset: { fxkswTooltip:'Opens Microsoft login. You will be redirected to an error page (localhost). Copy the URL of that error page!' },
+              fxkswTooltip:'Opens Microsoft login. You will be redirected to an error page (localhost). Copy the URL of that error page!',
               eventListener: (e) => {
                 e.preventDefault();
                 if (!this.data.appKey) return alert('Enter your Client ID first.');
@@ -1322,7 +1419,7 @@
             wrapper.appendChild(FluxKit.utils.createHTMLElement('div', {
               style: 'display: flex; align-items: center; gap: 6px; margin: 8px 0;',
               children: [
-                FluxKit.utils.createHTMLElement('span', { textContent: `/${this.options.namespace}/`, style: 'font-size: 13px; opacity: 0.7; white-space: nowrap;', dataset: { fxkswTooltip:'Root Folder (Locked)' } }),
+                FluxKit.utils.createHTMLElement('span', { textContent: `/${this.options.namespace}/`, style: 'font-size: 13px; opacity: 0.7; white-space: nowrap;', fxkswTooltip:'Root Folder (Locked)' }),
                 FluxKit.utils.createHTMLElement('input', {
                   class: 'flx-wiz-input', style: 'margin: 0; flex-grow: 1;', placeholder: `Subfolder ${placeholderSuffix}`, value: this.data.subFolder || '',
                   eventListener: { input: (e) => { this.data.subFolder = e.target.value }}
@@ -1346,7 +1443,7 @@
 
     return {
       AllProviders, Providers, CAPABILITIES, getCapabilities,
-      isConfigured, handleApiError, fetch, upload, Wizard, Editor,
+      isConfigured, handleApiError, fetch, upload, deleteAsset, Wizard, Editor,
       setTokenRefreshCallback: (cb) => { onTokenRefreshCallback = cb; }
     };
   })();
@@ -1428,6 +1525,16 @@
       },
       _returns: 'Promise<Boolean> true on successful upload, or throws an Error.',
       _example: "await FluxKit.sync.upload(profile, { mySetting: true }, 'settings.json', (file) => console.log(`Uploaded ${file}`));"
+    },
+
+    delete: {
+      _summary: 'Deletes a specific file directly from the active cloud provider.',
+      _command: 'await FluxKit.sync.delete(profile, fileIdOrName)',
+      _arguments: {
+        profile: { Type: 'Object', Required: 'Yes', Description: 'The authenticated sync profile.' },
+        fileIdOrName: { Type: 'String', Required: 'Yes', Description: 'The exact filename, path, or API ID to delete from the cloud.' }
+      },
+      _returns: 'Promise<Boolean>'
     },
 
     Wizard: {

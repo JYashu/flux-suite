@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FluxKit Scratchpad
 // @namespace    https://github.com/JYashu
-// @version      1.0.0
+// @version      1.1.0
 // @description  A full-featured, responsive interactive drawing board with a built-in UI toolkit.
 // @author       JYashu
 // @license      Apache-2.0
@@ -27,14 +27,14 @@
 
   if (typeof FluxKit === 'undefined' || !FluxKit.utils || !FluxKit.theme || !FluxKit.ui) {
     console.error('FluxKit Scratchpad Error: Core FluxKit is missing. Please @require flux-kit/core.js before flux-kit/scratchpad.js');
-    return; 
+    return;
   }
 
   FluxKit.ui.ScratchpadCore ??= class {
     constructor(canvasElement, options = {}) {
       this._abortController = new AbortController();
       this.globalCtrlOpts = { signal: this._abortController.signal, capture: true };
-
+      this.isActive = true;
       if (!canvasElement || canvasElement.tagName !== 'CANVAS') throw new Error('Scratchpad requires a valid HTMLCanvasElement');
       this._activeKeys = new Set();
       window.addEventListener('blur', () => this._activeKeys.clear(), this.globalCtrlOpts);
@@ -54,6 +54,12 @@
         chunkThreshold: Math.max(10, safeNum(options.chunkThreshold, 30)),
         onChange: typeof options.onChange === 'function' ? options.onChange : null,
         exportConfig: { mode: 'auto', maxWidth: 4096, maxHeight: 4096, padding: 10, ...(options.exportConfig || {}) },
+        imageCompression: options.imageCompression === false ? false : {
+          maxWidth: 1600,
+          quality: 0.85,
+          ...(options.imageCompression || {})
+        },
+        disableImagePaste: options.disableImagePaste || false,
         ...options,
       };
 
@@ -79,9 +85,8 @@
       this.activeHandle = null; this.selectionOriginalBounds = null; this.selectionOriginalChunk = null;
       this.isSpacePressed = false;
 
-      this._keydownListener = e => {
-        const tag = e.target.tagName?.toUpperCase();
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
+      const keydownListener = e => {
+        if (!this.isActive || FluxKit.utils.shouldIgnoreKeystroke(e)) return;
 
         const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
         const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
@@ -167,7 +172,8 @@
         }
       };
 
-      this._keyupListener = e => {
+      const keyupListener = e => {
+        if (!this.isActive || FluxKit.utils.shouldIgnoreKeystroke(e)) return;
         const key = e.key.toLowerCase();
         this._activeKeys.delete(key);
         if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
@@ -179,8 +185,8 @@
         }
       };
 
-      window.addEventListener('keyup', this._keyupListener, this.globalCtrlOpts);
-      window.addEventListener('keydown', this._keydownListener, this.globalCtrlOpts);
+      document.addEventListener('keyup', keyupListener, this.globalCtrlOpts);
+      document.addEventListener('keydown', keydownListener, this.globalCtrlOpts);
 
       this._initCanvas();
     }
@@ -213,7 +219,7 @@
         this._redraw();
       }, { passive: false });
 
-      this.resize(); this._saveState();
+      this.resize(); this._saveState(true);
     }
 
     _resolveColor(colorStr, targetAlpha = 1) {
@@ -1265,7 +1271,7 @@
       return { x: cx - w / 2, y: cy - h / 2, w: Math.max(1, w), h: Math.max(1, h) };
     }
 
-    _saveState() {
+    _saveState(suppressEvent = false) {
       const stateObj = {
         strokes: this.strokes,
         logicalX: this.logicalX, logicalY: this.logicalY, logicalWidth: this.logicalWidth, logicalHeight: this.logicalHeight,
@@ -1275,7 +1281,10 @@
       if (this.undoStack.length > 0 && this.undoStack[this.undoStack.length - 1] === snapshot) return;
       this.undoStack.push(snapshot);
       this.redoStack = [];
-      if (this.options.onChange) this.options.onChange();
+      
+      if (!suppressEvent && this.options.onChange) {
+         this.options.onChange();
+      }
     }
 
     setTool(color, width, alpha) {
@@ -1543,11 +1552,20 @@
           this.assets = {};
         }
 
+        for (const stroke of this.strokes) {
+          if (stroke.type === 'image' && stroke.dataUrl && !stroke.assetId) {
+            const newId = 'asset_' + FluxKit.utils.getUniqueId();
+            this.assets[newId] = stroke.dataUrl;
+            stroke.assetId = newId;
+            delete stroke.dataUrl;
+          }
+        }
+
         if (isDestructive) {
           this.undoStack = [this.getVectorJSON()]; 
           this.redoStack = [];
         } else {
-          this._saveState();
+          this._saveState(true);
         }
 
         if (hasCamera) {
@@ -1566,6 +1584,15 @@
     }
 
     getVectorJSON() {
+      const activeAssets = new Set();
+      this.strokes.forEach(s => { 
+        if (s.type === 'image' && s.assetId) activeAssets.add(s.assetId); 
+      });
+      const cleanAssets = {};
+      for (const [id, data] of Object.entries(this.assets || {})) {
+        if (activeAssets.has(id)) cleanAssets[id] = data;
+      }
+      this.assets = cleanAssets;
       return JSON.stringify({
         strokes: this.strokes,
         assets: this.assets || {},
@@ -1580,9 +1607,18 @@
     }
 
     pasteImage(fileOrBlob, clientX = null, clientY = null) {
+      if (this.options.disableImagePaste) {
+        FluxKit.ui.showNotification("Image pasting is disabled!", { icon: '🚫' });
+        return;
+      }
       const reader = new FileReader();
-      reader.onload = e => {
-        const dataUrl = e.target.result;
+      reader.onload = async e => {
+        const rawDataUrl = e.target.result;
+        let dataUrl = rawDataUrl;
+        if (this.options.imageCompression) {
+          const { maxWidth, quality } = this.options.imageCompression;
+          dataUrl = await FluxKit.utils.compressImage(rawDataUrl, maxWidth, quality);
+        }
         const img = new Image();
         img.onload = () => {
           const assetId = 'asset_' + FluxKit.utils.getUniqueId();
@@ -1708,8 +1744,7 @@
     clear() { this.strokes = []; this._redraw(); this._saveState(); }
 
     claimsKey(e) {
-      const tag = e.target.tagName?.toUpperCase();
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return false;
+      if (!this.isActive || FluxKit.utils.shouldIgnoreKeystroke(e)) return false;
 
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
@@ -1747,6 +1782,7 @@
     constructor(parentElement, options = {}) {
       this._abortController = new AbortController();
       this.globalCtrlOpts = { signal: this._abortController.signal, capture: true };
+      this.isActive = true;
       this.options = {
         ...options,
         sizeControl: options.sizeControl || 'buttons',
@@ -1777,10 +1813,9 @@
       this._onSystemThemeChange = e => { if (!this.themeConfig.autoDark) return; this.updateTheme(); };
       this._themeMediaQuery.addEventListener('change', this._onSystemThemeChange, this.globalCtrlOpts);
 
-
       const keydownListener = (e) => {
-        const tag = e.target.tagName?.toUpperCase();
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
+        if (!this.core || !this.container || !this.isActive) return;
+        if (FluxKit.utils.shouldIgnoreKeystroke(e)) return;
 
         const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
         const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
@@ -1815,7 +1850,7 @@
         }
       };
       
-      window.addEventListener('keydown', keydownListener, this.globalCtrlOpts);
+      document.addEventListener('keydown', keydownListener, this.globalCtrlOpts);
     }
 
     _injectStyles(parentElement) {
@@ -2018,7 +2053,7 @@
       }
 
       this.leftMoreWrapper = FluxKit.utils.createHTMLElement('div', { style: 'position: relative; display: none; align-items: center;' });
-      this.leftMoreBtn = FluxKit.utils.createHTMLElement('button', { className: 'flx-sp-tool-btn', dataset: { spTooltip: 'More Tools' }, icon: 'chevronRight', eventListener: (e) => openPopover(e, this.leftMoreBtn, this.leftMorePopover) });
+      this.leftMoreBtn = FluxKit.utils.createHTMLElement('button', { className: 'flx-sp-tool-btn', spTooltip: 'More Tools', icon: 'chevronRight', eventListener: (e) => openPopover(e, this.leftMoreBtn, this.leftMorePopover) });
       this.leftMorePopover = FluxKit.utils.createHTMLElement('div', { className: 'flx-sp-left-more-popover', eventListener: e => openPopover(e, this.leftMoreBtn, this.leftMorePopover) });
 
       document.addEventListener('pointerdown', e => closePopover(e, this.leftMoreBtn, this.leftMorePopover), this.globalCtrlOpts);
@@ -2036,7 +2071,7 @@
 
       if (this.options.sizeControl !== 'none') {
         const popover = FluxKit.utils.createHTMLElement('div', { className: 'flx-sp-popover' });
-        const settingsBtn = FluxKit.utils.createHTMLElement('button', { className: 'flx-sp-tool-btn', dataset: { spTooltip: 'Brush Settings' }, icon: 'settings', eventListener: e => openPopover(e, settingsBtn, popover) });
+        const settingsBtn = FluxKit.utils.createHTMLElement('button', { className: 'flx-sp-tool-btn', spTooltip: 'Brush Settings', icon: 'settings', eventListener: e => openPopover(e, settingsBtn, popover) });
 
         document.addEventListener('pointerdown', e => closePopover(e, settingsBtn, popover), this.globalCtrlOpts);
 
@@ -2079,7 +2114,7 @@
           const createBtnRow = (label, items, currentVal, activeProp, onClick ) => {
             const btnRow = FluxKit.utils.createHTMLElement('div', { style:  'display: flex; gap: 6px;' });
             items.forEach(item => {
-              const btn = FluxKit.utils.createHTMLElement('button', { class: `flx-sp-tool-btn ${currentVal === item.val ? 'active' : ''}`, dataset: { spTooltip: item.id },
+              const btn = FluxKit.utils.createHTMLElement('button', { class: `flx-sp-tool-btn ${currentVal === item.val ? 'active' : ''}`, spTooltip: item.id,
                 innerHTML: FluxKit.utils.safeHTML(item.sizePx
                   ? `<span style="display:block; width:${item.sizePx}px; height:${item.sizePx}px; border-radius:50%; background:currentColor; flex-shrink:0;"></span>`
                   : `<span style="font-size: 10px;">${item.id[0]}</span>`),
@@ -2104,10 +2139,10 @@
         leftTools.appendChild(FluxKit.utils.createHTMLElement('div', { style: 'position: relative; display: flex; align-items: center;', children: [ settingsBtn, popover ] }));
       }
 
-      const createActionBtn = (iconKey, title, isDanger, action) => FluxKit.utils.createHTMLElement('button', { className: `flx-sp-tool-btn ${isDanger ? 'danger' : ''}`, dataset: { spTooltip: title }, icon: iconKey, eventListener: (e) => { e.preventDefault(); action(); }
+      const createActionBtn = (iconKey, title, isDanger, action) => FluxKit.utils.createHTMLElement('button', { className: `flx-sp-tool-btn ${isDanger ? 'danger' : ''}`, spTooltip: title, icon: iconKey, eventListener: (e) => { e.preventDefault(); action(); }
       });
 
-      this.cropBtn = FluxKit.utils.createHTMLElement('button', { className: 'flx-sp-tool-btn', dataset: { spTooltip: 'Crop Canvas' }, icon: 'crop' });
+      this.cropBtn = FluxKit.utils.createHTMLElement('button', { className: 'flx-sp-tool-btn', spTooltip: 'Crop Canvas', icon: 'crop' });
 
       this.cropBtn.addEventListener('click', e => {
         e.preventDefault();
@@ -2118,7 +2153,7 @@
         this.cropBtn.classList.add('active');
       });
 
-      const focusBtn = FluxKit.utils.createHTMLElement('button', { className: 'flx-sp-tool-btn', dataset: { spTooltip: 'Fit to Screen' }, icon: 'focus' });
+      const focusBtn = FluxKit.utils.createHTMLElement('button', { className: 'flx-sp-tool-btn', spTooltip: 'Fit to Screen', icon: 'focus' });
       focusBtn.addEventListener('click', e => {
         e.preventDefault();
         if (this.core) this.core.zoomToFit();
@@ -2168,7 +2203,7 @@
       }
 
       this.fsBtn = FluxKit.utils.createHTMLElement('button', {
-        className: 'flx-sp-tool-btn', dataset: { spTooltip: 'Maximize (Right-click for options)' }, icon: 'maximize',
+        className: 'flx-sp-tool-btn', spTooltip: 'Maximize (Right-click for options)', icon: 'maximize',
         eventListener: { click: fsHandler, contexflxenu: fsMenu } });
       const fsPopover = FluxKit.utils.createHTMLElement('div', { class: 'flx-sp-popover', style: { width: '175px' }});
 
@@ -2215,8 +2250,7 @@
 
       const dataIOPopover = FluxKit.utils.createHTMLElement('div', { class: 'flx-sp-popover', style: { width: '140px' } });
       const dataIOBtn = FluxKit.utils.createHTMLElement('button', {
-        className: 'flx-sp-tool-btn', icon: 'document',
-        dataset: { spTooltip: 'Import / Export Vector JSON' },
+        className: 'flx-sp-tool-btn', icon: 'document', spTooltip: 'Import / Export Vector JSON',
         eventListener: (e) => openPopover(e, dataIOBtn, dataIOPopover)
       });
 
@@ -2278,7 +2312,7 @@
 
       if (this.options.showExportSettings) {
         const exportPopover = FluxKit.utils.createHTMLElement('div', { class: 'flx-sp-popover', style: { width: '180px' } });
-        const exportBtn = FluxKit.utils.createHTMLElement('button', { className: 'flx-sp-tool-btn', dataset: { spTooltip: 'Export/Save Mode' }, icon: 'image', eventListener: (e) => openPopover(e, exportBtn, exportPopover) });
+        const exportBtn = FluxKit.utils.createHTMLElement('button', { className: 'flx-sp-tool-btn', spTooltip: 'Export/Save Mode', icon: 'image', eventListener: (e) => openPopover(e, exportBtn, exportPopover) });
 
         document.addEventListener('pointerdown', e => closePopover(e, exportBtn, exportPopover), this.globalCtrlOpts);
 
@@ -2396,7 +2430,9 @@
         pointThreshold: this.options.pointThreshold || 3,
         backgroundColor: this.options.backgroundColor || 'transparent',
         onChange: this.options.onChange || null,
-        strokeColor: this.currentColor || 'var(--sp-text)'
+        strokeColor: this.currentColor || 'var(--sp-text)',
+        imageCompression: this.options.imageCompression,
+        disableImagePaste: this.options.disableImagePaste,
       });
 
       this._pasteListener = e => {
@@ -2449,7 +2485,7 @@
       }
 
       colorTokens.forEach((tokenColor, index) => {
-        const btn = FluxKit.utils.createHTMLElement('button', { className: `flx-sp-color-btn ${tokenColor === this.currentColor ? 'active' : ''}`, dataset: { spTooltip: `Color: ${activeColorObjs[index].id}` } });
+        const btn = FluxKit.utils.createHTMLElement('button', { className: `flx-sp-color-btn ${tokenColor === this.currentColor ? 'active' : ''}`, spTooltip: `Color: ${activeColorObjs[index].id}` });
         const swatch = FluxKit.utils.createHTMLElement('span', { class: 'flx-sp-swatch' });
         btn.style.setProperty('--sp-color-val', tokenColor, 'important');
 
@@ -2488,7 +2524,7 @@
 
       this.selectBtn = FluxKit.utils.createHTMLElement('button', {
         className: `flx-sp-tool-btn ${this.currentColor === 'select' ? 'active' : ''}`,
-        icon: 'pointer', dataset: { spTooltip: 'Select Tool' },
+        icon: 'pointer', spTooltip: 'Select Tool',
         eventListener: (e) => {
           e.preventDefault();
           if (this.currentColor === 'select') {
@@ -2521,7 +2557,7 @@
 
       this.eraserBtn = FluxKit.utils.createHTMLElement('button', {
         className: `flx-sp-tool-btn ${this.currentColor === 'eraser' ? 'active' : ''}`,
-        icon: 'eraser', dataset: { spTooltip: 'Erasure' },
+        icon: 'eraser', spTooltip: 'Erasure',
         eventListener: (e) => {
           e.preventDefault();
           if (this.core && this.core.selectedChunkIds.size > 0) {
@@ -2543,8 +2579,7 @@
 
       const createToolBtn = (id, icon, tooltip) => {
         const btn = FluxKit.utils.createHTMLElement('button', {
-          className: `flx-sp-tool-btn ${this.currentTool === id || (!this.currentTool && id === 'pen') ? 'active' : ''}`,
-          dataset: { spTooltip: tooltip }, icon,
+          className: `flx-sp-tool-btn ${this.currentTool === id || (!this.currentTool && id === 'pen') ? 'active' : ''}`, spTooltip: tooltip, icon,
           eventListener: (e) => {
             e.preventDefault();
             if (this.core && this.core.currentTool === 'line' && this.core.currentStroke) {
@@ -2571,7 +2606,7 @@
       };
 
       this.penBtn = createToolBtn('pen', 'edit', 'Pen Tool (P)');
-      this.lineBtn = createToolBtn('line', 'minus', 'Continuous Line (L)');
+      this.lineBtn = createToolBtn('line', 'line', 'Continuous Line (L)');
       this.rectBtn = createToolBtn('rect', 'square', 'Rectangle (R)');
       this.ovalBtn = createToolBtn('oval', 'circle', 'Oval (O)');
 
@@ -2679,10 +2714,8 @@
     loadVectorData(jsonString) { this.core.loadVectorJSON(jsonString); }
 
     claimsKey(e) {
-      if (!this.core || !this.container) return false;
-
-      const tag = e.target.tagName?.toUpperCase();
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return false;
+      if (!this.core || !this.container || !this.isActive) return false;
+      if (FluxKit.utils.shouldIgnoreKeystroke(e)) return false;
 
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
@@ -2696,6 +2729,13 @@
       }
 
       return this.core.claimsKey(e);
+    }
+
+    setIsActive(state) {
+      this.isActive = !!state;
+      if (this.core) {
+        this.core.isActive = this.isActive;
+      }
     }
 
     destroy() {
@@ -2753,10 +2793,15 @@
       'backgroundColor': { Type: 'String', Default: "'transparent'", Description: 'Background color of the canvas workspace.' },
       'pointThreshold': { Type: 'Number', Default: '3', Description: 'Minimum pixel distance between stroke points to trigger rendering.' },
       'defaultFsMode': { Type: 'String', Default: "'viewport'", Description: "Fullscreen behavior: 'viewport' (in-window max) or 'native' (OS fullscreen)." },
+      'imageCompression': { Type: 'Object|Boolean', Default: '{ maxWidth: 1600, quality: 0.85 }', Description: 'Configuration for compressing pasted images. Pass false to disable compression entirely.' },
       'onChange': { Type: 'Function', Default: 'null', Description: 'Callback triggered whenever the canvas state changes.' }
     },
-    _example: `const scratchpadInstance = new FluxKit.ui.Scratchpad(document.getElementById('spad-container'), {\n  sizeControl: 'sliders',\n  backgroundColor: '#ffffff'\n});`,
-    
+    _example: `const scratchpadInstance = new FluxKit.ui.Scratchpad(document.getElementById('spad-container'), {\n  sizeControl: 'sliders',\n  backgroundColor: '#ffffff',\n  imageCompression: { maxWidth: 1200, quality: 0.6 }\n});`,
+    setIsActive: {
+      _summary: 'Grants or revokes contextual keyboard focus for this specific instance.',
+      _command: 'scratchpadInstance.setIsActive(state)',
+      _arguments: { 'state': { Type: 'Boolean', Required: 'Yes', Description: 'Pass true if the modal needs to capture the keystrokes, false to revoke keystrokes.' } }
+    },
     updateTheme: {
       _summary: 'Dynamically updates the UI and canvas styling to match a new theme.',
       _command: 'scratchpadInstance.updateTheme(newTheme)',
@@ -2808,6 +2853,7 @@
       'eraserWidth': { Type: 'Number', Default: '20', Description: 'Pixel radius of the vector eraser.' },
       'chunkThreshold': { Type: 'Number', Default: '30', Description: 'The length of points array before a line is batched into a finalized chunk.' },
       'exportConfig': { Type: 'Object', Default: '{ mode: "auto", maxWidth: 4096, maxHeight: 4096, padding: 10 }', Description: 'Default configurations for image exporting.' },
+      'imageCompression': { Type: 'Object|Boolean', Default: '{ maxWidth: 1600, quality: 0.85 }', Description: 'Configuration for compressing pasted images. Pass false to disable compression entirely.' },
       'onChange': { Type: 'Function', Default: 'null', Description: 'Callback triggered when history/strokes are modified.' }
     },
     

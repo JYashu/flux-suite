@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Flux-Notes
+// @name         Flux Notes
 // @namespace    https://github.com/JYashu/flux-suite
-// @version      7.0.0
+// @version      8.3.0
 // @description  A ubiquitous, theme-aware note-taking overlay. Features Markdown formatting, an HTML5 scratchpad, and cross-browser syncing via WebDAV/Github/Dropbox/OneDrive.
 // @author       JYashu
 // @license      Apache-2.0
@@ -18,12 +18,12 @@
 // @grant        GM_registerMenuCommand
 // @grant        unsafeWindow
 // @grant        GM_getResourceText
-// @resource     easymdeCSS https://unpkg.com/easymde/dist/easymde.min.css
+// @resource     easymdeCSS https://unpkg.com/easymde@2.21.0/dist/easymde.min.css
 // @resource     faCSS https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css
 // @require      https://flux-suite.vercel.app/libs/flux-kit/core.js
 // @require      https://flux-suite.vercel.app/libs/flux-kit/sync.js
 // @require      https://flux-suite.vercel.app/libs/flux-kit/scratchpad.js
-// @require      https://unpkg.com/easymde/dist/easymde.min.js
+// @require      https://unpkg.com/easymde@2.21.0/dist/easymde.min.js
 // @run-at       document-idle
 // @connect      api.github.com
 // @connect      raw.githubusercontent.com
@@ -56,19 +56,28 @@
   if (window !== window.top) return;
 
   const {
-    createLogger, getUniqueId,
-    makeElementDragAndResize, trapTabFocus,
+    createLogger, getUniqueId, trapTabFocus,
     createHTMLElement, createSVGElement,
-    safeHTML, withTTPatched
+    safeHTML, withTTPatched, compressImage
   } = FluxKit.utils;
 
   const{
     viewer: fluxViewer,
     initContextMenu, initNotification, initTooltips,
-    createContextMenu, showNotification
+    createContextMenu
   } = FluxKit.ui;
 
   const { logMessage, logError, logWarning, logDebug } = createLogger('FluxNotes');
+
+  const makeElementDragAndResize = (element, header, opts = {}) => {
+    const options = { 
+      onClose: (el) => { modalCloseAction(el); return false; }, 
+      minWidth: 360, minHeight: 460, ...opts, autoFocus: false,
+      minimize: { iconTop: 0, iconRight: 20, iconSize: 16, color: 'var(--flxn-text)', hoverTransform: 'rotate(180deg) scale(1.1)', ...(opts.minimize || {}) }, 
+      close: { iconTop: 0, iconRight: -4, iconSize: 16, color: 'var(--flxn-text)', hoverTransform: 'rotate(90deg) scale(1.1)' } 
+    };
+    element.destroy = FluxKit.utils.makeElementDragAndResize(element, header, options);
+  }
 
   const mdRenderer = (() => {
     const sandbox = document.createElement('div');
@@ -96,23 +105,15 @@
   const STORAGE_KEY = 'flux_notes_config';
 
   const DEFAULT_SHORTCUT_KEYS = {
-    add: 'Alt+A',
-    view: 'Alt+V',
-    settings: 'Alt+Backquote',
-    toggleTheme: 'Alt+T',
-    bookmarkNote: 'Alt+B',
-    quickNote: 'Alt+Q'
+    add: 'alt+a',
+    view: 'alt+v',
+    settings: 'alt+`',
+    toggleTheme: 'alt+t',
+    bookmarkNote: 'alt+b',
+    quickNote: 'alt+q'
   };
 
-  const DEFAULT_CUSTOM_THEME = {
-    name: 'Custom Theme',
-    dark: true,
-    bg: '#1e1e1e',
-    text: '#eeeeee',
-    inputBg: '#252529',
-    accent: '#007bff',
-    btnTextColor: '#ffffff'
-  };
+  const DEFAULT_CUSTOM_THEME = FluxKit.theme.get('dark');
 
   const DEFAULT_CONFIG = {
     logging: false,
@@ -130,11 +131,16 @@
       description: '',
       pinned: false,
       lastEdited: new Date().toISOString()
-    }
+    },
+    trashQueue: []
   };
 
   let config = initializeConfig();
   window.FluxNotes = config;
+  let activeThemeBridge = {};
+  let ctxNamespace = { namespace: 'flx-notes', width: 170 };
+  let notifNamespace = { namespace: 'flx-notes' };
+  const showNotification = (msg, config) => FluxKit.ui.showNotification(msg, { ...config, ...notifNamespace });
 
   function initializeConfig() {
     try {
@@ -144,7 +150,11 @@
         GM_setValue(STORAGE_KEY, DEFAULT_CONFIG);
         return { ...DEFAULT_CONFIG, };
       }
-      return { ...DEFAULT_CONFIG, ...saved };
+      return { 
+        ...DEFAULT_CONFIG, ...saved, 
+        shortcuts: { ...DEFAULT_SHORTCUT_KEYS, ...(saved.shortcuts || {}) },
+        customTheme: { ...DEFAULT_CONFIG.customTheme, ...(saved.customTheme || {}) } 
+      };
     } catch (e) {
       logError('Failed to read config, falling back to default:', e);
       GM_setValue(STORAGE_KEY, DEFAULT_CONFIG);
@@ -168,13 +178,15 @@
   GM_registerMenuCommand('Settings', () => openSettingsModal());
 
   const MAX_GIST_TOTAL_SIZE = config.storageLimitMB * 1024 * 1024;
-  const DELETION_RETENTION_DAYS = 30;
+  const TOMBSTONE_RETENTION_DAYS = 30;
   const NOTES_LOADING_BATCH_SIZE = 12;
   const MODAL_IDS = {
-    NOTE: 'un-note-modal',
-    VIEW: 'un-view-modal',
-    SETTINGS: 'un-settings-modal',
-    QUICK_NOTE: 'un-quick-note'
+    NOTE: 'flxn-note-modal',
+    VIEW: 'flxn-view-modal',
+    SETTINGS: 'flxn-settings-modal',
+    QUICK_NOTE: 'flxn-quick-note',
+    STORAGE: 'flxn-storage-modal',
+    TAG_MERGE: 'flxn-merge-tags-modal',
   };
   const SYNC_FREQUENCIES = {
     'Every 30 minutes': 30 * 60 * 1000,
@@ -186,7 +198,7 @@
     'Never': 0,
   };
   const UI_ICONS = FluxKit.ui.icons;
-  let isShorcutUpdating = false;
+  let isShortcutUpdating = false;
   let darkMode = false, tempThemeSwitch = false;
   let renderBatch = null, index = 0, filteredNotes = [], activeTagFilters = {};
 
@@ -199,6 +211,8 @@
   const DB_VERSION = 2;
 
   let dbPromise = null;
+  
+  window.flxn_active_attachments = window.flxn_active_attachments || new Set();
 
   function initLocalDB() {
     if (dbPromise) return dbPromise;
@@ -215,17 +229,138 @@
     return dbPromise;
   }
 
+  let localUploadsPending = 0;
+
+  async function checkPendingUploadsOnLoad() {
+    try {
+      await cleanOrphanedDatabases();
+      const db = await initLocalDB();
+      const currentProfilePrefix = `${getCurrentProfileName() || 'default'}_`;
+      
+      const tx = db.transaction(STORE_UPLOADS, 'readonly');
+      const req = tx.objectStore(STORE_UPLOADS).getAllKeys();
+      
+      req.onsuccess = () => {
+        const keys = req.result || [];
+        localUploadsPending = keys.filter(k => k.startsWith(currentProfilePrefix)).length;
+        
+        const profile = getCurrentProfile();
+        const isLocal = !profile || !profile.provider || profile.provider === 'Local';
+
+        if (localUploadsPending > 0 && !isLocal) {
+          logMessage(`Found ${localUploadsPending} trapped uploads for active profile. Triggering sync.`);
+          triggerBackgroundSync();
+        }
+
+        cleanOrphanedDatabases();
+      };
+    } catch (e) {}
+  }
+
+  async function cleanOrphanedDatabases() {
+    return new Promise(async (resolve) => {
+      try {
+        const validProfiles = new Set(getAllProfiles().map(p => p.name));
+        validProfiles.add('default');
+        
+        const validAttachmentsPerProfile = new Map();
+
+        const getValidAttachmentsForProfile = (pName) => {
+          if (validAttachmentsPerProfile.has(pName)) return validAttachmentsPerProfile.get(pName);
+          
+          const validIds = new Set();
+          let notesToCheck = [];
+          
+          if (pName === getCurrentProfileName()) {
+            notesToCheck = [...(config.notes || []), ...(config.trashedNotes || [])];
+          } else {
+            const cached = loadCachedProfileData(pName);
+            if (cached) notesToCheck = [...(cached.notes || []), ...(cached.trashedNotes || [])];
+          }
+
+          notesToCheck.forEach(n => {
+            if (n.attachments) n.attachments.forEach(a => validIds.add(a.id));
+          });
+
+          validAttachmentsPerProfile.set(pName, validIds);
+          return validIds;
+        };
+        
+        const db = await initLocalDB();
+
+        let stores = [STORE_UPLOADS, STORE_CACHE];
+        let storesProcessed = 0;
+
+        stores.forEach(storeName => {
+          const tx = db.transaction(storeName, 'readwrite');
+          const store = tx.objectStore(storeName);
+          const req = store.getAllKeys();
+          
+          req.onsuccess = () => {
+            const keys = req.result || [];
+            keys.forEach(key => {
+              const match = key.match(/^(.*)_(att-.*)$/);
+              let pName = '', attId = '';
+
+              if (match) {
+                  pName = match[1];
+                  attId = match[2];
+              } else {
+                const lastUnderscore = key.lastIndexOf('_');
+                if (lastUnderscore !== -1) {
+                  pName = key.substring(0, lastUnderscore);
+                  attId = key.substring(lastUnderscore + 1);
+                } else pName = key;
+              }
+              const isProfileOrphan = !validProfiles.has(pName);
+              let isAttachmentOrphan = false;
+
+              if (!isProfileOrphan && attId) {
+                const validIds = getValidAttachmentsForProfile(pName);
+                
+                if (!validIds.has(attId) && !window.flxn_active_attachments.has(attId)) {
+                  isAttachmentOrphan = true;
+                }
+              }
+
+              if (isProfileOrphan || isAttachmentOrphan) {
+                store.delete(key);
+                logMessage(`🧹 Cleaned orphaned DB item: ${key}`);
+              }
+            });
+          };
+          tx.oncomplete = () => {
+            storesProcessed++;
+            if (storesProcessed === stores.length) resolve();
+          };
+          tx.onerror = () => {
+            storesProcessed++;
+            if (storesProcessed === stores.length) resolve();
+          }
+        });
+      } catch(e) {
+        logWarning("Failed to clean orphaned DBs", e);
+      }
+    });
+  }
+
+  setTimeout(checkPendingUploadsOnLoad, 1000);
+
   function getAttachmentCacheKey(attachmentId) {
     return `${getCurrentProfileName() || 'default'}_${attachmentId}`;
   }
 
   // --- UPLOAD QUEUE ---
   async function queueAttachmentForUpload(attachmentId, blob) {
+    window.flxn_active_attachments.add(attachmentId);
     const db = await initLocalDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_UPLOADS, 'readwrite');
       tx.objectStore(STORE_UPLOADS).put(blob, getAttachmentCacheKey(attachmentId));
-      tx.oncomplete = () => resolve();
+      tx.oncomplete = () => {
+        localUploadsPending++;
+        resolve();
+      };
       tx.onerror = () => reject(tx.error);
     });
   }
@@ -244,12 +379,16 @@
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_UPLOADS, 'readwrite');
       tx.objectStore(STORE_UPLOADS).delete(getAttachmentCacheKey(attachmentId));
-      tx.oncomplete = () => resolve();
+      tx.oncomplete = () => {
+        localUploadsPending = Math.max(0, localUploadsPending - 1);
+        resolve();
+      };
     });
   }
 
   // --- PREVIEW CACHE ---
   async function cacheAttachmentForPreview(attachmentId, blob) {
+    window.flxn_active_attachments.add(attachmentId);
     const db = await initLocalDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_CACHE, 'readwrite');
@@ -301,26 +440,26 @@
        1. BASE VARIABLES & ANIMATIONS
        ========================================================= */
     :host {
-      --un-radius-lg: 20px;
-      --un-radius-md: 12px;
-      --un-radius-sm: 8px;
-      --un-shadow-float: 0 12px 40px rgba(0, 0, 0, 0.12), 0 4px 12px rgba(0, 0, 0, 0.08);
-      --un-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.05);
-      --un-transition: 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
-      --un-spacing-xs: 5px;
-      --un-spacing-sm: 8px;
-      --un-spacing-md: 12px;
-      --un-bg-card: rgba(128,128,128,0.03);
-      --un-bg-card-hover: rgba(128,128,128,0.05);
+      --flxn-radius-lg: 20px;
+      --flxn-radius-md: 12px;
+      --flxn-radius-sm: 8px;
+      --flxn-shadow-float: 0 12px 40px rgba(0, 0, 0, 0.12), 0 4px 12px rgba(0, 0, 0, 0.08);
+      --flxn-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.05);
+      --flxn-transition: 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+      --flxn-spacing-xs: 5px;
+      --flxn-spacing-sm: 8px;
+      --flxn-spacing-md: 12px;
+      --flxn-bg-card: rgba(128,128,128,0.03);
+      --flxn-bg-card-hover: rgba(128,128,128,0.05);
     }
-    @keyframes un-fade-in { to { opacity: 1; } }
+    @keyframes flxn-fade-in { to { opacity: 1; } }
 
     /* =========================================================
        2. MODAL CONTAINERS & LAYOUT
        ========================================================= */
-    dialog.un-modal {
+    dialog.flxn-modal {
       margin: 0 !important;
-      border: 1px solid var(--un-border) !important;
+      border: 1px solid var(--flxn-border) !important;
       position: fixed !important;
       top: 15vh;
       left: 27.6vw;
@@ -341,108 +480,106 @@
           backdrop-filter: blur(3px);
       }
     }
-    .un-modal { box-sizing: border-box; opacity: 0; transform: scale(0.96); transition: opacity 0.2s ease, transform 0.2s ease; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
-    .un-modal.show { opacity: 1; transform: scale(1); }
-    .un-modal-header { box-sizing: border-box; flex: 0 0 auto; font-size: 18px; font-weight: bold; margin-bottom: 15px; margin-top: 0px; width: fit-content; }
-    .un-modal-content { box-sizing: border-box; flex: 1 1 auto; display: flex; flex-direction: column; position: relative; min-height: 0; overflow-y: auto; overflow-x: hidden; height: 100%; }
-    .un-modal-footer { box-sizing: border-box; flex: 0 0 auto; display: flex; justify-content: end; gap: 8px; text-align: right; margin-top: 15px; }
-    .un-empty-state {
+    .flxn-modal { box-sizing: border-box; opacity: 0; transform: scale(0.96); transition: opacity 0.2s ease, transform 0.2s ease; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+    .flxn-modal.show { opacity: 1; transform: scale(1); }
+    .flxn-modal-header { box-sizing: border-box; flex: 0 0 auto; font-size: 18px; font-weight: bold; margin-bottom: 15px; margin-top: 0px; width: fit-content; }
+    .flxn-modal-content { box-sizing: border-box; flex: 1 1 auto; display: flex; flex-direction: column; position: relative; min-height: 0; overflow-y: auto; overflow-x: hidden; height: 100%; }
+    .flxn-modal-footer { box-sizing: border-box; flex: 0 0 auto; display: flex; justify-content: end; gap: 8px; text-align: right; margin-top: 15px; }
+    .flxn-empty-state {
       grid-column: 1 / -1;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       padding: 60px 20px; text-align: center; color: #777; opacity: 0;
-      animation: un-fade-in 0.5s forwards 0.2s;
+      animation: flxn-fade-in 0.5s forwards 0.2s;
     }
 
     /* =========================================================
        3. FORMS, ROWS & ACCORDIONS
        ========================================================= */
-    .un-form-row {
+    .flxn-form-row {
       display: grid; grid-template-columns: 150px 1fr; align-items: center;
-      gap: var(--un-spacing-md); margin-bottom: var(--un-spacing-sm); margin-top: var(--un-spacing-sm); width: 100%;
+      gap: var(--flxn-spacing-md); margin-bottom: var(--flxn-spacing-sm); margin-top: var(--flxn-spacing-sm); width: 100%;
     }
-    .un-form-label { font-size: 14px; font-weight: 500; opacity: 0.85; white-space: nowrap; }
-    .un-profile-btn-row { flex: 0 0 auto; display: flex; justify-content: end; gap: 8px; text-align: right; margin-bottom: 15px; }
-    .un-profile-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; margin-bottom: var(--un-spacing-md); }
-    .un-modal input:not([type="checkbox"]), .un-modal select, .un-modal button {
+    .flxn-form-label { font-size: 14px; font-weight: 500; opacity: 0.85; white-space: nowrap; }
+    .flxn-profile-btn-row { flex: 0 0 auto; display: flex; justify-content: end; gap: 8px; text-align: right; margin-bottom: 15px; }
+    .flxn-profile-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; margin-bottom: var(--flxn-spacing-md); }
+    .flxn-modal input:not([type="checkbox"]), .flxn-modal select, .flxn-modal button {
       height: 30px !important; margin: 0 !important; box-sizing: border-box !important;
     }
 
-    .un-modal details { background: transparent !important; border: none !important; padding: 0 !important; margin-top: var(--un-spacing-sm); margin-bottom: var(--un-spacing-lg); }
-    .un-modal summary {
+    .flxn-modal details { background: transparent !important; border: none !important; padding: 0 !important; margin-top: var(--flxn-spacing-sm); margin-bottom: var(--flxn-spacing-lg); }
+    .flxn-modal summary {
       font-size: 16px !important; font-weight: 600 !important; cursor: pointer; outline: none; list-style: none;
       display: flex; align-items: center; justify-content: space-between;
-      padding: 0 0 var(--un-spacing-sm) 0 !important; margin: 0 0 var(--un-spacing-md) 0 !important;
-      border-bottom: 2px solid var(--un-border, rgba(128,128,128,0.15)) !important; user-select: none; transition: color 0.2s ease;
+      padding: 0 0 var(--flxn-spacing-sm) 0 !important; margin: 0 0 var(--flxn-spacing-md) 0 !important;
+      border-bottom: 2px solid var(--flxn-border, rgba(128,128,128,0.15)) !important; user-select: none; transition: color 0.2s ease;
     }
-    .un-modal summary::-webkit-details-marker { display: none; }
-    .un-modal summary::after { content: '▼'; font-size: 11px; opacity: 0.4; transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1); }
-    .un-modal details[open] summary::after { transform: rotate(-180deg); }
-    .un-modal details[open] summary { border-bottom: 1px solid var(--un-border, rgba(128,128,128,0.1)); margin-bottom: var(--un-spacing-sm); padding-bottom: var(--un-spacing-sm); }
-    .un-modal summary:hover { opacity: 0.8; }
+    .flxn-modal summary::-webkit-details-marker { display: none; }
+    .flxn-modal summary::after { content: '▼'; font-size: 11px; opacity: 0.4; transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1); }
+    .flxn-modal details[open] summary::after { transform: rotate(-180deg); }
+    .flxn-modal details[open] summary { border-bottom: 1px solid var(--flxn-border, rgba(128,128,128,0.1)); margin-bottom: var(--flxn-spacing-sm); padding-bottom: var(--flxn-spacing-sm); }
+    .flxn-modal summary:hover { opacity: 0.8; }
 
     /* =========================================================
        4. VIEW CONTROLS & TAGS (Static)
        ========================================================= */
-    .un-view-controls { display: flex; gap: var(--un-spacing-md); margin-bottom: var(--un-spacing-sm); align-items: center; width: 100%; }
-    .un-search-wrapper { flex: 1 1 auto; }
-    .un-sort-wrapper { flex: 0 0 auto; display: flex; align-items: center; gap: var(--un-spacing-xs); font-size: 14px; font-weight: 500; white-space: nowrap; }
-    #un-tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--un-spacing-md) !important; }
-    .un-tag-chip {
-      background: var(--un-bg-secondary, rgba(128,128,128,0.08)) !important;
-      border: 1px solid var(--un-border, rgba(128,128,128,0.15)) !important;
+    .flxn-view-controls { display: flex; gap: var(--flxn-spacing-md); margin-bottom: var(--flxn-spacing-sm); align-items: center; width: 100%; }
+    .flxn-search-wrapper { flex: 1 1 auto; }
+    .flxn-sort-wrapper { flex: 0 0 auto; display: flex; align-items: center; gap: var(--flxn-spacing-xs); font-size: 14px; font-weight: 500; white-space: nowrap; }
+    #flxn-tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--flxn-spacing-md) !important; }
+    .flxn-tag-chip {
+      background: var(--flxn-bg-secondary, rgba(128,128,128,0.08)) !important;
+      border: 1px solid var(--flxn-border, rgba(128,128,128,0.15)) !important;
       color: inherit !important; padding: 4px 12px !important; border-radius: 16px !important;
       font-size: 12px !important; font-weight: 500 !important; transition: all 0.2s ease !important;
     }
-    .un-tag-chip:hover {
-      background: var(--un-bg-hover, rgba(128,128,128,0.15)) !important;
-      border-color: var(--accentBg, #007bff) !important;
+    .flxn-tag-chip:hover {
+      background: var(--flxn-bg-hover, rgba(128,128,128,0.15)) !important;
+      border-color: var(--flxn-accent-bg, #007bff) !important;
       transform: translateY(-1px) !important;
     }
 
     /* =========================================================
        5. NOTE CARDS & ACTIONS (Static/Legacy)
        ========================================================= */
-    #un-notes-list > .note-container {
-      background: var(--un-bg-card, rgba(128,128,128,0.02)) !important;
-      border: 1px solid var(--un-border, rgba(128,128,128,0.15)) !important;
-      border-radius: var(--un-radius-md) !important; padding: 10px !important;
+    #flxn-notes-list > .note-container {
+      background: var(--flxn-bg-card, rgba(128,128,128,0.02)) !important;
+      border: 1px solid var(--flxn-border, rgba(128,128,128,0.15)) !important;
+      border-radius: var(--flxn-radius-md) !important; padding: 10px !important;
       box-shadow: 0 2px 8px rgba(0,0,0,0.02) !important; display: flex; flex-direction: row; gap: 8px; top: 0;
       transition: top 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease !important;
     }
-    #un-notes-list > .note-container:hover {
+    #flxn-notes-list > .note-container:hover {
       top: -2px !important; box-shadow: 0 12px 24px rgba(0,0,0,0.08) !important;
-      border-color: var(--accentBg, #007bff) !important; background: var(--un-bg-card-hover, rgba(128,128,128,0.05)) !important;
+      border-color: var(--flxn-accent-bg, #007bff) !important; background: var(--flxn-bg-card-hover, rgba(128,128,128,0.05)) !important;
     }
     .note-container .note-title { font-size: 15px; font-weight: 600; line-height: 1.3; }
     .note-container > div > div:nth-child(2) { font-size: 11px !important; opacity: 0.6; margin-top: 2px; }
 
-    .un-note-card { position: relative; overflow: hidden; }
-    .un-note-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 5px; opacity: 0; transform: translateY(-10px); transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94); }
-    .un-note-card:hover .un-note-actions { opacity: 1; transform: translateY(0); }
-    .un-action-btn { background: rgba(255, 255, 255, 0.9); border: 1px solid #ddd; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #444; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 12px; }
-    .un-action-btn:hover { background: var(--accentBg, #007bff); color: #fff; border-color: transparent; }
+    .flxn-note-card { position: relative; overflow: hidden; }
+    .flxn-note-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 5px; opacity: 0; transform: translateY(-10px); transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94); }
+    .flxn-note-card:hover .flxn-note-actions { opacity: 1; transform: translateY(0); }
+    .flxn-action-btn { background: rgba(255, 255, 255, 0.9); border: 1px solid #ddd; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #444; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 12px; }
+    .flxn-action-btn:hover { background: var(--flxn-accent-bg, #007bff); color: #fff; border-color: transparent; }
 
     /* =========================================================
-       6. SCREENSHOT PREVIEWS & ICONS
+       6. THUMBNAIL PREVIEWS & ICONS
        ========================================================= */
-    .un-icon-btn { width: 30px !important; height: 30px !important; padding: 0 !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; }
-    .un-icon-btn svg { display: block; }
-    .un-note-screenshot { max-width: 108px; max-height: 80px; border-radius: 6px; border: 1px solid #ccc; box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: transform 0.2s ease, box-shadow 0.2s ease; margin-top: 2.91px; flex-shrink: 0; }
-    .un-note-screenshot:hover { transform: scale(1.05); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
-    #un-screenshot-backdrop { pointer-events: auto; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 99999; }
-    #un-screenshot-preview { pointer-events: auto; border-radius: 10px; box-shadow: 0 6px 30px rgba(0,0,0,0.4); width: auto; height: auto; max-width: 95vw; max-height: 90vh; object-fit: contain; cursor: auto; transition: width 0.25s ease, height 0.25s ease; }
+    .flxn-icon-btn { width: 30px !important; height: 30px !important; padding: 0 !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; }
+    .flxn-icon-btn svg { display: block; }
+    .flx-note-thumbnail { max-width: 108px; max-height: 80px; border-radius: 6px; border: 1px solid #ccc; box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: transform 0.2s ease, box-shadow 0.2s ease; margin-top: 2.91px; flex-shrink: 0; }
+    .flx-note-thumbnail:hover { transform: scale(1.05); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
 
     /* =========================================================
        7. Custom Theme Color Pickers
        ========================================================= */
-    .un-modal input[type="color"].un-color-picker {
+    .flxn-modal input[type="color"].flxn-color-picker {
       width: 28px !important;
       height: 28px !important;
       min-height: 28px !important; /* Overrides the global 38px */
       flex: 0 0 28px !important;   /* Absolutely prevents flexbox stretching */
       padding: 0 !important;
       margin: 0 !important;
-      border: 1px solid var(--un-border, rgba(128,128,128,0.2)) !important;
+      border: 1px solid var(--flxn-border, rgba(128,128,128,0.2)) !important;
       border-radius: 50% !important;
       cursor: pointer;
       background: transparent !important;
@@ -452,30 +589,27 @@
       appearance: none;
       transition: transform 0.2s ease, box-shadow 0.2s ease !important;
     }
-
-    .un-modal input[type="color"].un-color-picker::-webkit-color-swatch-wrapper {
+    .flxn-modal input[type="color"].flxn-color-picker::-webkit-color-swatch-wrapper {
       padding: 0;
     }
-    .un-modal input[type="color"].un-color-picker::-webkit-color-swatch {
+    .flxn-modal input[type="color"].flxn-color-picker::-webkit-color-swatch {
       border: none;
       border-radius: 50%;
     }
-    .un-modal input[type="color"].un-color-picker::-moz-color-swatch {
+    .flxn-modal input[type="color"].flxn-color-picker::-moz-color-swatch {
       border: none;
       border-radius: 50%;
     }
-
-    .un-modal input[type="color"].un-color-picker:hover {
+    .flxn-modal input[type="color"].flxn-color-picker:hover {
       transform: scale(1.15);
-      box-shadow: var(--un-shadow-sm) !important;
+      box-shadow: var(--flxn-shadow-sm) !important;
     }
-    #un-custom-theme-panel {
+    #flxn-custom-theme-panel {
       padding: 12px 16px;
-      background: var(--un-bg-card, rgba(128,128,128,0.03));
-      border: 1px solid var(--un-border, rgba(128,128,128,0.1));
-      border-radius: var(--un-radius-sm);
+      background: var(--flxn-bg-card, rgba(128,128,128,0.03));
+      border: 1px solid var(--flxn-border, rgba(128,128,128,0.1));
+      border-radius: var(--flxn-radius-sm);
       margin-top: 12px;
-
       display: flex;
       flex-direction: row;
       justify-content: space-around; /* Distributes the dots evenly */
@@ -483,53 +617,409 @@
       gap: 8px;
       transition: opacity 0.3s ease;
     }
-
-    .un-color-item {
+    .flxn-color-item {
       display: flex;
       align-items: center;
       justify-content: flex-start;
       gap: 10px;
       cursor: pointer;
     }
-
-    .un-color-item .un-form-label {
+    .flxn-color-item .flxn-form-label {
       font-size: 12px; /* Slightly smaller for a tighter fit */
       margin: 0;
       white-space: nowrap;
     }
-
-    .un-color-picker {
+    .flxn-color-picker {
       -webkit-appearance: none;
       -moz-appearance: none;
       appearance: none;
       width: 28px !important; /* Scaled down from 38px */
       height: 28px !important;
       padding: 0 !important;
-      border: 1px solid var(--un-border, rgba(128,128,128,0.2)) !important;
+      border: 1px solid var(--flxn-border, rgba(128,128,128,0.2)) !important;
       border-radius: 50% !important;
       cursor: pointer;
       background: transparent;
       flex-shrink: 0;
       transition: transform 0.2s ease, box-shadow 0.2s ease !important;
     }
-
-    .un-color-picker::-webkit-color-swatch-wrapper { padding: 0; }
-    .un-color-picker::-webkit-color-swatch { border: none; border-radius: 50%; }
-    .un-color-picker::-moz-color-swatch { border: none; border-radius: 50%; }
-
-    .un-color-picker:hover {
+    .flxn-color-picker::-webkit-color-swatch-wrapper { padding: 0; }
+    .flxn-color-picker::-webkit-color-swatch { border: none; border-radius: 50%; }
+    .flxn-color-picker::-moz-color-swatch { border: none; border-radius: 50%; }
+    .flxn-color-picker:hover {
       transform: scale(1.15);
-      box-shadow: var(--un-shadow-sm);
+      box-shadow: var(--flxn-shadow-sm);
     }
+
+    /* =========================================================
+       8. STORAGE MANAGER
+       ========================================================= */
+    .flxn-storage-summary { display: flex; gap: 16px; margin-bottom: 16px; padding: 16px; background: rgba(128,128,128,0.05); border-radius: var(--flxn-radius-sm); align-items: center; flex-wrap: wrap; border: 1px solid var(--flxn-border, rgba(128,128,128,0.1)); }
+    .flxn-storage-stat { display: flex; flex-direction: column; align-items: flex-start; }
+    .flxn-storage-stat span:first-child { font-weight: bold; font-size: 18px; line-height: 1; margin-bottom: 4px; }
+    .flxn-storage-stat span:last-child { opacity: 0.6; font-size: 10px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; }
+    .flxn-storage-list { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; max-height: 50vh; padding-right: 4px; }
+    .flxn-storage-item { 
+      background: var(--flxn-bg-card, rgba(128,128,128,0.03)); 
+      border: 1px solid var(--flxn-border, rgba(128,128,128,0.15)); 
+      border-radius: var(--flxn-radius-sm); padding: 10px; 
+      transition: border-color 0.2s; 
+    }
+    .flxn-storage-item:hover { border-color: var(--flxn-accent-bg, #007bff); }
+    .flxn-storage-header { display: flex; align-items: center; justify-content: space-between; user-select: none; }
+    .flxn-storage-title { display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 13px; overflow: hidden; }
+    .flxn-storage-title svg { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.7; }
+    .flxn-storage-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+    .flxn-storage-path { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 400px; }
+    .flxn-storage-meta { display: flex; align-items: center; gap: 12px; font-size: 12px; opacity: 0.8; }
+    .flxn-storage-actions { display: flex; gap: 2px; opacity: 0; transition: opacity 0.2s; align-items: center; }
+    .flxn-storage-header:hover .flxn-storage-actions, .flxn-storage-child:hover .flxn-storage-actions { opacity: 1; }
+    .flxn-storage-bar-bg { width: 60px; height: 4px; background: rgba(128,128,128,0.2); border-radius: 2px; overflow: hidden; display: inline-block; vertical-align: middle; }
+    .flxn-storage-bar-fill { height: 100%; background: var(--flxn-accent-text, #007bff); }
+    .flxn-storage-children { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--flxn-border, rgba(128,128,128,0.15)); display: none; flex-direction: column; gap: 6px; }
+    .flxn-storage-item.expanded .flxn-storage-children { display: flex; }
+    .flxn-storage-child { display: flex; align-items: center; justify-content: space-between; font-size: 11px; padding: 4px 8px; background: rgba(128,128,128,0.04); }
+
+    /* =========================================================
+       9. RESPONSIVE SETTINGS LAYOUT
+       ========================================================= */
+    .flxn-settings-layout { display: flex; flex-direction: column; gap: 20px; height: 100%; overflow-y: auto; padding-right: 8px; }
+    .flxn-modal.flxn-wide-mode .flxn-settings-layout { flex-direction: row; overflow: hidden; }
+    .flxn-settings-col { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+    .flxn-modal.flxn-wide-mode .flxn-settings-col { overflow-y: auto; padding-right: 12px; }
+    .flxn-modal.flxn-wide-mode .flxn-settings-col:first-child { border-right: 1px solid var(--flxn-border, rgba(128,128,128,0.15)); margin-right: 12px; padding-right: 24px; }
   `;
 
-  /**
-   * Darkens a color by a percentage (0-100)
-   * @param {string} color - Hex or RGB color
-   * @param {number} percent - Percentage to darken (e.g., 10)
-   */
+  const DYNAMIC_MODAL_CSS = `
+    /* =========================================================
+      1. MODALS & CONTAINERS
+      ========================================================= */
+    #${MODAL_IDS.NOTE}, #${MODAL_IDS.VIEW}, #${MODAL_IDS.SETTINGS},
+    #${MODAL_IDS.QUICK_NOTE}, #${MODAL_IDS.TAG_MERGE}, #${MODAL_IDS.STORAGE} {
+      position: fixed;
+      background: var(--flxn-glass-bg);
+      color: var(--flxn-text);
+      font-family: var(--flxn-font-family);
+      backdrop-filter: blur(10px) saturate(180%);
+      -webkit-backdrop-filter: blur(10px) saturate(180%);
+      border: 1px solid var(--flxn-modal-border-color) !important;
+      box-shadow: var(--flxn-modal-shadow) !important;
+      transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease,
+                  background-color 0.2s ease, border-color 0.2s ease;
+    }
+    #${MODAL_IDS.NOTE}, #${MODAL_IDS.SETTINGS}, #${MODAL_IDS.QUICK_NOTE}, #${MODAL_IDS.TAG_MERGE}, #${MODAL_IDS.STORAGE} { left: 35vw; }
+    #${MODAL_IDS.SETTINGS} { overflow: visible; }
+    #${MODAL_IDS.VIEW} { padding: 24px; border-radius: 12px; width: 45vw; height: 70vh; display: flex; flex-direction: column; }
+    #${MODAL_IDS.NOTE} .flxn-modal-content { display: flex; flex-direction: column; gap: 10px; }
+    .flxn-modal-close-btn { position: absolute !important; top: 19px !important; right: 16px !important; width: 28px !important; height: 28px !important; background: transparent !important; border: none !important; box-shadow: none !important; color: var(--flxn-text) !important; opacity: 0.5; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 50% !important; padding: 0 !important; transition: all 0.2s ease !important; }
+    .flxn-modal-close-btn:hover { opacity: 1 !important; transform: rotate(90deg) scale(1.1) !important; }
+    .flxn-modal-settings-btn { position: absolute !important; top: 17px !important; right: 62px !important; width: 28px !important; height: 28px !important; background: transparent !important; border: none !important; box-shadow: none !important; color: var(--flxn-text) !important; opacity: 0.5; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 50% !important; padding: 0 !important; transition: all 0.2s ease !important; }
+    .flxn-modal-settings-btn:hover { opacity: 1 !important; transform: rotate(90deg) scale(1.1) !important; }
+
+    /* =========================================================
+      2. FORMS & INPUTS
+      ========================================================= */
+    #${MODAL_IDS.NOTE} input:not([type="checkbox"]):not(.CodeMirror-search-field):not(#flxn-tag-input),
+    #${MODAL_IDS.NOTE} textarea:not(.CodeMirror textarea):not([style*="display: none"]),
+    #${MODAL_IDS.NOTE} select,
+    #${MODAL_IDS.SETTINGS} input:not([type="checkbox"]), #${MODAL_IDS.SETTINGS} textarea, #${MODAL_IDS.SETTINGS} select,
+    #${MODAL_IDS.VIEW} input:not([type="checkbox"]), #${MODAL_IDS.VIEW} textarea, #${MODAL_IDS.VIEW} select,
+    #${MODAL_IDS.TAG_MERGE} input:not([type="checkbox"]), #${MODAL_IDS.TAG_MERGE} textarea, #${MODAL_IDS.TAG_MERGE} select,
+    #${MODAL_IDS.STORAGE} input:not([type="checkbox"]), #${MODAL_IDS.STORAGE} select,
+    #${MODAL_IDS.QUICK_NOTE} input:not([type="checkbox"]), #${MODAL_IDS.QUICK_NOTE} textarea, #${MODAL_IDS.QUICK_NOTE} select {
+      background: var(--flxn-input-bg) !important; color: var(--flxn-text) !important; border: 1px solid var(--flxn-accent-bg) !important;
+      width: 100% !important; padding: 6px !important; margin-bottom: 8px !important;
+      border-radius: 4px !important; box-sizing: border-box !important; font-family: var(--flxn-font-family);
+    }
+    .flxn-modal input:focus, .flxn-modal textarea:focus, .flxn-modal select:focus,
+    .flxn-tag-input-wrapper:focus-within, .EasyMDEContainer .CodeMirror.CodeMirror-focused {
+      outline: none !important; box-shadow: 0 0 0 1px var(--flxn-accent-bg) inset !important;
+    }
+    #${MODAL_IDS.SETTINGS} input[type="checkbox"] { transform: scale(1.2); margin-right: 8px; accent-color: var(--flxn-accent-bg); }
+
+    /* =========================================================
+      3. BUTTONS & LINKS
+      ========================================================= */
+    #${MODAL_IDS.NOTE} button, #${MODAL_IDS.VIEW} button, #${MODAL_IDS.SETTINGS} button,
+    #${MODAL_IDS.QUICK_NOTE} button, #${MODAL_IDS.TAG_MERGE} button, #${MODAL_IDS.STORAGE} button,
+    #flxn-notes-list > .note-container, .flxn-tag-chip {
+      transition: background 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease; cursor: pointer; border-radius: 6px;
+    }
+    #${MODAL_IDS.NOTE} button, #${MODAL_IDS.VIEW} button, #${MODAL_IDS.SETTINGS} button,
+    #${MODAL_IDS.QUICK_NOTE} button, #${MODAL_IDS.TAG_MERGE} button, #${MODAL_IDS.STORAGE} button {
+      padding: 6px 12px; background: linear-gradient(135deg, var(--flxn-accent-bg), var(--flxn-accent-bg-dark));
+      color: var(--flxn-btn-text-color); font-family: var(--flxn-font-family); position: relative; overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    #${MODAL_IDS.NOTE} button:hover, #${MODAL_IDS.VIEW} button:hover, #${MODAL_IDS.SETTINGS} button:hover,
+    #${MODAL_IDS.QUICK_NOTE} button:hover, #${MODAL_IDS.TAG_MERGE} button:hover {
+      transform: scale(1.03); box-shadow: var(--flxn-btn-hover-shadow);
+    }
+    #${MODAL_IDS.NOTE} button:active, #${MODAL_IDS.VIEW} button:active, #${MODAL_IDS.SETTINGS} button:active,
+    #${MODAL_IDS.QUICK_NOTE} button:active, #${MODAL_IDS.TAG_MERGE} button:active {
+      transform: scale(0.97); box-shadow: var(--flxn-btn-active-shadow);
+    }
+    .flxn-modal a:not(.button-like):not([class*="btn"]) { color: var(--flxn-accent-text); text-decoration: underline; cursor: pointer; font-family: var(--flxn-font-family); }
+    .flxn-modal a:hover { opacity: 0.85; }
+    #new-profile-btn, #delete-profile-btn { margin-bottom: 8px !important; }
+
+    /* =========================================================
+      4. NOTE CARDS & ACTIONS
+      ========================================================= */
+    flxn-notes-list-wrapper { display: flex; flex-direction: column; position: relative; height: auto !important; overflow: visible !important; padding-top: 10px; }
+    #flxn-notes-list {
+      height: auto; max-height: none !important; overflow: visible !important; display: grid !important; padding-bottom: var(--flxn-spacing-lg) !important;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); grid-auto-rows: min-content; gap: 16px; overscroll-behavior: contain; padding-right: 8px; scrollbar-width: thin; scrollbar-color: var(--flxn-input-bg) var(--flxn-bg);
+    }
+    #flxn-notes-list::-webkit-scrollbar { width: 8px; }
+    #flxn-notes-list::-webkit-scrollbar-track { background: var(--flxn-bg); }
+    #flxn-notes-list::-webkit-scrollbar-thumb { background: var(--flxn-input-bg); border-radius: 4px; border: 1px solid var(--flxn-scrollbar-thumb-border); }
+
+    #flxn-notes-list > .note-container {
+      height: auto; align-self: start; justify-self: stretch; display: flex; align-items: flex-start;
+      position: relative; cursor: pointer; padding: 10px; border-radius: 6px;
+      border-left: 4px solid var(--flxn-input-bg); border-bottom: 1px solid var(--flxn-input-bg);
+      transition: background-color 0.1s ease-in-out, opacity 0.25s ease, transform 0.25s ease, border-color 0.2s ease;
+      opacity: 0; transform: translateY(6px); will-change: opacity, transform;
+    }
+    #flxn-notes-list > .note-container.show { opacity: 1; transform: translateY(0); }
+    #flxn-notes-list > .note-container:hover { background-color: var(--flxn-input-bg); }
+    #flxn-notes-list > .note-container:active { background-color: var(--flxn-input-bg); transform: scale(0.97); }
+    #flxn-notes-list > .note-container.pinned { border-left: 4px solid var(--flxn-accent-bg) !important; background-color: var(--flxn-note-pinned-bg) !important; }
+
+    .flxn-note-actions-wrapper {
+      position: absolute; bottom: 0px; right: 0px; display: flex; flex-direction: row; gap: 4px;
+      padding: 6px 2px; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; border-radius: 14px;
+    }
+    .flxn-icon-action-btn { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer; border-radius: 50%; color: var(--flxn-text); opacity: 0.6; background: transparent; transition: all 0.15s ease; }
+    .flxn-icon-action-btn:hover { opacity: 1; background: var(--flxn-icon-hover-bg); }
+    .flxn-icon-action-btn.pinned-active:hover { color: #e53935; }
+    .flxn-icon-action-btn.trash-btn:hover { color: #e53935; background: rgba(229, 57, 53, 0.15); }
+
+    /* =========================================================
+      5. TAG SYSTEM
+      ========================================================= */
+    .flxn-tag-input-wrapper { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px; background: var(--flxn-input-bg); border: 1px solid var(--flxn-accent-bg); border-radius: 4px; cursor: text; min-height: 36px; box-sizing: border-box; }
+    .flxn-tag-input-wrapper input { border: none !important; background: transparent !important; width: auto !important; flex-grow: 1; min-width: 80px; margin: 0 !important; padding: 0 !important; box-shadow: none !important; color: inherit !important; }
+    .flxn-tag-chip { background: var(--flxn-bg); color: var(--flxn-text); padding: 4px 8px; border-radius: 12px; font-size: 12px; display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--flxn-tag-chip-border); width: max-content; }
+    .flxn-tag-chip:hover { filter: brightness(1.15); transform: scale(1.05); box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+    .flxn-tag-chip:active { transform: scale(0.97); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .flxn-tag-chip mark { background: #ffe066; padding: 0; }
+    .flxn-tag-chip.include { background: var(--flxn-accent-bg) !important; color: var(--flxn-btn-text-color) !important; border-color: var(--flxn-accent-bg-darker) !important; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
+    .flxn-tag-chip.exclude { background: transparent !important; color: var(--flxn-accent-bg) !important; border: 1px dashed var(--flxn-accent-bg) !important; text-decoration: line-through; opacity: 0.6; }
+
+    /* =========================================================
+      6. NOTIFICATIONS
+      ========================================================= */
+    .flxn-notification { background: var(--flxn-bg); color: var(--flxn-text); border: 1px solid var(--flxn-notification-border); }
+    .flxn-notification-action { background: var(--flxn-accent-bg) !important; color: var(--flxn-btn-text-color) !important; border: none !important; }
+
+    /* =========================================================
+      7. EASYMDE EDITOR
+      ========================================================= */
+    .flx-icon-fallback { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; pointer-events: none; }
+    .flx-icon-fallback svg { width: 100%; height: 100%; }
+    .EasyMDEContainer .editor-toolbar {
+      background: var(--flxn-input-bg) !important;
+      border: 1px solid var(--flxn-accent-bg) !important;
+      border-top-left-radius: 4px !important;
+      border-top-right-radius: 4px !important;
+      opacity: 1 !important;
+      padding: 4px 6px !important;
+    }
+    .EasyMDEContainer .editor-toolbar button {
+      display: inline-flex !important;
+      align-items: center;
+      justify-content: center;
+      min-width: 28px;
+      min-height: 28px;
+      padding: 0 !important;
+      margin: 2px !important;
+    }
+    .EasyMDEContainer .editor-toolbar i.separator {
+      display: inline-block;
+      margin: 0 4px;
+      border-right: 1px solid var(--flxn-separator-color) !important;
+      width: 0;
+      text-indent: -9999px;
+      height: 18px;
+      vertical-align: middle;
+    }
+
+    .EasyMDEContainer .editor-toolbar button, .EasyMDEContainer .editor-toolbar button i.fa, .EasyMDEContainer .editor-toolbar button svg,
+    .editor-toolbar button i, .editor-toolbar button::before {
+      color: var(--flxn-text) !important; background: transparent !important; border: 1px solid transparent !important;
+    }
+    .EasyMDEContainer .editor-toolbar button.active, .EasyMDEContainer .editor-toolbar button:hover {
+      background: var(--flxn-bg) !important; border-color: var(--flxn-toolbar-hover-border) !important;
+    }
+    .EasyMDEContainer .editor-toolbar button.active i.fa, .EasyMDEContainer .editor-toolbar button:hover i.fa,
+    .EasyMDEContainer .editor-toolbar button.active i, .EasyMDEContainer .editor-toolbar button:hover i,
+    .EasyMDEContainer .editor-toolbar button.active svg, .EasyMDEContainer .editor-toolbar button:hover svg {
+      color: var(--flxn-accent-text) !important;
+    }
+    .EasyMDEContainer .editor-toolbar button.disabled-for-preview { opacity: 0.4 !important; }
+
+    #flxn-editor-wrapper:not([style*="display: none"]),
+    #flxn-scratchpad-wrapper:not([style*="display: none"]) { display: flex !important; flex-direction: column !important; flex: 1 1 auto !important; min-height: 250px; height: 100%; }
+
+    .flxn-modal .EasyMDEContainer { display: flex; flex-direction: column; height: 100%; flex: 1 1 auto; min-height: 0; }
+    .flxn-modal .EasyMDEContainer .editor-toolbar:not(.fullscreen) { flex: 0 0 auto; }
+    .flxn-modal .EasyMDEContainer .CodeMirror:not(.CodeMirror-fullscreen) {
+      flex: 1 1 auto; height: auto !important; min-height: 150px; max-height: none !important;
+      display: flex; flex-direction: column;
+      background: var(--flxn-input-bg) !important; color: var(--flxn-text) !important;
+      border: 1px solid var(--flxn-accent-bg) !important; border-top: none !important;
+      border-bottom-left-radius: 4px !important; border-bottom-right-radius: 4px !important;
+      margin: 0 !important; font-family: inherit !important;
+    }
+    .flxn-modal .EasyMDEContainer .CodeMirror-scroll:not(.CodeMirror-fullscreen) { flex: 1 1 auto !important; height: 100% !important; max-height: none !important; min-height: 0 !important; }
+    
+    .EasyMDEContainer .CodeMirror-cursor { border-left: 2px solid var(--flxn-text) !important; }
+    .EasyMDEContainer .editor-statusbar { color: var(--flxn-text) !important; opacity: 0.7; flex: 0 0 auto; }
+
+    .flxn-modal.flxn-fullscreen-active {
+      top: 0 !important;
+      left: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      max-width: 100vw !important;
+      max-height: 100vh !important;
+      border-radius: 0 !important;
+      padding: 0 !important;
+      border: none !important;
+      transform: none !important;
+      box-shadow: none !important;
+      background: var(--flxn-bg) !important;
+    }
+    .flxn-modal.flxn-fullscreen-active .flxn-header-wrapper,
+    .flxn-modal.flxn-fullscreen-active .flxn-modal-footer,
+    .flxn-modal.flxn-fullscreen-active .flxn-tag-input-wrapper,
+    .flxn-modal.flxn-fullscreen-active #flxn-note-url,
+    .flxn-modal.flxn-fullscreen-active .flxn-modal-close-btn {
+      display: none !important;
+    }
+    .flxn-modal.flxn-fullscreen-active .flxn-modal-content {
+      padding: 0 !important;
+      height: 100% !important;
+      gap: 0 !important;
+      overflow: hidden !important;
+    }
+    .flxn-modal.flxn-fullscreen-active .EasyMDEContainer {
+      height: 100% !important;
+    }
+    .flxn-modal.flxn-fullscreen-active .CodeMirror-fullscreen,
+    .flxn-modal.flxn-fullscreen-active .editor-preview-side {
+      top: 50px !important;
+      height: calc(100vh - 50px) !important;
+      box-sizing: border-box !important;
+    }
+    .flxn-modal.flxn-fullscreen-active .editor-toolbar.fullscreen {
+      width: 100vw !important;
+      box-sizing: border-box !important;
+      padding-top: 10px !important;
+    }
+    .flxn-modal.flxn-fullscreen-active .CodeMirror-scroll {
+      max-height: none !important;
+    }
+
+    .EasyMDEContainer .editor-preview,
+    .EasyMDEContainer .editor-preview-side {
+      background: var(--flxn-bg) !important;
+      color: var(--flxn-text) !important;
+      border: 1px solid var(--flxn-accent-bg) !important;
+      box-sizing: border-box !important;
+      padding: 10px 14px !important;
+      line-height: 1.4 !important;
+      font-size: 14px !important;
+    }
+    .EasyMDEContainer .editor-preview {
+      border-top: none !important;
+    }
+    .editor-preview p, .editor-preview-side p {
+      margin: 0.5em 0 !important;
+    }
+
+    .editor-preview h1, .editor-preview-side h1,
+    .editor-preview h2, .editor-preview-side h2,
+    .editor-preview h3, .editor-preview-side h3,
+    .editor-preview h4, .editor-preview-side h4 {
+      margin-top: 1em !important;
+      margin-bottom: 0.4em !important;
+      line-height: 1.2 !important;
+    }
+    .editor-preview h1, .editor-preview-side h1 { font-size: 1.4em !important; }
+    .editor-preview h2, .editor-preview-side h2 { font-size: 1.2em !important; }
+    .editor-preview h3, .editor-preview-side h3 { font-size: 1.1em !important; }
+    .editor-preview h4, .editor-preview-side h4 { font-size: 1em !important; }
+    .editor-preview ul, .editor-preview-side ul {
+      list-style: disc outside !important;
+      padding-left: 1.5em !important;
+      margin: 0.5em 0 !important;
+      display: block !important;
+    }
+    .editor-preview ol, .editor-preview-side ol {
+      list-style: decimal outside !important;
+      padding-left: 1.5em !important;
+      margin: 0.5em 0 !important;
+      display: block !important;
+    }
+    .editor-preview li, .editor-preview-side li {
+      display: list-item !important;
+      margin-bottom: 0.2em !important;
+    }
+    .editor-preview input[type="checkbox"], .editor-preview-side input[type="checkbox"] {
+      appearance: checkbox !important;
+      -webkit-appearance: checkbox !important;
+      display: inline-block !important;
+      width: auto !important;
+      height: auto !important;
+      margin-right: 6px !important;
+      margin-left: -2px !important;
+      opacity: 1 !important;
+      cursor: pointer !important;
+      vertical-align: baseline !important;
+      position: relative !important;
+      top: 1px !important;
+    }
+
+    .editor-preview a, .editor-preview-side a {
+      cursor: pointer !important;
+      color: var(--flxn-accent-text) !important;
+      text-decoration: none !important;
+    }
+    .editor-preview a:hover, .editor-preview-side a:hover {
+      text-decoration: underline !important;
+    }
+
+    /* =========================================================
+      8. EDGE DOCK
+      ========================================================= */
+    #flxn-edge-dock {
+      pointer-events: auto; position: fixed; top: 50%; transform: translateY(-50%);
+      width: 6px; height: 100px; background: var(--flxn-dock-bg);
+      backdrop-filter: blur(6px) saturate(150%); -webkit-backdrop-filter: blur(6px) saturate(150%);
+      border: 1px solid var(--flxn-dock-border);
+      border-right: none; border-radius: 6px 0 0 6px; cursor: grab; z-index: 999999;
+      transition: width 0.2s ease, opacity 0.2s ease, background 0.2s ease;
+      box-shadow: -2px 0 12px rgba(0,0,0,0.25), inset 1px 0 2px rgba(255,255,255,0.2); opacity: 0.85;
+    }
+    #flxn-edge-dock:hover { width: 14px; opacity: 1; background: var(--flxn-accent-bg-dark); }
+    #flxn-edge-dock:active { cursor: grabbing; }
+    #flxn-sync-indicator {
+      position: absolute; left: -16px; top: -2px; width: 18px; height: 18px; background: var(--flxn-accent-bg);
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      opacity: 0; visibility: hidden; transform: translateY(-50%) scale(0.5);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: -2px 2px 8px rgba(0,0,0,0.3); cursor: help; color: white;
+    }
+    #flxn-sync-indicator.active { opacity: 1; visibility: visible; transform: translateY(-50%) scale(1); }
+    #flxn-sync-indicator svg { width: 10px; height: 10px; fill: currentColor; animation: flxn-spin 1.5s linear infinite; }
+    @keyframes flxn-spin { 100% { transform: rotate(360deg); } }
+  `;
+
   const darken = FluxKit.theme.darken;
-  const { isSiteDark, getSiteStyles, get: getTheme, presets: fluxPresets } = FluxKit.theme;
+  const { isSiteDark, getSiteStyles, presets: fluxPresets } = FluxKit.theme;
 
   const THEME_PRESETS = {
     auto: { name: 'Auto (Site Match)', dark: null },
@@ -542,338 +1032,46 @@
     '#43aa8b', '#577590', '#9d4edd', '#ff6d00'
   ];
 
-  let activeThemeBridge = {};
-
-  function injectDynamicModalStyles({ fontFamily, accentBg, accentText, btnTextColor, bg, text, inputBg }) {
-    const glassBg = bg && bg.length === 7 ? bg + 'E6' : bg;
-
-    const style = `
-      /* =========================================================
-         1. MODALS & CONTAINERS
-         ========================================================= */
-      #${MODAL_IDS.NOTE}, #${MODAL_IDS.VIEW}, #${MODAL_IDS.SETTINGS},
-      #${MODAL_IDS.QUICK_NOTE}, #un-merge-tags-modal {
-        position: fixed;
-        background: ${glassBg};
-        color: ${text};
-        font-family: ${fontFamily};
-        backdrop-filter: blur(10px) saturate(180%);
-        -webkit-backdrop-filter: blur(10px) saturate(180%);
-        border: 1px solid ${darkMode ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)'} !important;
-        box-shadow: ${darkMode ? '0 12px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.1) inset' : '0 12px 40px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.5) inset'} !important;
-        transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
-      }
-      #${MODAL_IDS.NOTE}, #${MODAL_IDS.SETTINGS}, #${MODAL_IDS.QUICK_NOTE}, #un-merge-tags-modal { left: 35vw; }
-      #${MODAL_IDS.SETTINGS} { overflow: visible; }
-      #${MODAL_IDS.VIEW} { padding: 24px; border-radius: 12px; width: 45vw; height: 70vh; display: flex; flex-direction: column; }
-      #${MODAL_IDS.NOTE} .un-modal-content { display: flex; flex-direction: column; gap: 10px; }
-      .un-modal-close-btn { position: absolute !important; top: 16px !important; right: 16px !important; width: 28px !important; height: 28px !important; background: transparent !important; border: none !important; box-shadow: none !important; color: ${text} !important; opacity: 0.5; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 50% !important; padding: 0 !important; z-index: 10; transition: all 0.2s ease !important; }
-      .un-modal-close-btn:hover { opacity: 1 !important; transform: rotate(90deg) scale(1.1) !important; }
-
-      /* =========================================================
-         2. FORMS & INPUTS
-         ========================================================= */
-      /* CRITICAL FIX: Added :not(#un-tag-input) to prevent double borders inside the tag wrapper */
-      #${MODAL_IDS.NOTE} input:not([type="checkbox"]):not(.CodeMirror-search-field):not(#un-tag-input),
-      #${MODAL_IDS.NOTE} textarea:not(.CodeMirror textarea):not([style*="display: none"]),
-      #${MODAL_IDS.NOTE} select,
-      #${MODAL_IDS.SETTINGS} input:not([type="checkbox"]), #${MODAL_IDS.SETTINGS} textarea, #${MODAL_IDS.SETTINGS} select,
-      #${MODAL_IDS.VIEW} input:not([type="checkbox"]), #${MODAL_IDS.VIEW} textarea, #${MODAL_IDS.VIEW} select,
-      #un-merge-tags-modal input:not([type="checkbox"]), #un-merge-tags-modal textarea, #un-merge-tags-modal select,
-      #${MODAL_IDS.QUICK_NOTE} input:not([type="checkbox"]), #${MODAL_IDS.QUICK_NOTE} textarea, #${MODAL_IDS.QUICK_NOTE} select {
-        background: ${inputBg} !important; color: ${text} !important; border: 1px solid ${accentBg} !important;
-        width: 100% !important; padding: 6px !important; margin-bottom: 8px !important;
-        border-radius: 4px !important; box-sizing: border-box !important; font-family: ${fontFamily};
-      }
-      .un-modal input:focus, .un-modal textarea:focus, .un-modal select:focus,
-      .un-tag-input-wrapper:focus-within, .EasyMDEContainer .CodeMirror.CodeMirror-focused {
-        outline: none !important; box-shadow: 0 0 0 1px ${accentBg} inset !important;
-      }
-      #${MODAL_IDS.SETTINGS} input[type="checkbox"] { transform: scale(1.2); margin-right: 8px; accent-color: ${accentBg}; }
-
-      /* =========================================================
-         3. BUTTONS & LINKS
-         ========================================================= */
-      #${MODAL_IDS.NOTE} button, #${MODAL_IDS.VIEW} button, #${MODAL_IDS.SETTINGS} button,
-      #${MODAL_IDS.QUICK_NOTE} button, #un-merge-tags-modal button,
-      #un-notes-list > .note-container, .un-tag-chip {
-        transition: background 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease; cursor: pointer; border-radius: 6px;
-      }
-      #${MODAL_IDS.NOTE} button, #${MODAL_IDS.VIEW} button, #${MODAL_IDS.SETTINGS} button,
-      #${MODAL_IDS.QUICK_NOTE} button, #un-merge-tags-modal button {
-        padding: 6px 12px; background: linear-gradient(135deg, ${accentBg}, ${darken(accentBg, 10)});
-        color: ${btnTextColor}; font-family: ${fontFamily}; position: relative; overflow: hidden;
-        border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-      }
-      #${MODAL_IDS.NOTE} button:hover, #${MODAL_IDS.VIEW} button:hover, #${MODAL_IDS.SETTINGS} button:hover,
-      #${MODAL_IDS.QUICK_NOTE} button:hover, #un-merge-tags-modal button:hover {
-        transform: scale(1.03); box-shadow: ${darkMode ? '0 4px 10px rgba(255,255,255,0.15)' : '0 4px 10px rgba(0,0,0,0.15)'};
-      }
-      #${MODAL_IDS.NOTE} button:active, #${MODAL_IDS.VIEW} button:active, #${MODAL_IDS.SETTINGS} button:active,
-      #${MODAL_IDS.QUICK_NOTE} button:active, #un-merge-tags-modal button:active {
-        transform: scale(0.97); box-shadow: ${darkMode ? '0 2px 6px rgba(255,255,255,0.1)' : '0 2px 6px rgba(0,0,0,0.1)'};
-      }
-      .un-modal a:not(.button-like):not([class*="btn"]) { color: ${accentText}; text-decoration: underline; cursor: pointer; font-family: ${fontFamily}; }
-      .un-modal a:hover { opacity: 0.85; }
-
-      /* =========================================================
-         4. NOTE CARDS & ACTIONS
-         ========================================================= */
-      .un-notes-list-wrapper { display: block; flex-direction: column; position: relative; height: auto !important; overflow: visible !important; padding-top: 10px; }
-      #un-notes-list {
-        height: auto; max-height: none !important; overflow: visible !important; display: block !important; padding-bottom: var(--un-spacing-lg) !important;
-        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); grid-auto-rows: min-content; gap: 16px; overscroll-behavior: contain; padding-right: 8px; scrollbar-width: thin; scrollbar-color: ${inputBg} ${bg};
-      }
-      #un-notes-list::-webkit-scrollbar { width: 8px; }
-      #un-notes-list::-webkit-scrollbar-track { background: ${bg}; }
-      #un-notes-list::-webkit-scrollbar-thumb { background: ${inputBg}; border-radius: 4px; border: 1px solid ${darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}; }
-
-      #un-notes-list > .note-container {
-        height: auto; align-self: start; justify-self: stretch; display: flex; align-items: flex-start;
-        position: relative; cursor: pointer; padding: 10px; border-radius: 6px;
-        border-left: 4px solid ${inputBg}; border-bottom: 1px solid ${inputBg};
-        transition: background-color 0.1s ease-in-out, opacity 0.25s ease, transform 0.25s ease;
-        opacity: 0; transform: translateY(6px); will-change: opacity, transform;
-      }
-      #un-notes-list > .note-container.show { opacity: 1; transform: translateY(0); }
-      #un-notes-list > .note-container:hover { background-color: ${inputBg}; }
-      #un-notes-list > .note-container:active { background-color: ${inputBg}; transform: scale(0.97); }
-      #un-notes-list > .note-container.pinned { border-left: 4px solid ${accentBg} !important; background-color: ${darkMode ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)'} !important; }
-
-      .un-note-actions-wrapper {
-        position: absolute; bottom: 0px; right: 0px; display: flex; flex-direction: row; gap: 4px;
-        padding: 6px 2px; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; z-index: 10; border-radius: 14px;
-      }
-      .un-icon-action-btn { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer; border-radius: 50%; color: ${text}; opacity: 0.6; background: transparent; transition: all 0.15s ease; }
-      .un-icon-action-btn:hover { opacity: 1; background: ${darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'}; }
-      .un-icon-action-btn.pinned-active:hover { color: #e53935; }
-      .un-icon-action-btn.trash-btn:hover { color: #e53935; background: rgba(229, 57, 53, 0.15); }
-
-      /* =========================================================
-         5. TAG SYSTEM
-         ========================================================= */
-      .un-tag-input-wrapper { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px; background: ${inputBg}; border: 1px solid ${accentBg}; border-radius: 4px; cursor: text; min-height: 36px; box-sizing: border-box; }
-      .un-tag-input-wrapper input { border: none !important; background: transparent !important; width: auto !important; flex-grow: 1; min-width: 80px; margin: 0 !important; padding: 0 !important; box-shadow: none !important; color: inherit !important; }
-      .un-tag-chip { background: ${bg}; color: ${text}; padding: 4px 8px; border-radius: 12px; font-size: 12px; display: inline-flex; align-items: center; gap: 4px; border: 1px solid ${darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}; width: max-content; }
-      .un-tag-chip:hover { filter: brightness(1.15); transform: scale(1.05); box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-      .un-tag-chip:active { transform: scale(0.97); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-      .un-tag-chip mark { background: #ffe066; padding: 0; }
-      .un-tag-chip.include { background: ${accentBg} !important; color: ${btnTextColor} !important; border-color: ${darken(accentBg, 15)} !important; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
-      .un-tag-chip.exclude { background: transparent !important; color: ${accentBg} !important; border: 1px dashed ${accentBg} !important; text-decoration: line-through; opacity: 0.6; }
-
-      /* =========================================================
-         6. NOTIFICATIONS
-         ========================================================= */
-      .un-notification { background: ${bg}; color: ${text}; border: 1px solid ${darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}; }
-      .un-notification-action { background: ${accentBg} !important; color: ${btnTextColor} !important; border: none !important; }
-
-      /* =========================================================
-         7. EASYMDE EDITOR
-         ========================================================= */
-      .icon-svg-fallback { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; pointer-events: none; }
-      .icon-svg-fallback svg { width: 100%; height: 100%; vector-effect: non-scaling-stroke; }
-      .EasyMDEContainer .editor-toolbar {
-        background: ${inputBg} !important;
-        border: 1px solid ${accentBg} !important;
-        border-top-left-radius: 4px !important;
-        border-top-right-radius: 4px !important;
-        opacity: 1 !important;
-        padding: 4px 6px !important; /* Natural padding */
-      }
-      .EasyMDEContainer .editor-toolbar button {
-        display: inline-flex !important;
-        align-items: center;
-        justify-content: center;
-        min-width: 28px;
-        min-height: 28px;
-        padding: 0 !important;
-        margin: 2px !important;
-      }
-      .EasyMDEContainer .editor-toolbar i.separator {
-        display: inline-block;
-        margin: 0 4px;
-        border-right: 1px solid ${darkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'} !important;
-        width: 0;
-        text-indent: -9999px;
-        height: 18px;
-        vertical-align: middle;
-      }
-
-      .EasyMDEContainer .editor-toolbar button, .EasyMDEContainer .editor-toolbar button i.fa, .EasyMDEContainer .editor-toolbar button svg,
-      .editor-toolbar button i, .editor-toolbar button::before {
-        color: ${text} !important; background: transparent !important; border: 1px solid transparent !important;
-      }
-      .EasyMDEContainer .editor-toolbar button.active, .EasyMDEContainer .editor-toolbar button:hover {
-        background: ${bg} !important; border-color: ${darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'} !important;
-      }
-      .EasyMDEContainer .editor-toolbar button.active i.fa, .EasyMDEContainer .editor-toolbar button:hover i.fa,
-      .EasyMDEContainer .editor-toolbar button.active i, .EasyMDEContainer .editor-toolbar button:hover i,
-      .EasyMDEContainer .editor-toolbar button.active svg, .EasyMDEContainer .editor-toolbar button:hover svg {
-        color: ${accentText} !important;
-      }
-      .EasyMDEContainer .editor-toolbar button.disabled-for-preview { opacity: 0.4 !important; }
-
-      .EasyMDEContainer .CodeMirror {
-        background: ${inputBg} !important;
-        color: ${text} !important;
-        border: 1px solid ${accentBg} !important;
-        border-top: none !important;
-        border-bottom-left-radius: 4px !important;
-        border-bottom-right-radius: 4px !important;
-        margin: 0 !important; font-family: inherit !important;
-      }
-      .EasyMDEContainer .CodeMirror-scroll { min-height: 200px !important; max-height: 40vh !important; }
-      .EasyMDEContainer .CodeMirror-cursor { border-left: 2px solid ${text} !important; }
-      .EasyMDEContainer .editor-statusbar { color: ${text} !important; opacity: 0.7; }
-
-      .un-modal.un-fullscreen-active {
-        top: 0 !important;
-        left: 0 !important;
-        width: 100vw !important;
-        height: 100vh !important;
-        max-width: 100vw !important;
-        max-height: 100vh !important;
-        border-radius: 0 !important;
-        padding: 0 !important;
-        border: none !important;
-        transform: none !important;
-        box-shadow: none !important;
-        background: ${bg} !important;
-      }
-      .un-modal.un-fullscreen-active .un-header-wrapper,
-      .un-modal.un-fullscreen-active .un-modal-footer,
-      .un-modal.un-fullscreen-active .un-tag-input-wrapper,
-      .un-modal.un-fullscreen-active #un-note-url,
-      .un-modal.un-fullscreen-active .un-modal-close-btn {
-        display: none !important; /* Hide other modal elements to give editor full focus */
-      }
-      .un-modal.un-fullscreen-active .un-modal-content {
-        padding: 0 !important;
-        height: 100% !important;
-        gap: 0 !important;
-        overflow: hidden !important;
-      }
-      .un-modal.un-fullscreen-active .EasyMDEContainer {
-        height: 100% !important;
-      }
-      .un-modal.un-fullscreen-active .CodeMirror-fullscreen,
-      .un-modal.un-fullscreen-active .editor-preview-side {
-        top: 50px !important; /* Offset for the toolbar height */
-        height: calc(100vh - 50px) !important;
-        box-sizing: border-box !important;
-      }
-      .un-modal.un-fullscreen-active .editor-toolbar.fullscreen {
-        width: 100vw !important;
-        box-sizing: border-box !important;
-        padding-top: 10px !important;
-      }
-      .un-modal.un-fullscreen-active .CodeMirror-scroll {
-        max-height: none !important;
-      }
-
-      .EasyMDEContainer .editor-preview,
-      .EasyMDEContainer .editor-preview-side {
-        background: ${bg} !important;
-        color: ${text} !important;
-        border: 1px solid ${accentBg} !important;
-        box-sizing: border-box !important;
-        padding: 10px 14px !important; /* Tighter container padding */
-        line-height: 1.4 !important; /* Slightly condensed line height */
-        font-size: 14px !important; /* Standardized base size */
-      }
-      .EasyMDEContainer .editor-preview {
-        border-top: none !important;
-      }
-      .editor-preview p, .editor-preview-side p {
-        margin: 0.5em 0 !important; /* Halved vertical margins */
-      }
-
-      .editor-preview h1, .editor-preview-side h1,
-      .editor-preview h2, .editor-preview-side h2,
-      .editor-preview h3, .editor-preview-side h3,
-      .editor-preview h4, .editor-preview-side h4 {
-        margin-top: 1em !important;
-        margin-bottom: 0.4em !important;
-        line-height: 1.2 !important;
-      }
-      .editor-preview h1, .editor-preview-side h1 { font-size: 1.4em !important; }
-      .editor-preview h2, .editor-preview-side h2 { font-size: 1.2em !important; }
-      .editor-preview h3, .editor-preview-side h3 { font-size: 1.1em !important; }
-      .editor-preview h4, .editor-preview-side h4 { font-size: 1em !important; }
-      .editor-preview ul, .editor-preview-side ul {
-        list-style: disc outside !important;
-        padding-left: 1.5em !important; /* Shallower indentation */
-        margin: 0.5em 0 !important;
-        display: block !important;
-      }
-      .editor-preview ol, .editor-preview-side ol {
-        list-style: decimal outside !important;
-        padding-left: 1.5em !important;
-        margin: 0.5em 0 !important;
-        display: block !important;
-      }
-      .editor-preview li, .editor-preview-side li {
-        display: list-item !important;
-        margin-bottom: 0.2em !important; /* Tighter spacing between items */
-      }
-      .editor-preview input[type="checkbox"], .editor-preview-side input[type="checkbox"] {
-        appearance: checkbox !important;
-        -webkit-appearance: checkbox !important;
-        display: inline-block !important;
-        width: auto !important;
-        height: auto !important;
-        margin-right: 6px !important;
-        margin-left: -2px !important;
-        opacity: 1 !important;
-        cursor: pointer !important;
-        vertical-align: baseline !important;
-        position: relative !important;
-        top: 1px !important;
-      }
-
-      .editor-preview a, .editor-preview-side a {
-        cursor: pointer !important;
-        color: ${accentText} !important;
-        text-decoration: none !important;
-      }
-      .editor-preview a:hover, .editor-preview-side a:hover {
-        text-decoration: underline !important;
-      }
-
-      /* =========================================================
-         8. EDGE DOCK
-         ========================================================= */
-      #un-edge-dock {
-        pointer-events: auto; position: fixed; right: 0; top: 50%; transform: translateY(-50%);
-        width: 6px; height: 100px; background: ${accentBg.length === 7 ? accentBg + 'B3' : accentBg};
-        backdrop-filter: blur(6px) saturate(150%); -webkit-backdrop-filter: blur(6px) saturate(150%);
-        border: 1px solid ${darkMode ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.2)'};
-        border-right: none; border-radius: 6px 0 0 6px; cursor: grab; z-index: 999999;
-        transition: width 0.2s ease, opacity 0.2s ease, background 0.2s ease;
-        box-shadow: -2px 0 12px rgba(0,0,0,0.25), inset 1px 0 2px rgba(255,255,255,0.2); opacity: 0.85;
-      }
-      #un-edge-dock:hover { width: 14px; opacity: 1; background: ${darken(accentBg, 10)}; }
-      #un-edge-dock:active { cursor: grabbing; }
-      #un-sync-indicator {
-        position: absolute; left: -16px; top: -2px; width: 18px; height: 18px; background: ${accentBg};
-        border-radius: 50%; display: flex; align-items: center; justify-content: center;
-        /* Hidden state */
-        opacity: 0; visibility: hidden; transform: translateY(-50%) scale(0.5);
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        box-shadow: -2px 2px 8px rgba(0,0,0,0.3); cursor: help; color: white;
-      }
-      #un-sync-indicator.active { opacity: 1; visibility: visible; transform: translateY(-50%) scale(1); }
-      #un-sync-indicator svg { width: 10px; height: 10px; fill: currentColor; animation: un-spin 1.5s linear infinite; }
-      @keyframes un-spin { 100% { transform: rotate(360deg); } }
-    `;
-
-    let styleEl = getAppRoot().querySelector('#un-dynamic-styles');
-    if (!styleEl) {
-      styleEl = document.createElement('style');
-      styleEl.id = 'un-dynamic-styles';
-      getAppRoot().appendChild(styleEl);
+  function applyThemeVars(theme) {
+    const { fontFamily, accentBg, accentText, btnTextColor, bg, text, inputBg, darkMode } = theme;
+  
+    const root = getAppRoot();
+  
+    const vars = {
+      '--flxn-font-family': fontFamily,
+      '--flxn-bg': bg,
+      '--flxn-text': text,
+      '--flxn-accent-bg': accentBg,
+      '--flxn-accent-text': accentText,
+      '--flxn-btn-text-color': btnTextColor,
+      '--flxn-input-bg': inputBg,
+  
+      '--flxn-glass-bg': bg && bg.length === 7 ? bg + 'E6' : bg,
+      '--flxn-dock-bg': accentBg && accentBg.length === 7 ? accentBg + 'B3' : accentBg,
+      '--flxn-accent-bg-dark': darken(accentBg, 10),
+      '--flxn-accent-bg-darker': darken(accentBg, 15),
+  
+      '--flxn-modal-border-color': darkMode ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)',
+      '--flxn-modal-shadow': darkMode
+        ? '0 12px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.1) inset'
+        : '0 12px 40px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.5) inset',
+      '--flxn-btn-hover-shadow': darkMode ? '0 4px 10px rgba(255,255,255,0.15)' : '0 4px 10px rgba(0,0,0,0.15)',
+      '--flxn-btn-active-shadow': darkMode ? '0 2px 6px rgba(255,255,255,0.1)' : '0 2px 6px rgba(0,0,0,0.1)',
+      '--flxn-note-pinned-bg': darkMode ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)',
+      '--flxn-icon-hover-bg': darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
+      '--flxn-tag-chip-border': darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+      '--flxn-notification-border': darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+      '--flxn-separator-color': darkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)',
+      '--flxn-toolbar-hover-border': darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+      '--flxn-scrollbar-thumb-border': darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+      '--flxn-dock-border': darkMode ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.2)',
+    };
+  
+    for (const [key, value] of Object.entries(vars)) {
+      root.host.style.setProperty(key, value);
     }
-    styleEl.textContent = style;
+  
+    root.host.classList.toggle('flxn-dark', !!darkMode);
   }
 
   function applyTheme(theme) {
@@ -889,14 +1087,13 @@
       darkMode = isSiteDark(null, false);
       const siteStyles = getSiteStyles({
         isDark: darkMode,
-        ignoreSelector: '#un-shadow-host'
+        ignoreSelector: '#flxn-shadow-host'
       });
       stylePayload = { ...siteStyles, darkMode };
     } else {
-      const preset = getTheme(themeKey);
-      darkMode = preset.dark;
+      const preset = THEME_PRESETS[themeKey];
       stylePayload = {
-        ...getTheme(themeKey), darkMode, fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+        ...preset, darkMode: preset.dark, fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
       };
     }
 
@@ -911,9 +1108,10 @@
     if (window.activeUnSyncEditor) {
       window.activeUnSyncEditor.updateTheme(activeThemeBridge);
     }
-    if (window.activeUnPadInstance) {
-       window.activeUnPadInstance.updateTheme(activeThemeBridge);
-   }
+    const activePadContainers = getAppRoot().querySelectorAll('#flxn-scratchpad-wrapper');
+    activePadContainers.forEach(container => {
+      container.dispatchEvent(new CustomEvent('flxn-theme-changed', { detail: activeThemeBridge }));
+    });
     if (typeof fluxViewer !== 'undefined' && fluxViewer) {
       fluxViewer.updateTheme(stylePayload);
     }
@@ -921,12 +1119,14 @@
     const rootElement = getAppRoot();
     initNotification({
       ...stylePayload,
+      ...notifNamespace,
       rootElement,
       position: 'top-center'
     });
 
     initContextMenu({
       ...stylePayload,
+      ...ctxNamespace,
       rootElement,
       bg: stylePayload.bg.length > 7 ? stylePayload.bg.slice(0, -2) : stylePayload.bg,
     });
@@ -934,11 +1134,12 @@
     initTooltips({
       ...stylePayload,
       rootElement,
+      attribute: 'flxNotes',
       border: `1px solid ${stylePayload.accentBg}`,
       delay: 500
     });
 
-    injectDynamicModalStyles(stylePayload);
+    applyThemeVars(stylePayload);
   }
 
   function getTagColor(tag) {
@@ -960,11 +1161,62 @@
 
   let unAppRoot = null;
 
+  function bringToFront(targetModal) {
+    if (!targetModal) return;
+
+    const allModals = Array.from(getAppRoot().querySelectorAll('.flxn-modal'));
+    let maxZ = 0;
+
+    allModals.forEach(m => {
+      if (m !== targetModal) {
+        const z = parseInt(m.style.zIndex) || 0;
+        if (z > maxZ) maxZ = z;
+      }
+    });
+
+    targetModal.style.zIndex = Math.max(10001, maxZ + 1).toString();
+    requestAnimationFrame(() => updateActiveScratchpadState());
+  }
+
+  function applyModalCascade(newModal, oldCoords) {
+    if (oldCoords) {
+      newModal.style.top = oldCoords.top;
+      newModal.style.left = oldCoords.left;
+      newModal.style.bottom = 'auto';
+      newModal.style.right = 'auto';
+      return;
+    }
+    const allModals = Array.from(getAppRoot().querySelectorAll('.flxn-modal'))
+      .filter(m => m !== newModal && m.classList.contains('show'));
+
+    if (allModals.length === 0) return;
+
+    let activeModal = allModals.reduce((top, current) => {
+      const topZ = parseInt(top.style.zIndex || 10000);
+      const currZ = parseInt(current.style.zIndex || 10000);
+      return currZ > topZ ? current : top;
+    }, allModals[0]);
+
+    const rect = activeModal.getBoundingClientRect();
+    const cascadeOffset = 32;
+
+    let nextTop = rect.top + cascadeOffset;
+    let nextLeft = rect.left + cascadeOffset;
+
+    if (nextTop > window.innerHeight * 0.6) nextTop = window.innerHeight * 0.15; 
+    if (nextLeft > window.innerWidth * 0.6) nextLeft = window.innerWidth * 0.25;
+
+    newModal.style.top = `${nextTop}px`;
+    newModal.style.left = `${nextLeft}px`;
+    newModal.style.bottom = 'auto';
+    newModal.style.right = 'auto';
+  }
+
   function getAppRoot() {
     if (unAppRoot) return unAppRoot;
 
     const host = document.createElement('div');
-    host.id = 'un-shadow-host';
+    host.id = 'flxn-shadow-host';
 
     host.style.all = 'initial';
     host.style.display = 'block';
@@ -981,12 +1233,18 @@
 
     unAppRoot = host.attachShadow({ mode: 'open' });
 
+    unAppRoot.addEventListener('mousedown', (e) => {
+      const modal = e.target.closest('.flxn-modal');
+      if (modal) bringToFront(modal);
+    }, true);
+
     const staticStyle = document.createElement('style');
-    staticStyle.id = 'un-static-styles';
+    staticStyle.id = 'flxn-static-styles';
 
     staticStyle.textContent = `
       dialog { pointer-events: auto; }
       ${STATIC_MODAL_CSS}
+      ${DYNAMIC_MODAL_CSS}
     `;
     unAppRoot.appendChild(staticStyle);
 
@@ -1001,6 +1259,9 @@
       file: UI_ICONS.document,
     }
   });
+
+  const confirmAction = async (message) => FluxKit.ui.confirm(message, { theme: activeThemeBridge });
+  const promptUser = async (message, val) => FluxKit.ui.prompt(message, { defaultValue: val, theme: activeThemeBridge  });
 
   const unQuery = (selector) => getAppRoot().querySelector(selector);
   const unQueryAll = (selector) => getAppRoot().querySelectorAll(selector);
@@ -1017,42 +1278,36 @@
 
   const generateId = () => 'note-' + getUniqueId();
 
-  function migrateNoteFormat(notes) {
-    let migrated = false;
-    notes.forEach(note => {
-      // Migrate old screenshot properties to the attachments array
-      if ((note.hasImage || note.screenshot || note.imageFile) && !note.attachments) {
-        note.attachments = [];
-        if (note.imageFile || note.screenshot) {
-          note.attachments.push({
-            id: 'att-' + getUniqueId(),
-            filename: 'screenshot.png',
-            type: 'image/png',
-            size: note.screenshot ? Math.round(note.screenshot.length * 0.75) : 0,
-            providerStorage: 'base64',
-            storagePath: null,
-            thumbnailFile: note.imageFile || 'images_1.json',
-            data: note.screenshot || null
-          });
-        }
-        delete note.hasImage;
-        delete note.imageFile;
-        delete note.screenshot;
-        migrated = true;
-      }
-      if (!note.attachments) {
-        note.attachments = [];
-        migrated = true;
-      }
-    });
-    return migrated;
+  function formatBytes(bytes, decimals = 2) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
   }
 
-  const getNotes = () => {
-    const notes = config.notes || [];
-    if (migrateNoteFormat(notes)) saveConfig(config);
-    return notes;
-  };
+  const formatMB = (mb) => mb >= 1024 ? Number((mb / 1024).toFixed(2)) + ' GB' : Number(mb.toFixed(2)) + ' MB';
+
+  const getNotes = () => config.notes || [];
+
+  function updateActiveScratchpadState() {
+    const activeModals = Array.from(getAppRoot().querySelectorAll('.flxn-modal.show'));
+    if (activeModals.length === 0) return;
+
+    const topModal = activeModals.sort((a, b) => (parseInt(b.style.zIndex) || 0) - (parseInt(a.style.zIndex) || 0))[0];
+    const topZ = parseInt(topModal.style.zIndex) || 0;
+
+    activeModals.forEach(modal => {
+      const padContainer = modal.querySelector('#flxn-scratchpad-wrapper');
+      if (padContainer && padContainer._fluxPadInstance) {
+        const isTopmost = (modal === topModal);
+        const isVisible = (padContainer.style.display === 'block');
+        const isFocused = (topZ >= 10001);
+        padContainer._fluxPadInstance.setIsActive(isTopmost && isVisible && isFocused);
+      }
+    });
+  }
 
   function saveNote(note) {
     const notes = getNotes();
@@ -1115,37 +1370,35 @@
     if ($(MODAL_IDS.VIEW)) renderNotes();
   }
 
-  function closeModal(modal) {
+  function closeModalDialogue(modal) {
     if (!modal) return;
     modal.dispatchEvent(new Event('modal-closed'));
+    if (modal.destroy) modal.destroy();
     if (modal.parentElement && modal.parentElement.id?.includes('-container')) modal.parentElement.remove();
     else modal.remove();
     modal.removeAttribute?.('data-screenshot');
     logMessage(`Closed modal: ${modal.id}`);
   }
 
-  const closeAllModals = () => {
-    const modals = [
-      $(MODAL_IDS.NOTE + '-container'),
-      $(MODAL_IDS.VIEW),
-      $(MODAL_IDS.SETTINGS),
-    ];
-
-    modals.forEach(modal => closeModal(modal));
-  };
+  const modalCloseAction = (modalElement) => {
+    if (typeof modalElement.requestSafeClose === 'function') {
+      modalElement.requestSafeClose();
+    } else {
+      closeModalDialogue(modalElement);
+    }
+  }
 
   // ------------------------
   // UI Elements
   // ------------------------
-  function addModalCloseBtn(modalElement, closeAction) {
+  function addSettingModalBtn(modalElement) {
     const btn = createHTMLElement('button', {
-      className: 'un-modal-close-btn', icon: 'close',
+      className: 'flxn-modal-settings-btn', icon: 'settings',
       eventListener: {
         click: (e) => {
           e.preventDefault();
           e.stopPropagation();
-          closeModal(modalElement);
-          if (closeAction) closeAction();
+          openSettingsModal();
         }
       }
     });
@@ -1153,13 +1406,13 @@
   }
 
   function updateNoteInPlace(updatedNote) {
-    const notesList = $('un-notes-list');
+    const notesList = $('flxn-notes-list');
     if (!notesList) return;
 
     const existingNode = notesList.querySelector(`.note-container[data-id="${updatedNote.id}"]`);
 
     if (existingNode) {
-      const query = $('un-search-input')?.value.toLowerCase() || '';
+      const query = $('flxn-search-input')?.value.toLowerCase() || '';
 
       const scoreMeta = computeNoteScore(updatedNote, query);
       const newNode = buildNoteElement(updatedNote, query, scoreMeta);
@@ -1175,31 +1428,9 @@
     }
   }
 
-  function showUndoNotification() {
-    showNotification('Note trashed.', {
-      duration: 6000,
-      actionLabel: 'Undo',
-      actionCallback: () => {
-        const lastNote = getUndoBuffer();
-        if (lastNote) {
-          const notes = getNotes();
-          notes.push(lastNote);
-          config.notes = notes;
-          config.trashedNotes = config.trashedNotes.filter(n => n.id !== lastNote.id);
-          saveConfig(config);
-
-          if ($(MODAL_IDS.VIEW)) renderNotes();
-        }
-      },
-      position: 'bottom-center',
-      animationType: 'fade',
-      icon: UI_ICONS.trash,
-    });
-  }
-
   function updateSyncIndicatorUI() {
     const appRoot = getAppRoot();
-    const indicator = appRoot.querySelector('#un-sync-indicator');
+    const indicator = appRoot.querySelector('#flxn-sync-indicator');
     if (!indicator) return;
 
     const activeSyncs = window.activeSyncs || new Set();
@@ -1207,25 +1438,25 @@
     if (activeSyncs.size > 0) {
       indicator.classList.add('active');
       const profiles = Array.from(activeSyncs).join(', ');
-      indicator.dataset.tooltip = `Syncing profiles: ${profiles}`;
+      indicator.dataset.flxNotesTooltip = `Syncing profiles: ${profiles}`;
     } else {
       indicator.classList.remove('active');
-      indicator.title = '';
     }
   }
 
   function createEdgeDock() {
     const appRoot = getAppRoot();
-    if (appRoot.querySelector('#un-edge-dock')) return;
+    if (appRoot.querySelector('#flxn-edge-dock')) return;
 
     const savedTop = config.dockPosition || '50%';
+    const getScrollbarWidth = () => window.innerWidth - document.documentElement.clientWidth;
     const dock = createHTMLElement('div', {
-      id: 'un-edge-dock',
-      style: `top: ${savedTop};`
+      id: 'flxn-edge-dock',
+      style: `top: ${savedTop}; right: ${getScrollbarWidth()}px;`
     });
 
     const syncIndicator = createHTMLElement('div', {
-      id: 'un-sync-indicator',
+      id: 'flxn-sync-indicator',
       innerHTML: UI_ICONS.sync || '🔄'
     });
     dock.appendChild(syncIndicator);
@@ -1233,6 +1464,12 @@
     appRoot.appendChild(dock);
 
     updateSyncIndicatorUI();
+
+    window.addEventListener('resize', () => {
+      if (dock && dock.isConnected) {
+        dock.style.right = `${getScrollbarWidth()}px`;
+      }
+    });
 
     let isDragging = false;
     let startY = 0;
@@ -1246,7 +1483,7 @@
       const onMouseMove = (moveEvent) => {
         if (Math.abs(moveEvent.clientY - startY) > 5) {
           isDragging = true;
-          // Close menu if open while dragging
+
           const existingMenu = $('flxkit-context-menu');
           if (existingMenu) existingMenu.remove();
 
@@ -1254,6 +1491,7 @@
           newTop = Math.max(50, Math.min(window.innerHeight - 50, newTop));
 
           dock.style.top = `${(newTop / window.innerHeight) * 100}%`;
+          dock.style.right = `${getScrollbarWidth()}px`;
         }
       };
 
@@ -1282,7 +1520,6 @@
           { label: 'Add Note', icon: UI_ICONS.edit, action: () => openNoteModal() },
           { label: 'View Notes', icon: UI_ICONS.preview, action: () => openViewModal() },
           { label: 'Quick Note', icon: UI_ICONS.pin, action: () => openQuickNoteModal() },
-          { separator: true },
           { label: 'Bookmark Page', icon: UI_ICONS.bookmark, action: () => createBookmarkNote() },
           { separator: true },
           {
@@ -1295,62 +1532,419 @@
               await syncNotesData();
             }
           },
+          { separator: true },
           { label: 'Settings', icon: UI_ICONS.settings, action: () => openSettingsModal() },
+          { label: 'Storage Manager', icon: UI_ICONS.save, action: () => openStorageManagerModal() },
         ];
 
-        createContextMenu(rect.left - 180, rect.top + (rect.height / 2) - 80, options, 170);
+        createContextMenu(rect.left - 180 - getScrollbarWidth(), rect.top + (rect.height / 2) - 80, options, ctxNamespace);
       }
     });
+  }
+
+  function openStorageManagerModal() {
+    const existingModal = $('flxn-storage-modal');
+    let savedCoords = null;
+    if (existingModal) {
+      if (existingModal.style.top) savedCoords = { top: existingModal.style.top, left: existingModal.style.left };
+      closeModalDialogue(existingModal);
+    }
+
+    let currentFilter = 'all';
+    let currentSort = 'size-desc';
+    let currentMimeFilters = new Set();
+    let currentSearchTerm = '';
+
+    const modal = createHTMLElement('dialog', {
+      class: 'flxn-modal', id: 'flxn-storage-modal', style: { width: '40vw' },
+      children: [
+        createHTMLElement('div', {
+          class: 'flxn-modal-header-wrapper', style: { cursor: 'move' },
+          children: [createHTMLElement('h3', { class: 'flxn-modal-header', textContent: 'Storage Manager' })]
+        }),
+        createHTMLElement('div', {
+          class: 'flxn-view-controls', style: 'display:flex; flex-wrap: wrap; gap:8px; padding-top: 12px;',
+          children: [
+            createHTMLElement('div', {
+              class: 'flxn-search-wrapper', style: 'display:flex; gap:8px;',
+              children: [
+                createHTMLElement('input', {
+                  type: 'text', placeholder: 'Search name or path...',
+                  style: 'flex-grow: 1; width: 50% !important;',
+                  eventListener: { input: (e) => { currentSearchTerm = e.target.value.toLowerCase(); renderList(); } }
+                }),
+                createHTMLElement('select', {
+                  id: 'flxn-storage-filter', style: 'width: 25% !important; padding: 6px;',
+                  children: [
+                    createHTMLElement('option', { value: 'all', textContent: 'View: Notes' }),
+                    createHTMLElement('option', { value: 'attachments', textContent: 'View: Attachments' })
+                  ],
+                  eventListener: { change: (e) => { currentFilter = e.target.value; renderList(); } }
+                }),
+                createHTMLElement('select', {
+                  id: 'flxn-storage-sort', style: 'width: 25% !important; padding: 6px;',
+                  children: [
+                    createHTMLElement('option', { value: 'size-desc', textContent: 'Sort: Largest First' }),
+                    createHTMLElement('option', { value: 'size-asc', textContent: 'Sort: Smallest First' }),
+                    createHTMLElement('option', { value: 'name', textContent: 'Sort: A-Z' })
+                  ],
+                  eventListener: { change: (e) => { currentSort = e.target.value; renderList(); } }
+                })
+              ]
+            })
+          ]
+        }),
+        createHTMLElement('div', { class: 'flxn-modal-content', id: 'flxn-storage-list-container' }),
+        createHTMLElement('div', {
+          class: 'flxn-modal-footer',
+          children: [ createHTMLElement('button', { textContent: 'Close', eventListener: () => closeModalDialogue(modal) }) ]
+        })
+      ]
+    });
+
+    function getMimeCategory(mime) {
+      if (!mime) return 'Other';
+      if (mime.startsWith('image/')) return 'Images';
+      if (mime.startsWith('audio/')) return 'Audio';
+      if (mime.startsWith('video/')) return 'Video';
+      if (mime.includes('pdf') || mime.includes('document') || mime.includes('text') || mime.includes('json')) return 'Docs';
+      return 'Other';
+    }
+
+    function renderList() {
+      const container = modal.querySelector('#flxn-storage-list-container');
+      container.innerHTML = safeHTML('');
+
+      const { maxFileMB } = calculateStorageUsage();
+      const limitBytes = maxFileMB * 1024 * 1024;
+
+      let items = [];
+      let totalSize = 0;
+      let noteCount = 0;
+      let fileCount = 0;
+      let typeStats = { Images: 0, Audio: 0, Video: 0, Docs: 0, Other: 0 };
+
+      // 1. Calculate Absolute Stats
+      getNotes().forEach(note => {
+        let noteSize = new Blob([JSON.stringify(note)]).size;
+        let attachments = note.attachments || [];
+        
+        noteCount++;
+        totalSize += noteSize;
+
+        attachments.forEach(att => {
+          let aSize = att.size || 0;
+          totalSize += aSize;
+          fileCount++;
+          typeStats[getMimeCategory(att.type)]++;
+        });
+
+        const matchSearch = (text) => text && text.toLowerCase().includes(currentSearchTerm);
+        const noteMatchesSearch = !currentSearchTerm || matchSearch(note.title) || attachments.some(a => matchSearch(a.filename) || matchSearch(a.storagePath));
+
+        if (currentFilter === 'all') {
+          if (!noteMatchesSearch) return;
+          
+          // --- FIX: Multi-Select Filter Check ---
+          // If filters are active, the note MUST contain at least one matching attachment type
+          if (currentMimeFilters.size > 0 && !attachments.some(a => currentMimeFilters.has(getMimeCategory(a.type)))) return;
+
+          // UX BONUS: Filter the children so the accordion only shows the selected file types!
+          let displayedChildren = currentMimeFilters.size > 0 
+            ? attachments.filter(a => currentMimeFilters.has(getMimeCategory(a.type)))
+            : attachments;
+
+          let nodeTotal = noteSize + displayedChildren.reduce((sum, a) => sum + (a.size || 0), 0);
+          
+          items.push({
+            type: 'note', name: note.title || 'Untitled Note', noteId: note.id,
+            size: nodeTotal, children: displayedChildren, rawSize: noteSize, noteObj: note,
+          });
+          // ---------------------------------------
+
+        } else if (currentFilter === 'attachments') {
+          attachments.forEach(att => {
+            if (currentSearchTerm && !matchSearch(att.filename) && !matchSearch(att.storagePath) && !matchSearch(note.title)) return;
+            
+            // Multi-Select Attachment Check
+            if (currentMimeFilters.size > 0 && !currentMimeFilters.has(getMimeCategory(att.type))) return;
+
+            items.push({ type: 'attachment', name: att.filename || att.id, size: att.size || 0, parentNote: note.title, noteId: note.id, attObj: att });
+          });
+        }
+      });
+
+      // 2. Restore Original Summary Layout with Multi-Toggles
+      const summaryContainer = createHTMLElement('div', { class: 'flxn-storage-summary' });
+
+      summaryContainer.appendChild(createHTMLElement('div', { class: 'flxn-storage-stat', innerHTML: safeHTML(`<span>${formatBytes(totalSize)}</span><span>Used</span>`) }));
+      summaryContainer.appendChild(createHTMLElement('div', { class: 'flxn-storage-stat', innerHTML: safeHTML(`<span>${noteCount}</span><span>Notes</span>`) }));
+      summaryContainer.appendChild(createHTMLElement('div', { class: 'flxn-storage-stat', innerHTML: safeHTML(`<span>${fileCount}</span><span>Files</span>`) }));
+
+      summaryContainer.appendChild(createHTMLElement('div', { style: 'flex-grow:1;' }));
+
+      Object.entries(typeStats).filter(([k,v]) => v > 0).forEach(([k,v]) => {
+        const isActive = currentMimeFilters.has(k);
+        
+        summaryContainer.appendChild(createHTMLElement('div', {
+          class: 'flxn-storage-stat',
+          flxNotesTooltip: isActive ? `Remove ${k} from filter` : `Add ${k} to filter`,
+          style: `cursor: pointer; transition: all 0.2s ease; ${isActive ? 'border: 1px solid var(--flxn-accent-bg); color: var(--flxn-accent-text); border-radius: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.15);' : ''}`,
+          innerHTML: safeHTML(`<span>${v}</span><span>${k}</span>`),
+          eventListener: {
+            click: () => {
+              if (isActive) currentMimeFilters.delete(k);
+              else currentMimeFilters.add(k);
+              renderList();
+            }
+          }
+        }));
+      });
+
+      container.appendChild(summaryContainer);
+
+      const listEl = createHTMLElement('div', { class: 'flxn-storage-list' });
+
+      items.sort((a, b) => {
+        if (currentSort === 'size-desc') return b.size - a.size;
+        if (currentSort === 'size-asc') return a.size - b.size;
+        return a.name.localeCompare(b.name);
+      });
+
+      const preview = async (e, attObj) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const btn = e.currentTarget;
+        btn.style.opacity = '0.5';
+        try {
+          const data = await getAttachmentData(attObj);
+          if (data) fluxViewer.open(attObj.filename || attObj.id, data);
+          else showNotification('Failed to load file content.', { icon: UI_ICONS.error });
+        } finally { btn.style.opacity = '1'; }
+      }
+
+      const buildPreviewBtn = (attObj) => {
+        return createHTMLElement('button', {
+          innerHTML: safeHTML(UI_ICONS.preview || '👁'), class: 'flxn-icon-btn',
+          style: 'width: 24px !important; height: 24px !important; background: transparent !important; color: var(--flxn-text) !important; border: none !important; box-shadow: none !important;',
+          flxNotesTooltip: 'Preview File', eventListener: (e) => preview(e, attObj),
+        });
+      };
+
+      const buildDeleteNoteBtn = (noteId) => {
+        return createHTMLElement('button', {
+          innerHTML: safeHTML(UI_ICONS.trash), class: 'flxn-icon-btn',
+          style: 'cursor: pointer; width: 24px !important; height: 24px !important; background: transparent !important; color: #e74c3c !important; border: none !important; box-shadow: none !important;',
+          flxNotesTooltip: 'Delete Entire Note',
+          eventListener: {
+            click: async (e) => {
+              e.stopPropagation();
+              if(await confirmAction('Move this note and ALL its attachments to trash?')) {
+                const notes = getNotes();
+                const idx = notes.findIndex(n => n.id === noteId);
+                if (idx > -1) {
+                  const n = notes[idx];
+                  config.trashedNotes = config.trashedNotes || [];
+                  config.trashedNotes.push({ id: n.id, trashedAt: new Date().toISOString() });
+                  
+                  // Safely invoke garbage collection for all nested assets
+                  if (n.attachments) n.attachments.forEach(a => queueAssetForDeletion(a));
+                  notes.splice(idx, 1);
+                  
+                  config.notes = notes;
+                  saveConfig(config);
+                  triggerBackgroundSync();
+                  if ($('flxn-notes-list')) renderNotes();
+                  if ($('storage-usage')) updateStorageUsageDisplay();
+                  renderList();
+                }
+              }
+            }
+          }
+        });
+      };
+
+      const buildDeleteAttBtn = (noteId, attObj) => {
+        return createHTMLElement('button', {
+          innerHTML: safeHTML(UI_ICONS.trash), class: 'flxn-icon-btn',
+          style: 'cursor: pointer; width: 24px !important; height: 24px !important; background: transparent !important; color: #e74c3c !important; border: none !important; box-shadow: none !important;',
+          flxNotesTooltip: 'Delete File',
+          eventListener: {
+            click: async (e) => {
+              e.stopPropagation();
+              const isPad = attObj._systemRef && attObj._systemRef.startsWith('scratchpad_');
+              if (isPad && !await confirmAction('This will permanently delete your scratchpad drawing. Are you sure?')) return;
+              if (!isPad && !await confirmAction(`Delete file "${attObj.filename}"?`)) return;
+
+              const notes = getNotes();
+              const n = notes.find(nx => nx.id === noteId);
+              if (n) {
+                if (isPad) {
+                   const vec = n.attachments.find(a => a._systemRef === 'scratchpad-vector');
+                   const prev = n.attachments.find(a => a._systemRef === 'scratchpad-preview');
+                   if (vec) queueAssetForDeletion(vec);
+                   if (prev) queueAssetForDeletion(prev);
+                   n.attachments = n.attachments.filter(a => !a._systemRef || !a._systemRef.startsWith('scratchpad'));
+                } else {
+                   queueAssetForDeletion(attObj);
+                   n.attachments = n.attachments.filter(a => a.id !== attObj.id);
+                }
+                config.notes = notes;
+                saveConfig(config);
+                triggerBackgroundSync();
+                if ($('storage-usage')) updateStorageUsageDisplay();
+                renderList();
+              }
+            }
+          }
+        });
+      };
+
+      if (items.length === 0) {
+        listEl.appendChild(createHTMLElement('div', { textContent: 'No items found.', style: 'opacity:0.5; padding: 20px; text-align:center;' }));
+      } else {
+        items.forEach(item => {
+          const pct = Math.min(100, (item.size / limitBytes) * 100);
+          const icon = item.type === 'note' ? UI_ICONS.document : (item.name.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? UI_ICONS.image : UI_ICONS.zap);
+          
+          const titleContent = createHTMLElement('div', { 
+            class: 'flxn-storage-title',
+            innerHTML: safeHTML(`<span>${icon}</span> <span class="flxn-storage-name" data-flx-notes-tooltip="Click to open ${item.type === 'note' ? 'note' : 'file'}" style="cursor: pointer; transition: color 0.15s ease;">${escapeHtml(item.name)}</span> ${item.parentNote ? `<span class="flxn-storage-path" data-flx-notes-tooltip="${item.attObj.storagePath}" style="opacity:0.5; font-size:10px;">in ${escapeHtml(item.parentNote)} [${item.attObj.storagePath}]</span>` : ''}`)
+          });
+
+          const titleBtn = titleContent.querySelector('.flxn-storage-name');
+          
+          titleBtn.addEventListener('mouseenter', function() { 
+            this.style.color = 'var(--flxn-accent-bg, #5C7CFA)'; 
+            this.style.textDecoration = 'underline'; 
+          });
+          titleBtn.addEventListener('mouseleave', function() { 
+            this.style.color = ''; 
+            this.style.textDecoration = 'none'; 
+          });
+
+          titleBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); 
+
+            if (item.type === 'note' && item.noteObj) openNoteModal(item.noteObj, () => openStorageManagerModal());
+            else if (item.attObj) preview(e, item.attObj);
+          });
+          
+          const actionsContainer = createHTMLElement('div', { class: 'flxn-storage-actions' });
+          if (item.type === 'note') actionsContainer.appendChild(buildDeleteNoteBtn(item.noteId));
+          if (item.type === 'attachment') {
+            actionsContainer.appendChild(buildPreviewBtn(item.attObj));
+            actionsContainer.appendChild(buildDeleteAttBtn(item.noteId, item.attObj));
+          }
+
+          const metaContent = createHTMLElement('div', { class: 'flxn-storage-meta' });
+          metaContent.appendChild(actionsContainer);
+          metaContent.appendChild(createHTMLElement('span', { textContent: formatBytes(item.size), style: { width: 'max-content' } }));
+          metaContent.appendChild(createHTMLElement('div', { class: 'flxn-storage-bar-bg', innerHTML: safeHTML(`<div class="flxn-storage-bar-fill" style="width:${pct}%"></div>`) }));
+
+          const header = createHTMLElement('div', {
+            class: 'flxn-storage-header',
+            children: [ titleContent, metaContent ]
+          });
+
+          const itemEl = createHTMLElement('div', { class: 'flxn-storage-item', children: [header] });
+
+          if (item.type === 'note') {
+            const childContainer = createHTMLElement('div', { class: 'flxn-storage-children' });
+            childContainer.appendChild(createHTMLElement('div', { class: 'flxn-storage-child', innerHTML: safeHTML(`<span>📄 Note Text & Base Data</span> <span>${formatBytes(item.rawSize)}</span>`) }));
+            
+            item.children.forEach(child => {
+              const cRow = createHTMLElement('div', { class: 'flxn-storage-child' });
+              const cName = createHTMLElement('span', { textContent: `📎 ${child.filename || child.id}`, style: 'cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%;', eventListener: (e) => preview(e, child) });
+              
+              const cMeta = createHTMLElement('div', { style: 'display:flex; align-items:center; gap:8px;' });
+              const cActions = createHTMLElement('div', { class: 'flxn-storage-actions' });
+              cActions.appendChild(buildPreviewBtn(child));
+              cActions.appendChild(buildDeleteAttBtn(item.noteId, child));
+              cMeta.appendChild(cActions);
+              cMeta.appendChild(createHTMLElement('span', { textContent: formatBytes(child.size || 0) }));
+
+              cRow.appendChild(cName);
+              cRow.appendChild(cMeta);
+
+              childContainer.appendChild(cRow);
+            });
+            itemEl.appendChild(childContainer);
+            
+            // Accordion Toggle
+            header.addEventListener('click', (e) => {
+               if (!e.target.closest('.flxn-storage-actions')) itemEl.classList.toggle('expanded');
+            });
+            header.style.cursor = 'pointer';
+          } else {
+             header.style.cursor = 'default';
+          }
+
+          listEl.appendChild(itemEl);
+        });
+      }
+
+      container.appendChild(listEl);
+    }
+
+    getAppRoot().appendChild(modal);
+
+    applyModalCascade(modal, savedCoords);
+
+    requestAnimationFrame(() => {
+      modal.classList.add('show');
+      renderList();
+      bringToFront(modal);
+      makeElementDragAndResize(modal, modal.querySelector('div.flxn-modal-header-wrapper'));
+    });
+    trapTabFocus(modal);
+    applyTheme();
   }
 
   let quickNoteModalInstance = null;
 
   function openQuickNoteModal() {
     if (quickNoteModalInstance) {
-      quickNoteModalInstance.querySelector('.un-modal-header').focus();
+      bringToFront(quickNoteModalInstance);
+      quickNoteModalInstance.querySelector('.flxn-modal-header').focus();
       return;
     }
 
     injectEasyMdeCSS();
     let mdeInstance = null;
-    const editorTextarea = createHTMLElement('textarea', { id: 'un-quick-mde-editor' });
+    const editorTextarea = createHTMLElement('textarea', { id: 'flxn-quick-mde-editor' });
 
     const modal = createHTMLElement('dialog', {
-      class: 'un-modal', id: 'un-quick-note', style: { zIndex: 1 },
+      class: 'flxn-modal', id: 'flxn-quick-note',
       children: [
-        createHTMLElement('div', { class: 'un-modal-header-wrapper', children: [createHTMLElement('h3', {
-          class: 'un-modal-header',
+        createHTMLElement('div', { class: 'flxn-modal-header-wrapper', style: { cursor: 'move' }, children: [createHTMLElement('h3', {
+          class: 'flxn-modal-header',
           textContent: config.quickNote.title,
         })]}),
         createHTMLElement('div', {
-          class: 'un-modal-content',
+          class: 'flxn-modal-content',
           children: [ editorTextarea ]
         }),
         createHTMLElement('div', {
-          class: 'un-modal-footer',
+          class: 'flxn-modal-footer',
           children: [
             createHTMLElement('button', { textContent: 'Clear', eventListener: () => {
               mdeInstance.value('');
               config.quickNote.description = '';
-              showNotification(`Quick note cleared`, { icon: UI_ICONS.clear });
+              showNotification(`Quick note cleared`, { icon: UI_ICONS.eraser });
             }}),
-            createHTMLElement('button', { textContent: 'Close', eventListener: closeModal })
+            createHTMLElement('button', { textContent: 'Close', eventListener: () => closeModalDialogue(modal) })
           ]
         })
       ]
     });
 
-    getAppRoot().appendChild(modal);
-    addModalCloseBtn(modal);
-    requestAnimationFrame(() => modal.classList.add('show'));
-
     withTTPatched(() => {
       mdeInstance = getMDEInstance(modal, editorTextarea, config.quickNote.description);
     });
 
-    monitorToolbarIcons(mdeInstance)
+    injectToolbarIcons(mdeInstance)
 
-    makeElementDragAndResize(modal, modal.querySelector('div.un-modal-header-wrapper'), { minWidth: 250, minHeight: 150 });
     quickNoteModalInstance = modal;
 
     function saveQuickNote() {
@@ -1359,15 +1953,8 @@
       saveConfig(config);
     }
 
-    function closeModal() {
-      saveQuickNote();
-      modal.remove();
-      quickNoteModalInstance = null;
-    }
-
     modal.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') saveQuickNote();
-      if (e.key === 'Escape') closeModal();
     });
 
     modal.addEventListener('click', (e) => {
@@ -1386,15 +1973,26 @@
       }
     });
 
+    getAppRoot().appendChild(modal);
+    applyModalCascade(modal);
+    requestAnimationFrame(() => {
+      modal.classList.add('show');
+      bringToFront(modal);
+      makeElementDragAndResize(modal, modal.querySelector('div.flxn-modal-header-wrapper'), { minWidth: 250, minHeight: 150 });
+    });
+    modal.addEventListener('modal-closed', () => {
+      saveQuickNote();
+      quickNoteModalInstance = null;
+    }, { once: true });
     return modal;
   }
 
   function renderNotes() {
     index = 0;
-    const notesList = $('un-notes-list');
+    const notesList = $('flxn-notes-list');
     if (!notesList) return;
-    const sortBy = $('un-sort-select')?.value || 'date';
-    const query = $('un-search-input')?.value.toLowerCase() || '';
+    const sortBy = $('flxn-sort-select')?.value || 'date';
+    const query = $('flxn-search-input')?.value.toLowerCase() || '';
     let baseNotes = getNotes();
     const includes = Object.keys(activeTagFilters).filter(k => activeTagFilters[k] === 'include');
     const excludes = Object.keys(activeTagFilters).filter(k => activeTagFilters[k] === 'exclude');
@@ -1440,9 +2038,9 @@
     if (filteredNotes.length === 0) {
       const isSearch = query.length > 0;
       const emptyState = createHTMLElement('div', {
-        class: 'un-empty-state',
+        class: 'flxn-empty-state',
         children: [
-          createHTMLElement('div', { innerHTML: safeHTML('<i class="fa fa-book" style="font-size: 48px; margin-bottom: 15px; opacity: 0.5;"></i>') }),
+          createHTMLElement('div', { innerHTML: safeHTML(`<span style="display: flex; margin-bottom: 15px; opacity: 0.5; color: inherit; font-size: 50px;">${UI_ICONS.book.replace('width="16" height="16"', 'width="48" height="48"')}</span>`) }),
           createHTMLElement('h3', {
             textContent: isSearch ? 'No notes found' : 'Your vault is empty',
             style: 'margin: 0 0 8px 0; font-size: 18px; font-weight: 600;'
@@ -1457,7 +2055,6 @@
       return;
     }
 
-    // Debounced resize handler to reapply Masonry layout
     let resizeTimeout;
     const debouncedMasonry = () => {
       clearTimeout(resizeTimeout);
@@ -1522,9 +2119,9 @@
 
     const firstImage = (note.attachments || []).find(a => a.type.startsWith('image/'));
     if (firstImage && firstImage.data) {
-      const screenshotWrapper = createHTMLElement('div', { className: 'un-note-screenshot', style: 'margin-right: 12px;',
+      const screenshotWrapper = createHTMLElement('div', { className: 'flx-note-thumbnail', style: 'margin-right: 12px;',
         children: [
-          createHTMLElement('img', { src: firstImage.data, alt: 'Attachment', class: 'un-note-screenshot',
+          createHTMLElement('img', { src: firstImage.data, alt: 'Attachment', class: 'flx-note-thumbnail',
             eventListener: {
               click: async (e) => {
                 e.stopPropagation();
@@ -1565,7 +2162,7 @@
     });
 
     if (note.isConflict) {
-      titleContainer.appendChild(createHTMLElement('span', { innerHTML: safeHTML('⚠️'), flxTooltip: 'This note was created because a sync conflict occurred.' }));
+      titleContainer.appendChild(createHTMLElement('span', { innerHTML: safeHTML('⚠️'), flxNotesTooltip: 'This note was created because a sync conflict occurred.' }));
     }
 
     if (note.url) {
@@ -1591,7 +2188,7 @@
           : [];
         const tagEl = createHTMLElement('span', {
           innerHTML: safeHTML(highlightWithIndices(tag, indices)),
-          className: `un-tag-chip ${state || ''}`,
+          className: `flxn-tag-chip ${state || ''}`,
           eventListener: {
             'click': e => {
               e.stopPropagation();
@@ -1612,14 +2209,14 @@
                 {
                   label: `${UI_ICONS.search} Filter by this tag`,
                   action: () => {
-                    $('un-search-input').value = tag;
+                    $('flxn-search-input').value = tag;
                     renderNotes();
                   }
                 },
                 {
                   label: `${UI_ICONS.edit} Rename tag`,
-                  action: () => {
-                    const newName = prompt(`Rename tag "${tag}" to:`, tag);
+                  action: async () => {
+                    const newName = await promptUser(`Rename tag "${tag}" to:`, tag);
                     if (newName && newName.trim() !== tag) {
                       renameTag(tag, newName.trim());
                     }
@@ -1627,8 +2224,8 @@
                 },
                 {
                   label: `${UI_ICONS.trash} Delete tag`,
-                  action: () => {
-                    if (confirm(`Delete tag "${tag}" from all notes?`)) {
+                  action: async () => {
+                    if (await confirmAction(`Delete tag "${tag}" from all notes?`)) {
                       deleteTag(tag);
                     }
                   }
@@ -1639,7 +2236,7 @@
                     createMergeTagsModal(tag);
                   }
                 }
-              ]);
+              ], ctxNamespace);
             }
         }
         });
@@ -1673,10 +2270,10 @@
 
     noteContainer.appendChild(contentDiv);
 
-    const actionsWrapper = createHTMLElement('div', { class: 'un-note-actions-wrapper' });
+    const actionsWrapper = createHTMLElement('div', { class: 'flxn-note-actions-wrapper' });
     const pinBtn = createHTMLElement('span', {
-      dataset: { tooltip: note.pinned ? 'Unpin Note' : 'Pin Note', id: note.id },
-      className: `un-icon-action-btn ${note.pinned ? 'pinned-active' : ''}`,
+      dataset: { flxNotesTooltip: note.pinned ? 'Unpin Note' : 'Pin Note', id: note.id },
+      className: `flxn-icon-action-btn ${note.pinned ? 'pinned-active' : ''}`,
       innerHTML: safeHTML(note.pinned ? UI_ICONS.pinned : UI_ICONS.pin),
       eventListener: {
         mouseenter: (e) => {
@@ -1696,8 +2293,8 @@
     });
 
     const trashBtn = createHTMLElement('span', {
-      dataset: { tooltip: 'Delete Note', id: note.id },
-      className: 'un-icon-action-btn trash-btn', icon: 'trash',
+      dataset: { flxNotesTooltip: 'Delete Note', id: note.id },
+      className: 'flxn-icon-action-btn trash-btn', icon: 'trash',
       eventListener: {
         mouseenter: (e) => { e.currentTarget.style.background = 'rgba(211, 47, 47, 0.1)' },
         mouseleave: (e) => { e.currentTarget.style.background = 'transparent' },
@@ -1721,6 +2318,7 @@
             const updated = allNotes.filter(n => n.id !== noteId);
             config.notes = updated;
             saveConfig(config);
+            triggerBackgroundSync();
 
             noteContainer.innerHTML = safeHTML('');
             noteContainer.className = 'note-container trashed-ghost show';
@@ -1734,7 +2332,7 @@
 
             const undoBtn = createHTMLElement('button', {
               innerHTML: safeHTML(`<span style="display:flex;align-items:center;gap:6px;">${UI_ICONS.refresh} Undo Delete</span>`),
-              style: 'background: transparent; color: var(--text); border: none; box-shadow: none; font-weight: 500; cursor: pointer; opacity: 0.7; transition: opacity 0.2s ease;',
+              style: 'background: transparent; color: var(--flxn-text); border: none; box-shadow: none; font-weight: 500; cursor: pointer; opacity: 0.7; transition: opacity 0.2s ease;',
               eventListener: {
                 mouseenter: (ev) => { ev.currentTarget.style.opacity = '1' },
                 mouseleave: (ev) => { ev.currentTarget.style.opacity = '0.7' },
@@ -1765,12 +2363,14 @@
               setTimeout(() => {
                 if (noteContainer.parentElement) {
                   noteContainer.remove();
-                  applyMasonryLayout($('un-notes-list'));
+                  applyMasonryLayout($('flxn-notes-list'));
                 }
               }, 250);
-            }, 6000);
 
-            // showUndoNotification();
+              if (trashedNote && trashedNote.attachments) {
+                trashedNote.attachments.forEach(att => queueAssetForDeletion(att));
+              }
+            }, 6000);
           }
         }
       }
@@ -1783,7 +2383,13 @@
   }
 
   function openViewModal() {
-    closeAllModals();
+    const existingModal = $(MODAL_IDS.VIEW);
+    let savedCoords = null;
+    if (existingModal) {
+      if (existingModal.style.top) savedCoords = { top: existingModal.style.top, left: existingModal.style.left };
+      closeModalDialogue(existingModal);
+    }
+
     activeTagFilters = {};
     const sortOptions = [
       { value: 'date', label: 'Date' },
@@ -1791,21 +2397,21 @@
       { value: 'url', label: 'URL' },
     ];
     const modal = createHTMLElement('dialog', {
-      class: 'un-modal',
+      class: 'flxn-modal',
       id: MODAL_IDS.VIEW,
       children: [
         createHTMLElement('div', {
-          class: 'un-modal-header-wrapper',
-          children: [createHTMLElement('h3', { class: 'un-modal-header', textContent: 'Notes Vault' })]
+          class: 'flxn-modal-header-wrapper', style: { cursor: 'move' },
+          children: [createHTMLElement('h3', { class: 'flxn-modal-header', textContent: 'Notes Vault' })]
         }),
         createHTMLElement('div', {
-          class: 'un-view-controls',
+          class: 'flxn-view-controls',
           children: [
             createHTMLElement('div', {
-              class: 'un-search-wrapper',
+              class: 'flxn-search-wrapper',
               children: [
                 createHTMLElement('input', {
-                  id: 'un-search-input',
+                  id: 'flxn-search-input',
                   type: 'text',
                   placeholder: 'Search by title, URL, or tags...',
                   style: 'margin-bottom: 0 !important;',
@@ -1814,10 +2420,10 @@
               ]
             }),
             createHTMLElement('label', {
-              class: 'un-sort-wrapper',
+              class: 'flxn-sort-wrapper',
               innerText: 'Sort by:',
               children: createHTMLElement('select', {
-                id: 'un-sort-select',
+                id: 'flxn-sort-select',
                 style: 'margin-bottom: 0 !important;',
                 eventListener: { 'change': renderNotes },
                 children: sortOptions.map(({ value, label }) => createHTMLElement('option', { value, textContent: label }))
@@ -1825,23 +2431,23 @@
             }),
           ]
         }),
-        createHTMLElement('div', { id: 'un-tag-list' }),
+        createHTMLElement('div', { id: 'flxn-tag-list' }),
         createHTMLElement('div', {
-          class: 'un-modal-content',
+          class: 'flxn-modal-content',
           children: [
             createHTMLElement('div', {
-              class: 'un-notes-list-wrapper',
+              class: 'flxn-notes-list-wrapper',
               children: [
-                createHTMLElement('div', { id: 'un-notes-list' })
+                createHTMLElement('div', { id: 'flxn-notes-list' })
               ]
             }),
           ]
         }),
         createHTMLElement('div', {
-          class: 'un-modal-footer',
+          class: 'flxn-modal-footer',
           children: [
             createHTMLElement('button', {
-              id: 'un-close-view',
+              id: 'flxn-close-view',
               textContent: 'New',
               eventListener: () => {
                 openNoteModal({
@@ -1854,9 +2460,9 @@
               }
             }),
             createHTMLElement('button', {
-              id: 'un-close-view',
+              id: 'flxn-close-view',
               textContent: 'Close',
-              eventListener: () => closeModal(modal)
+              eventListener: () => closeModalDialogue(modal)
             }),
           ]
         })
@@ -1864,14 +2470,17 @@
     });
 
     getAppRoot().appendChild(modal);
-    addModalCloseBtn(modal);
-    requestAnimationFrame(() => modal.classList.add('show'));
-    trapTabFocus(modal);
-
-    makeElementDragAndResize(modal, modal.querySelector('div.un-modal-header-wrapper'), {
-      onResizing: () => applyMasonryLayout(modal.querySelector('#un-notes-list')),
-      onResizeEnd: () => applyMasonryLayout(modal.querySelector('#un-notes-list'))
+    addSettingModalBtn(modal);
+    applyModalCascade(modal, savedCoords);
+    requestAnimationFrame(() => { 
+      modal.classList.add('show');
+      bringToFront(modal);
+      makeElementDragAndResize(modal, modal.querySelector('div.flxn-modal-header-wrapper'), {
+        onAnyResize: () => applyMasonryLayout(modal.querySelector('#flxn-notes-list')),
+        onResizing: () => applyMasonryLayout(modal.querySelector('#flxn-notes-list')),
+      });
     });
+    trapTabFocus(modal);
 
     renderTagList();
     renderNotes();
@@ -1881,7 +2490,7 @@
   }
 
   function createTagSuggestions(inputEl, wrapper) {
-    const dropdown = createHTMLElement('div', { className: 'un-tag-suggestions' });
+    const dropdown = createHTMLElement('div', { className: 'flxn-tag-suggestions' });
     Object.assign(dropdown.style, {
       position: 'absolute',
       background: '#fff',
@@ -1901,7 +2510,7 @@
     inputEl.addEventListener('input', () => {
       const query = inputEl.value.toLowerCase();
       const allTags = getAllTags();
-      const currentTags = [...wrapper.querySelectorAll('.un-tag-chip')].map(el => el.dataset.tag.toLowerCase());
+      const currentTags = [...wrapper.querySelectorAll('.flxn-tag-chip')].map(el => el.dataset.tag.toLowerCase());
 
       const matches = query
         ? allTags.filter(t => t.toLowerCase().includes(query) && !currentTags.includes(t.toLowerCase()))
@@ -1945,7 +2554,7 @@
       }
 
       if (e.key === 'Backspace' && !inputEl.value) {
-        const chips = wrapper.querySelectorAll('.un-tag-chip');
+        const chips = wrapper.querySelectorAll('.flxn-tag-chip');
         if (chips.length) chips[chips.length - 1].remove();
       }
     });
@@ -1968,102 +2577,181 @@
     };
 
     let activeAttachments = note.attachments;
+    const originalAttIds = (note.attachments || []).map(a => a.id).sort().join(',');
+    let isPadDirty = false;
     const capabilities = getCapabilities();
 
     injectEasyMdeCSS();
 
     let attachmentsWrapper, noteURLInput;
-    const editorContainer = createHTMLElement('div', { id: 'un-editor-wrapper' });
-    const editorTextarea = createHTMLElement('textarea', { id: 'un-mde-editor' });
+    const editorContainer = createHTMLElement('div', { id: 'flxn-editor-wrapper' });
+    const editorTextarea = createHTMLElement('textarea', { id: 'flxn-mde-editor' });
     editorContainer.appendChild(editorTextarea);
     let mdeInstance = null
 
-    const scratchpadContainer = createHTMLElement('div', { id: 'un-scratchpad-wrapper', style: 'display: none;' }); // Hidden by default
+    const scratchpadContainer = createHTMLElement('div', { id: 'flxn-scratchpad-wrapper', style: 'display: none;' }); // Hidden by default
     let padInstance = null;
     let isPadActive = (note && note.id && getNotes().some(n => n.id === note.id) && !note.description && activeAttachments.find(a => a._systemRef === 'scratchpad-vector'));
     
     const updateScratchpadData = async () => {
+      const oldPadFiles = activeAttachments.filter(a => a._systemRef === 'scratchpad-vector' || a._systemRef === 'scratchpad-preview');
+      activeAttachments = activeAttachments.filter(a => a._systemRef !== 'scratchpad-vector' && a._systemRef !== 'scratchpad-preview');
+      oldPadFiles.forEach(att => queueAssetForDeletion(att));
       const pngData = padInstance.getPreviewImage();
+
       if (pngData) {
-        activeAttachments = activeAttachments.filter(a => a._systemRef !== 'scratchpad-vector' && a._systemRef !== 'scratchpad-preview');
-
         const baseId = 'att-' + getUniqueId();
+        const capabilities = getCapabilities();
 
-        const jsonBlob = new Blob([padInstance.getVectorData()], { type: 'application/json' });
+        const jsonText = padInstance.getVectorData();
+        const jsonBlob = new Blob([jsonText], { type: 'application/json' });
         await queueAttachmentForUpload(baseId + '-vec', jsonBlob);
-        activeAttachments.push({ id: baseId + '-vec', _systemRef: 'scratchpad-vector', filename: 'scratchpad_vector.json', type: 'application/json', size: jsonBlob.size, providerStorage: 'native', data: null });
+        const vecFilename = 'scratchpad_vector.json';
+        activeAttachments.push({ 
+          id: baseId + '-vec', _systemRef: 'scratchpad-vector', 
+          filename: vecFilename, type: 'application/json', 
+          size: jsonBlob.size, providerStorage: 'native', 
+          storagePath: `assets/${generateAssetFilename(vecFilename, baseId + '-vec', note.title)}`,
+          data: null,
+          uploadPending: true,
+          sourceOrigin: window.location.origin
+        });
 
         const rawPngBlob = dataURLtoBlob(pngData);
-        const thumb = await generateThumbnail(rawPngBlob);
-        await queueAttachmentForUpload(baseId + '-png', rawPngBlob);
-        activeAttachments.push({ id: baseId + '-png', _systemRef: 'scratchpad-preview', filename: 'scratchpad_preview.png', type: 'image/png', size: rawPngBlob.size, providerStorage: 'native', data: thumb });
+        if (capabilities.requiresBatchedBase64) {
+          activeAttachments.push({ 
+            id: baseId + '-png', _systemRef: 'scratchpad-preview', 
+            filename: 'scratchpad_preview.png', type: 'image/png', 
+            size: Math.round(pngData.length * 0.75), providerStorage: 'base64', 
+            storagePath: null, // Base64 doesn't need a path
+            data: pngData 
+          });
+        } else {
+          const thumb = await generateThumbnail(rawPngBlob);
+          await queueAttachmentForUpload(baseId + '-png', rawPngBlob);
+          const pngFilename = 'scratchpad_preview.png';
+          activeAttachments.push({ 
+            id: baseId + '-png', _systemRef: 'scratchpad-preview', 
+            filename: pngFilename, type: 'image/png', 
+            size: rawPngBlob.size, providerStorage: 'native', 
+            storagePath: `assets/${generateAssetFilename(pngFilename, baseId + '-png', note.title)}`,
+            data: thumb,
+            uploadPending: true,
+            sourceOrigin: window.location.origin
+          });
+        }
 
         renderAttachmentsList();
       }
     }
 
     const openScratchpad = async () => {
+      const existingVec = activeAttachments.find(a => a._systemRef === 'scratchpad-vector');
+      if (existingVec && existingVec.uploadPending && existingVec.sourceOrigin !== window.location.origin) {
+        const host = existingVec.sourceOrigin.replace(/^https?:\/\//i, '');
+        showNotification(`Cannot edit: Sketch is waiting to upload on ${host}. Open that site to sync it first!`, { icon: UI_ICONS.warning, duration: 5000 });
+         
+        isPadActive = false;
+        togglePadBtn.innerHTML = getIconHTML('scribble');
+        togglePadBtn.dataset.flxNotesTooltip = 'Open Scratchpad';
+        return; 
+      }
+
       editorContainer.style.display = 'none';
       scratchpadContainer.style.display = 'block';
 
       if (!padInstance) {
-        padInstance = new FluxKit.ui.Scratchpad(scratchpadContainer, { pointThreshold: 2, showExportSettings: true, theme: activeThemeBridge });
-        window.activeUnPadInstance = padInstance;
+        const capabilities = getCapabilities();
+
+        padInstance = new FluxKit.ui.Scratchpad(scratchpadContainer, { 
+          pointThreshold: 2, showExportSettings: true, theme: activeThemeBridge,
+          disableImagePaste: capabilities.requiresBatchedBase64,
+          imageCompression: capabilities.requiresBatchedBase64 ? { maxWidth: 1200, quality: 0.6 } : false,
+          onChange: () => { isPadDirty = true; }
+        });
+        isPadDirty = false;
+
+        scratchpadContainer._fluxPadInstance = padInstance;
 
         const existingVec = activeAttachments.find(a => a._systemRef === 'scratchpad-vector');
         if (existingVec) {
-          const rawBlob = await getAttachmentData(existingVec);
-          const jsonText = await new Blob([rawBlob]).text();
-          padInstance.loadVectorData(jsonText);
+          scratchpadContainer.style.position = 'relative';
+          scratchpadContainer.style.pointerEvents = 'none';
+          const loaderOverlay = createHTMLElement('div', {
+            style: 'position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: var(--flxn-bg, rgba(255,255,255,0.7)); opacity: 0.9; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; backdrop-filter: blur(4px); border-radius: 8px; color: var(--flxn-text, #333); transition: opacity 0.2s ease;',
+            innerHTML: safeHTML(`<span style="display: flex; font-size: 36px;">${UI_ICONS.loader}</span><span style="margin-top: 10px; font-weight: 500; font-size: 13px;">Loading Sketch...</span>`)
+          });
+          
+          scratchpadContainer.appendChild(loaderOverlay);
+          try {
+            const rawBlob = await getAttachmentData(existingVec);
+            const jsonText = await new Blob([rawBlob]).text();
+            padInstance.loadVectorData(jsonText);
+          } catch (err) {
+            logError("Failed to load scratchpad vectors:", err);
+            showNotification("Failed to load sketch data.", { icon: UI_ICONS.error });
+          } finally {
+            isPadDirty = false;
+            loaderOverlay.style.opacity = '0';
+            setTimeout(() => {
+              loaderOverlay.remove();
+              scratchpadContainer.style.pointerEvents = '';
+            }, 200);
+          }
         }
       }
       padInstance.refresh();
+      scratchpadContainer.addEventListener('flxn-theme-changed', (e) => {
+        if (padInstance) padInstance.updateTheme(e.detail);
+      });
     }
 
     if (isPadActive) openScratchpad();
 
     const getIconHTML = (iconName) => {
-      const rawSVG = window.FluxKit.ui.icons[iconName];
-      return safeHTML(`<span style="display:flex;">${rawSVG}</span>`);
+      const rawIcon = window.FluxKit.ui.icons[iconName];
+      return safeHTML(`<span style="display:flex;">${rawIcon}</span>`);
     };
 
     const togglePadBtn = createHTMLElement('button', {
-      className: 'un-icon-btn',
+      className: 'flxn-icon-btn',
       style: 'width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center;',
       icon: isPadActive ? 'textCaret' : 'scribble',
-      flxTooltip: `${isPadActive ? 'Open Text Editor' : 'Open Scratchpad'}`,
+      flxNotesTooltip: `${isPadActive ? 'Open Text Editor' : 'Open Scratchpad'}`,
       eventListener: {
         click: async (e) => {
           e.preventDefault();
           isPadActive = !isPadActive;
           if (isPadActive) {
             togglePadBtn.innerHTML = getIconHTML('textCaret');
-            togglePadBtn.dataset.tooltip = 'Open Text Editor';
+            togglePadBtn.dataset.flxNotesTooltip = 'Open Text Editor';
             await openScratchpad();
+            updateActiveScratchpadState();
           }
           else {
             scratchpadContainer.style.display = 'none';
             editorContainer.style.display = 'block';
             togglePadBtn.innerHTML = getIconHTML('scribble');
-            togglePadBtn.dataset.tooltip = 'Open Scratchpad';
+            togglePadBtn.dataset.flxNotesTooltip = 'Open Scratchpad';
             updateScratchpadData();
+            updateActiveScratchpadState();
           }
         }
       }
     });
 
-    const modalContent = createHTMLElement('div', { class: 'un-modal-content',
+    const modalContent = createHTMLElement('div', { class: 'flxn-modal-content',
       children: [
         editorContainer,
         scratchpadContainer,
         createTagInput(note.tags),
-        noteURLInput = createHTMLElement('input', { id: 'un-note-url', placeholder: 'URL', value: note.url }),
+        noteURLInput = createHTMLElement('input', { id: 'flxn-note-url', placeholder: 'URL', value: note.url }),
         attachmentsWrapper = createHTMLElement('div', { style: 'margin-top: 10px;' })
       ]
     })
 
     const modalHeader = createHTMLElement('h3', {
-      class: 'un-modal-header',
+      class: 'flxn-modal-header',
       contentEditable: 'true',
       textContent: note.title,
       style: { cursor: 'text' },
@@ -2083,36 +2771,41 @@
 
     const actionBtnsWrapper = createHTMLElement('div', { style: 'display: flex; align-items: center; gap: 8px;' });
 
-    const modal = createHTMLElement('dialog', { class: `un-modal un-${note.id}`, style: { zIndex: 1 }, id: MODAL_IDS.NOTE,
+    const modal = createHTMLElement('dialog', { class: `flxn-modal flxn-${note.id}`, id: MODAL_IDS.NOTE,
       children: [
-        createHTMLElement('div', { class: 'un-header-wrapper', children: [modalHeader]}),
+        createHTMLElement('div', { class: 'flxn-header-wrapper', children: [modalHeader]}),
         modalContent,
-        createHTMLElement('div', { class: 'un-modal-footer',
+        createHTMLElement('div', { class: 'flxn-modal-footer',
           children: [
             actionBtnsWrapper,
             createHTMLElement('div', {
               style: 'display:flex; gap:8px;',
               children: [
                 createHTMLElement('button', {
-                  id: 'un-save-note',
+                  id: 'flxn-save-note',
                   textContent: 'Save',
                   style: 'min-width: 80px; transition: all 0.2s ease;',
                   eventListener: async (e) => {
                     const btn = e.target;
                     try {
                       btn.disabled = true;
-                      btn.innerHTML = safeHTML(`<i class="fa fa-spinner fa-spin"></i> Saving...`);
+                      btn.innerHTML = safeHTML(`<span style="display:flex;align-items:center;justify-content:center;gap:6px;">${UI_ICONS.loader} Saving...</span>`);
                       btn.style.opacity = '0.8';
                       btn.style.cursor = 'not-allowed';
 
                       let finalDescription = mdeInstance.value();
                       if (isPadActive) await updateScratchpadData();
 
+                      const removedAttachments = (note.attachments || []).filter(
+                        a1 => !activeAttachments.find(a2 => a2.id === a1.id)
+                      );
+                      removedAttachments.forEach(att => queueAssetForDeletion(att));
+
                       const updatedNote = {
                         id: note.id,
                         title: modalHeader.textContent.trim(),
                         description: finalDescription,
-                        tags: getTagsFromWrapper(unQuery('.un-tag-input-wrapper')),
+                        tags: getTagsFromWrapper(unQuery('.flxn-tag-input-wrapper')),
                         url: noteURLInput.value.trim(),
                         attachments: activeAttachments,
                         pinned: note.pinned || false,
@@ -2120,7 +2813,7 @@
 
                       if (!updatedNote.title) {
                         showNotification('Title is required.');
-                        modal.querySelector('.un-modal-header').focus();
+                        modal.querySelector('.flxn-modal-header').focus();
                         throw new Error('Title is required');
                       }
 
@@ -2129,22 +2822,22 @@
                       btn.style.background = '#28a745';
                       btn.style.color = '#fff';
                       btn.style.border = '1px solid #28a745';
-                      btn.innerHTML = safeHTML(`<i class="fa fa-check"></i> Saved!`);
+                      btn.innerHTML = safeHTML(`<span style="display:flex;align-items:center;justify-content:center;gap:6px;">${UI_ICONS.success} Saved!</span>`);
 
                       setTimeout(() => {
-                        closeModal(modal);
+                        closeModalDialogue(modal);
                       }, 500);
 
-                      setTimeout(() => closeModal(modal), 500);
-                      if (isNewNote && $(MODAL_IDS.VIEW)) renderNotes();
+                      setTimeout(() => closeModalDialogue(modal), 500);
+                      renderNotes();
                       if (onSaveCallback) await onSaveCallback(updatedNote);
 
                     } catch (err) {
-                      btn.innerHTML = safeHTML(`<i class="fa fa-exclamation-triangle"></i> Error`);
-                      btn.dataset.tooltip = err.message || 'Error';
+                      btn.innerHTML = safeHTML(`<span style="display:flex;align-items:center;justify-content:center;gap:6px;">${UI_ICONS.warning} Error</span>`);
+                      btn.dataset.flxNotesTooltip = err.message || 'Error';
                       btn.style.background = '#dc3545';
                       setTimeout(() => {
-                        btn.dataset.tooltip = 'Save';
+                        btn.dataset.flxNotesTooltip = 'Save';
                         btn.disabled = false;
                         btn.innerHTML = safeHTML('Save');
                         btn.style.background = '';
@@ -2153,8 +2846,8 @@
                   }
                 }),
                 createHTMLElement('button', {
-                  id: 'un-cancel-note', textContent: 'Cancel',
-                  eventListener: () => { if (onCancelCallback) onCancelCallback(); modal.parentElement.remove(); }
+                  id: 'flxn-cancel-note', textContent: 'Cancel',
+                  eventListener: () => { requestSafeClose(); }
                 })
               ]
             })
@@ -2163,22 +2856,34 @@
       ],
      });
 
-    ['keydown', 'keyup', 'keypress'].forEach(eventType => {
-      modal.addEventListener(eventType, (e) => {
-        if (['Enter', 'Tab', 'Backspace', 'Delete', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
-        e.stopPropagation();
-      }, { capture: true });
-    })
+    const hasUnsavedChanges = () => {
+      if (modalHeader.textContent.trim() !== (note.title || 'Untitled')) return true;
+      if (mdeInstance && mdeInstance.value() !== (note.description || '')) return true;
+      if (noteURLInput.value.trim() !== (note.url || '')) return true;
+      
+      const currentTags = getTagsFromWrapper(modal.querySelector('.flxn-tag-input-wrapper')) || [];
+      if (JSON.stringify(currentTags) !== JSON.stringify(note.tags || [])) return true;
+      
+      const currentAttIds = activeAttachments.map(a => a.id).sort().join(',');
+      if (originalAttIds !== currentAttIds) return true;
 
-    const wrapper = createHTMLElement('div', { id: `${MODAL_IDS.NOTE}-${note.id}-container`, class: 'un-modal-wrapper', children: modal });
-    getAppRoot().appendChild(wrapper);
-    addModalCloseBtn(modal);
-    requestAnimationFrame(() => modal.classList.add('show'));
+      if (isPadDirty) return true;
+
+      return false;
+    };
+
+    const requestSafeClose = async () => {
+      if (hasUnsavedChanges()) {
+        if (!await confirmAction('You have unsaved changes. Discard them?')) return;
+      }      
+      if (onCancelCallback) onCancelCallback();
+      closeModalDialogue(modal);
+    };
 
     withTTPatched(() => {
       mdeInstance = getMDEInstance(modal, editorTextarea, note.description);
     });
-    monitorToolbarIcons(mdeInstance);
+    injectToolbarIcons(mdeInstance);
 
     function renderAttachmentsList() {
       attachmentsWrapper.innerHTML = safeHTML('');
@@ -2191,25 +2896,38 @@
         const isSystemPreview = att._systemRef === 'scratchpad-preview';
         const displayName = isSystemPreview ? 'Scratchpad Sketch' : att.filename;
         const icon = att.data
-            ? `<img src="${att.data}" style="width: 16px; height: 16px; object-fit: cover; border-radius: 2px;">`
-            : `<i class="fa fa-file"></i>`;
+          ? `<img src="${att.data}" style="width: 16px; height: 16px; object-fit: cover; border-radius: 2px;">`
+          : `<span style="display: flex; align-items: center; justify-content: center; width: 16px; height: 16px;">${UI_ICONS.document}</span>`;
+
+        let statusIndicator = '';
+        const profile = getCurrentProfile();
+        const isLocal = !profile || !profile.provider || profile.provider === 'Local';
+        if (att.uploadPending && !isLocal) {
+          if (att.sourceOrigin !== window.location.origin) {
+            const host = att.sourceOrigin.replace(/^https?:\/\//i, '');
+            statusIndicator = `<span style="color: #f59e0b; margin-left: 6px; display: inline-flex; align-items: center;" data-flx-notes-tooltip="Trapped on ${host}. Open that site to upload!">${UI_ICONS.warning}</span>`;
+          } else {
+            statusIndicator = `<span style="color: var(--flxn-accent-text); margin-left: 6px; display: inline-flex; align-items: center;" data-flx-notes-tooltip="Not uploaded to cloud yet...">${UI_ICONS.hourglassSpin}</span>`;
+          }
+        }
 
         const chip = createHTMLElement('div', {
-          style: 'display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: var(--bg-muted); border-radius: 4px; font-size: 11px; border: 1px solid var(--border); cursor: pointer;',
-          flxTooltip: 'Click to open/preview',
+          style: 'display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 4px; font-size: 11px; border: 1px solid var(--flxn-modal-border-color); cursor: pointer;',
+          flxNotesTooltip: 'Click to open/preview',
           children: [
             createHTMLElement('span', { innerHTML: safeHTML(icon) }),
             createHTMLElement('span', { textContent: displayName, style: 'max-width: 120px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;' }),
-            createHTMLElement('i', {
-              class: 'fa fa-times',
-              style: 'margin-left: 4px; opacity: 0.6;',
-              flxTooltip: 'Remove',
+            statusIndicator ? createHTMLElement('span', { innerHTML: safeHTML(statusIndicator) }) : '',
+            createHTMLElement('span', {
+              innerHTML: safeHTML(UI_ICONS.close),
+              style: 'margin-left: 4px; opacity: 0.6; display: inline-flex; align-items: center; justify-content: center;',
+              flxNotesTooltip: 'Remove',
               eventListener: {
-                click: (e) => {
+                click: async (e) => {
                   e.stopPropagation();
                   activeAttachments = activeAttachments.filter(a => a.id !== att.id);
                   if (isSystemPreview) {
-                    if (!confirm('This will permanently delete your scratchpad drawing. Are you sure?')) return;
+                    if (!await confirmAction('This will permanently delete your scratchpad drawing. Are you sure?')) return;
                     activeAttachments = activeAttachments.filter(a => a._systemRef !== 'scratchpad-vector' && a._systemRef !== 'scratchpad-preview');
                   } else {
                     activeAttachments = activeAttachments.filter(a => a.id !== att.id);
@@ -2245,9 +2963,9 @@
     }
 
     const cameraBtn = createHTMLElement('button', {
-      className: 'un-icon-btn',
+      className: 'flxn-icon-btn',
       style: 'width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center;', icon: 'camera',
-      flxTooltip: `${!isScreenshotHelperInstalled ? 'UN Screenshot Helper extension required' : 'Capture Screenshot'}`,
+      flxNotesTooltip: `${!isScreenshotHelperInstalled ? 'Flux Screenshot Helper extension required' : 'Capture Screenshot'}`,
       eventListener: {
         click: (e) => {
           e.preventDefault();
@@ -2278,17 +2996,20 @@
               const rawBlob = dataURLtoBlob(dataUrl);
               const thumbnailData = await generateThumbnail(rawBlob); // Tiny UI preview
 
-              await queueAttachmentForUpload(id, rawBlob); // Save massive uncompressed file to IndexedDB
+              await queueAttachmentForUpload(id, rawBlob);
 
+              const filename = `screenshot_${Date.now()}.png`;
               activeAttachments.push({
                 id,
-                filename: `screenshot_${Date.now()}.png`,
+                filename: filename,
                 type: 'image/png',
                 size: rawBlob.size,
                 providerStorage: 'native',
-                storagePath: null, // Assigned by sync engine
-                thumbnailFile: null,   // Assigned by sync engine
-                data: thumbnailData // Fast UI rendering
+                storagePath: `assets/${generateAssetFilename(filename, id, note.title)}`,
+                thumbnailFile: null, // Assigned by sync engine
+                data: thumbnailData,
+                uploadPending: true,
+                sourceOrigin: window.location.origin
               });
             }
 
@@ -2307,7 +3028,7 @@
     actionBtnsWrapper.appendChild(cameraBtn);
     actionBtnsWrapper.appendChild(togglePadBtn);
 
-    // 2. Native File Attachment Button (Only if profile allows it!)
+    // Native File Attachment Button (Only if profile allows it!)
     if (capabilities.allowsNativeFiles) {
       const fileInput = createHTMLElement('input', {
         type: 'file',
@@ -2325,9 +3046,8 @@
             const id = 'att-' + getUniqueId();
             let thumbnailData = null;
 
-            // Instantly show loading state
             const prevIcon = attachBtn.innerHTML;
-            attachBtn.innerHTML = safeHTML('<i class="fa fa-spinner fa-spin"></i>');
+            attachBtn.innerHTML = safeHTML(UI_ICONS.loader);
             attachBtn.disabled = true;
 
             try {
@@ -2343,9 +3063,11 @@
                 type: file.type,
                 size: file.size,
                 providerStorage: 'native',
-                storagePath: null, // Will be set by sync engine
+                storagePath: `assets/${generateAssetFilename(file.name, id, note.title)}`,
                 thumbnailFile: null,
-                data: thumbnailData // For instant UI preview
+                data: thumbnailData,
+                uploadPending: true,
+                sourceOrigin: window.location.origin
               });
 
               showNotification(`Attached ${file.name}`);
@@ -2356,17 +3078,17 @@
             } finally {
               attachBtn.innerHTML = safeHTML(prevIcon);
               attachBtn.disabled = false;
-              fileInput.value = ''; // Reset input
+              fileInput.value = '';
             }
           }
         }
       });
 
       const attachBtn = createHTMLElement('button', {
-        className: 'un-icon-btn',
+        className: 'flxn-icon-btn',
         style: 'width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center;',
-        innerHTML: safeHTML('<i class="fa fa-paperclip"></i>'), // Fallback paperclip icon
-        flxTooltip: 'Attach File',
+        innerHTML: safeHTML(UI_ICONS.paperclip),
+        flxNotesTooltip: 'Attach File',
         eventListener: {
           click: (e) => {
             e.preventDefault();
@@ -2407,37 +3129,42 @@
     });
 
     trapTabFocus(modal);
-    makeElementDragAndResize(modal, modal.querySelector('div.un-header-wrapper'), { minWidth: 298, minHeight: 326 });
     applyTheme();
+    modal.requestSafeClose = requestSafeClose;
 
+    const wrapper = createHTMLElement('div', { id: `${MODAL_IDS.NOTE}-${note.id}-container`, class: 'flxn-modal-wrapper', children: modal });
+    getAppRoot().appendChild(wrapper);
+    applyModalCascade(modal);
+    requestAnimationFrame(() => {
+      modal.classList.add('show');
+      bringToFront(modal);
+      makeElementDragAndResize(modal, modal.querySelector('div.flxn-header-wrapper'), { minWidth: 298, minHeight: 326 });
+    });
+    
     modal.addEventListener('modal-closed', () => {
-      if (window.activeUnPadInstance) {
-        window.activeUnPadInstance.destroy();
-        window.activeUnPadInstance = null;
+      if (padInstance) {
+        padInstance.destroy();
+        logMessage(`Cleaned up FluxKit Scratchpad instance for note: ${note.id}`);
       }
-      logMessage('Cleaned up FluxKit Scratchpad instance on modal close.');
     }, { once: true });
   }
 
   function openSettingsModal() {
+    const existingModal = $(MODAL_IDS.SETTINGS);
+    let savedCoords = null;
+    if (existingModal) {
+      if (existingModal.style.top) savedCoords = { top: existingModal.style.top, left: existingModal.style.left };
+      closeModalDialogue(existingModal);
+    }
     const userTheme = config.theme || 'auto';
     const profiles = getAllProfiles();
-    const currentProfileName =
-      getCurrentProfileName() || profiles[0]?.name || '';
-    let currentProfile = profiles.find(p => p.name === currentProfileName) || {
-      name: '',
-      gistId: '',
-      fileName: '',
-      token: '',
-      syncFrequency: 'Every day',
-    };
-
-    closeAllModals();
+    const currentProfileName = getCurrentProfileName() || profiles[0]?.name || '';
+    let currentProfile = profiles.find(p => p.name === currentProfileName) || { name: 'Default', provider: 'Local' };
 
     const syncIntervalLabel = createHTMLElement('label', {
-      class: 'un-form-row',
+      class: 'flxn-form-row',
       children: [
-        createHTMLElement('div', { textContent: 'Sync frequency', class: 'un-form-label' }),
+        createHTMLElement('div', { textContent: 'Sync frequency', class: 'flxn-form-label' }),
         createHTMLElement('select', {
           id: 'sync-frequency-select',
           style: 'width:55%;margin:0;',
@@ -2453,42 +3180,8 @@
     });
 
     const allProfiles = config.profiles || [];
-    const profileSvg = createSVGElement('svg', {
-      viewBox: '0 0 24 24',
-      width: '18',
-      height: '18',
-      fill: 'currentColor',
-      children: [
-        createSVGElement('path', {
-          d: 'M14,2 C14.2652165,2 14.5195704,2.10535684 14.7071068,2.29289322 L19.7071068,7.29289322 C19.8946432,7.4804296 20,7.73478351 20,8 L20,9 C20,9.55228475 19.5522847,10 19,10 L13,10 C12.4871642,10 12.0644928,9.61395981 12.0067277,9.11662113 L12,9 L11.999,4 L7,4 C6.44771525,4 6,4.44771525 6,5 L6,19 C6,19.5522847 6.44771525,20 7,20 L9,20 C9.55228475,20 10,20.4477153 10,21 C10,21.5522847 9.55228475,22 9,22 L7,22 C5.34314575,22 4,20.6568542 4,19 L4,5 C4,3.34314575 5.34314575,2 7,2 L14,2 Z M17,12 C17.5522847,12 18,12.4477153 18,13 L18,16 L21,16 C21.5522847,16 22,16.4477153 22,17 C22,17.5522847 21.5522847,18 21,18 L18,18 L18,21 C18,21.5522847 17.5522847,22 17,22 C16.4477153,22 16,21.5522847 16,21 L16,18 L13,18 C12.4477153,18 12,17.5522847 12,17 C12,16.4477153 12.4477153,16 13,16 L16,16 L16,13 C16,12.4477153 16.4477153,12 17,12 Z M13.999,4.414 L14,8 L17.586,8 L13.999,4.414 Z'
-        })
-      ]
-    });
 
-    const deleteSvg = createSVGElement('svg', {
-      viewBox: '0 0 24 24',
-      width: '18',
-      height: '18',
-      fill: 'none',
-      children: [
-        createSVGElement('path', {
-          d: "M13.5 3H12H8C6.34315 3 5 4.34315 5 6V18C5 19.6569 6.34315 21 8 21H11M13.5 3L19 8.625M13.5 3V7.625C13.5 8.17728 13.9477 8.625 14.5 8.625H19M19 8.625V11.8125",
-          "stroke-linecap": "round",
-          "stroke-linejoin": "round",
-          "stroke-width": "2",
-          stroke: "currentColor"
-        }),
-        createSVGElement('path', {
-          d: "M15 16L17.5 18.5M20 21L17.5 18.5M17.5 18.5L20 16M17.5 18.5L15 21",
-          "stroke-linecap": "round",
-          "stroke-linejoin": "round",
-          "stroke-width": "2",
-          stroke: "currentColor"
-        })
-      ]
-    });
-
-    const profileRow = createHTMLElement('div', { class: 'un-profile-row',
+    const profileRow = createHTMLElement('div', { class: 'flxn-profile-row',
       children: [
         createHTMLElement('select', { id: 'profile-select', style: 'flex-grow:1',
           children: allProfiles.map(profile => createHTMLElement('option', { value: profile.name, textContent: profile.name, selected: profile.name === currentProfileName })),
@@ -2500,33 +3193,23 @@
               }
           }
         }),
-        createHTMLElement('button', { id: 'new-profile-btn', flxTooltip: 'New Profile', class: 'un-icon-btn', children: profileSvg, eventListener: async () => {
-          const name = prompt('Enter new profile name:');
+        createHTMLElement('button', { id: 'new-profile-btn', flxNotesTooltip: 'New Profile', class: 'flxn-icon-btn', icon: 'fileAdd', eventListener: async () => {
+          const name = await promptUser('Enter new profile name:');
           if (name && !allProfiles.find(p => p.name === name)) {
             await saveProfile({ provider: 'Local', name });
             openSettingsModal();
           } else if (allProfiles.find(p => p.name === name)) alert('A profile with this name already exists.');
         }}),
-        createHTMLElement('button', { id: 'delete-profile-btn', flxTooltip: 'Delete Profile', class: 'un-icon-btn', children: deleteSvg, eventListener: async () => {
-          if (!confirm(`Delete the profile: ${currentProfileName}? This cannot be undone.`)) return;
-          await syncNotesData(getSnapshot());
-          const updated = profiles.filter(p => p.name !== currentProfileName);
-          config.profiles = updated;
-          config.currentProfile = updated[0]?.name || '';
-          const cached = loadCachedProfileData(config.currentProfile);
-          if (cached) {
-            config.notes = cached.notes;
-            config.trashedNotes = cached.trashedNotes;
-            config.lastSyncTime = cached.lastSyncTime;
-            showNotification(`Loaded "${config.currentProfile}" from local cache.`, { icon: UI_ICONS.zap });
-          } else {
-            config.notes = [];
-            config.trashedNotes = [];
-            config.lastSyncTime = null;
-          }
-          saveConfig(config);
-          await syncNotesData(getSnapshot());
+        createHTMLElement('button', { id: 'delete-profile-btn', flxNotesTooltip: 'Delete Profile', class: 'flxn-icon-btn', icon: 'fileDelete', eventListener: async () => {
+          const isLocal = !currentProfile.provider || currentProfile.provider === 'Local';
+          const confirmMsg = isLocal 
+            ? `Delete the local profile: "${currentProfileName}"?\n\n⚠️ WARNING: This profile is NOT synced to the cloud. All notes and images will be PERMANENTLY deleted and cannot be restored!`
+            : `Delete the profile: "${currentProfileName}"?\n\nThis will remove it from this browser. Your notes will remain safely stored on ${currentProfile.provider}.`;
+
+          if (!await confirmAction(confirmMsg)) return;
+          await completelyDeleteProfile(currentProfileName);
           openSettingsModal();
+          renderNotes();
         }}),
       ]});
 
@@ -2534,14 +3217,14 @@
       ? new Date(config.lastSyncTime).toLocaleString()
       : 'Never';
 
-    const profileActionContainer = createHTMLElement('div', { id: 'un-profile-action-container' });
+    const profileActionContainer = createHTMLElement('div', { id: 'flxn-profile-action-container' });
 
     const renderSetupButton = () => {
       profileActionContainer.innerHTML = safeHTML('');
       const btn = createHTMLElement('button', {
         textContent: '✨ Set up Sync Wizard',
         eventListener: () => {
-          const wizardContainer = createHTMLElement('div', { id: 'un-wizard-container' });
+          const wizardContainer = createHTMLElement('div', { id: 'flxn-wizard-container' });
 
           profileActionContainer.innerHTML = safeHTML('');
           profileActionContainer.appendChild(wizardContainer);
@@ -2549,6 +3232,20 @@
           const rootContainer = getAppRoot();
           const defaultSub = currentProfileName || 'Default';
           window.activeUnSyncWizard = new FluxKit.sync.Wizard(rootContainer, { namespace: 'FluxNotes', defaultSubFolder: defaultSub, theme: activeThemeBridge }, async (data) => {
+            const newCaps = FluxKit.sync.getCapabilities({ provider: data.provider });
+            const { usedMB } = calculateStorageUsage();
+            if (usedMB * 1024 * 1024 > newCaps.totalQuota) {
+              showNotification(`Blocked: Your local data (${usedMB.toFixed(1)}MB) exceeds the ${data.provider} quota.`, { icon: UI_ICONS.ban, duration: 6000 });
+              openSettingsModal();
+              return;
+            }
+
+            const oversizeFile = getNotes().flatMap(n => n.attachments || []).find(a => (a.size || 0) > newCaps.maxFileSize);
+            if (oversizeFile) {
+              showNotification(`Blocked: File '${oversizeFile.filename}' exceeds ${data.provider}'s ${(newCaps.maxFileSize/1024/1024).toFixed(1)}MB limit.`, { icon: UI_ICONS.ban, duration: 6000 });
+              openSettingsModal();
+              return;
+            }
             showNotification('Sync configured!');
             const newProfile = {
               name: currentProfileName || 'Default',
@@ -2588,7 +3285,7 @@
       children: [
         createHTMLElement('div', {
           textContent: `Active Profile (Last Synced: ${lastSync})`,
-          class: 'un-form-label',
+          class: 'flxn-form-label',
           style: 'margin-bottom: 8px;'
         }),
         profileRow
@@ -2607,7 +3304,7 @@
     const customFields = createHTMLElement('div', {
       children: [
         syncIntervalLabel,
-        createHTMLElement('div', { class: 'un-profile-btn-row',
+        createHTMLElement('div', { class: 'flxn-profile-btn-row',
           children: [
             createHTMLElement('button', { id: 'save-settings', textContent: 'Save', style: 'width:124px;',
               eventListener: async () => {
@@ -2618,6 +3315,18 @@
                 await syncNotesData(getSnapshot());
               }
             }),
+            
+            createHTMLElement('button', { 
+              textContent: 'Disconnect', 
+              style: 'width:124px; background: transparent; color: #e74c3c; border: 1px solid #e74c3c;',
+              eventListener: async () => {
+                if (await confirmAction(`Disconnect ${currentProfile.name} from ${currentProfile.provider}? Local files will remain safe.`)) {
+                  updateProfile({ name: currentProfile.name, provider: 'Local' });
+                  showNotification('Profile disconnected. Reverted to Local storage.', { icon: UI_ICONS.success });
+                  openSettingsModal();
+                }
+              }
+            })
           ]
         })
       ]
@@ -2674,70 +3383,83 @@
         createHTMLElement('summary', { textContent: 'Keyboard Shortcuts' }),
         createHTMLElement('div', {
           style: 'font-size:12px; margin-bottom:16px; opacity: 0.9; line-height: 1.5;',
-          innerHTML: safeHTML('Click an input to record your keys.<br><strong style="color: var(--accentBg, #007bff);">Press Enter or Escape to save</strong> your new combo.')
+          innerHTML: safeHTML('Click an input to record your keys.<br><strong style="color: var(--flxn-accent-text, #007bff);">Press Enter to save</strong> your new combo.')
         }),
         ...(shortcutFields.map(({ id, label, key }) =>
           createHTMLElement('label', {
-            class: 'un-form-row',
+            class: 'flxn-form-row',
             children: [
-              createHTMLElement('div', { textContent: label.replace(' Shortcut:', ''), class: 'un-form-label' }),
+              createHTMLElement('div', { textContent: label.replace(' Shortcut:', ''), class: 'flxn-form-label' }),
               createHTMLElement('input', {
                 id,
                 type: 'text',
                 readOnly: true,
-                value: getShortcutConfig(key),
+                value: FluxKit.utils.formatShortcutForDisplay(getShortcutConfig(key)),
                 style: 'text-align: center; font-family: monospace; cursor: pointer;',
                 eventListener: {
                   focus: (e) => {
-                    isShorcutUpdating = true;
-                    e.target.style.borderColor = 'var(--accentBg, #007bff)';
+                    isShortcutUpdating = true;
+                    e.target.style.borderColor = 'var(--flxn-accent-bg, #007bff)';
                     e.target.style.boxShadow = '0 0 0 3px rgba(0, 123, 255, 0.25)';
-                    e.target.value = 'Press keys... (Esc to save)';
+                    e.target.value = 'Press keys... (Enter to save)';
+                    
+                    delete e.target.dataset.tempStored;
                   },
                   blur: (e) => {
-                    isShorcutUpdating = true;
+                    isShortcutUpdating = false;
                     e.target.style.borderColor = '';
                     e.target.style.boxShadow = '';
-                    e.target.value = getShortcutConfig(key);
+                    
+                    e.target.value = FluxKit.utils.formatShortcutForDisplay(getShortcutConfig(key));
                   },
                   keydown: (e) => {
                     e.preventDefault();
                     e.stopPropagation();
 
-                    if (e.key === 'Escape' || e.key === 'Enter') {
-                      const attemptedShortcut = e.target.value;
-                      const currentShortcut = getShortcutConfig(key);
-
-                      if (attemptedShortcut === currentShortcut) {
-                        e.target.blur();
-                        return;
-                      }
-                      const duplicateField = shortcutFields.find(
-                        f => getShortcutConfig(f.key) === attemptedShortcut && f.key !== key
-                      );
-                      if (duplicateField) {
-                        e.target.value = currentShortcut;
-                        e.target.blur();
-
-                        const conflictName = duplicateField.label.replace(' Shortcut:', '');
-                        showNotification(
-                          `❌ Error: ${attemptedShortcut} is already used by "${conflictName}"`,
-                          4000,
-                          null,
-                          null,
-                          { animationType: 'bounce', progressGradient: '#ff4757' }
-                        );
-                        return;
-                      }
-                      updateShortcutConfig(key, attemptedShortcut);
-                      showNotification(`Shortcut updated to ${attemptedShortcut}`);
+                    if (e.key === 'Escape') {
                       e.target.blur();
                       return;
                     }
 
-                    const { stored } = getShortcutFromEvent(e);
-                    if (stored) {
-                      e.target.value = stored;
+                    if (e.key === 'Enter') {
+                      const attemptedStored = e.target.dataset.tempStored;
+                      const currentStored = getShortcutConfig(key);
+
+                      if (!attemptedStored || attemptedStored === currentStored) {
+                        e.target.blur();
+                        return;
+                      }
+
+                      const duplicateField = shortcutFields.find(
+                        f => getShortcutConfig(f.key) === attemptedStored && f.key !== key
+                      );
+                      
+                      if (duplicateField) {
+                        e.target.blur();
+
+                        const conflictName = duplicateField.label.replace(' Shortcut:', '');
+                        const displayAttempt = FluxKit.utils.formatShortcutForDisplay(attemptedStored);
+                        
+                        showNotification(
+                          `❌ Error: ${displayAttempt} is already used by "${conflictName}"`,
+                          4000, null, null,
+                          { animationType: 'bounce', progressGradient: '#ff4757' }
+                        );
+                        return;
+                      }
+                      
+                      updateShortcutConfig(key, attemptedStored);
+                      
+                      showNotification(`Shortcut updated to ${FluxKit.utils.formatShortcutForDisplay(attemptedStored)}`);
+                      e.target.blur();
+                      return;
+                    }
+
+                    const { stored, display, isModifierOnly } = FluxKit.utils.getShortcutFromEvent(e);
+                    
+                    if (stored && !isModifierOnly) {
+                      e.target.value = display;
+                      e.target.dataset.tempStored = stored;
                     }
                   }
                 }
@@ -2748,100 +3470,76 @@
       ]
     });
 
-    const { usedMB, limitMB, percent, status } = calculateStorageUsage();
-
-    const color =
-      status === 'over' ? '#e74c3c' :
-      status === 'critical' ? '#f39c12' :
-      status === 'warning' ? '#f1c40f' :
-      '#2ecc71';
-
-    const tooltip =
-      status === 'over' ? 'Storage limit exceeded! Notes may fail to sync.' :
-      status === 'critical' ? 'Critically close to storage limit. Consider cleaning up old notes.' :
-      status === 'warning' ? 'Approaching storage limit — consider compressing or deleting old notes.' :
-      'Storage usage within safe range.';
-
     const storageInfo = createHTMLElement('div', {
       id: 'storage-usage',
       style: `
         margin: 6px 0 12px 0;
         font-size: 13px;
-        color: var(--text-secondary);
-      `,
-      flxTooltip: tooltip,
-      innerHTML: safeHTML(`
-        💾 Storage used: <strong>${usedMB.toFixed(2)} MB</strong> / ${limitMB} MB
-        <div style="background: var(--bg-muted); height:6px; border-radius:4px; overflow:hidden; margin-top:4px;">
-          <div style="
-            width:${percent}%;
-            height:100%;
-            background:${color};
-            transition: width 0.3s ease;
-          "></div>
-        </div>
-      `)
+      `
     });
 
-    const modal = createHTMLElement('dialog', { class: 'un-modal', id: MODAL_IDS.SETTINGS, style: { zIndex: 2 },
+    const themeControls = createHTMLElement('div', {
       children: [
-        createHTMLElement('h3', { class: 'un-modal-header', textContent: 'Settings' }),
-        storageInfo,
-        createHTMLElement('div', { class: 'un-modal-content', children: [
-          profileLabel, isProfileConfigured(currentProfile) ? profileDetails : profileActionContainer,
-          createHTMLElement('label', { class: 'un-form-row',
-            children: [
-              createHTMLElement('div', { textContent: 'Theme', class: 'un-form-label'}),
-              createHTMLElement('select', {
-                id: 'theme-select',
-                children: Object.entries(THEME_PRESETS).map(([key, preset]) =>
-                  createHTMLElement('option', {
-                    value: key,
-                    textContent: preset.name,
-                    selected: key === userTheme
-                  })
-                ),
-                eventListener: { change: (e) => {
-                  const selected = e.target.value;
-                  tempThemeSwitch = false;
-                  applyTheme(selected);
-
-                  const customPanel = unQuery('#un-custom-theme-panel');
-                  if (customPanel) {
-                    customPanel.style.display = selected === 'custom' ? 'flex' : 'none';
-                  }
-                }}
-              })
-
-            ]
-          }),
-          createHTMLElement('div', {
-            id: 'un-custom-theme-panel',
-            style: `display: ${userTheme === 'custom' ? 'flex' : 'none'};`,
-            children: [
-              { key: 'bg', label: 'Main Background' },
-              { key: 'inputBg', label: 'Input Background' },
-              { key: 'text', label: 'Text Color' },
-              { key: 'accent', label: 'Accent Color' },
-              { key: 'btnTextColor', label: 'Button Text' }
-            ].map(prop => createHTMLElement('input', {
-              type: 'color',
-              class: 'un-color-picker',
-              value: config.customTheme[prop.key],
-              dataset: { tooltip: prop.label, tooltipDelay: 50 },
-              eventListener: {
-                input: (e) => {
-                  config.customTheme[prop.key] = e.target.value;
-                  saveConfig(config);
-                  THEME_PRESETS.custom[prop.key] = e.target.value;
-                  if (userTheme === 'custom') applyTheme('custom');
-                }
+        createHTMLElement('label', { class: 'flxn-form-row',
+          children: [
+            createHTMLElement('div', { textContent: 'Theme', class: 'flxn-form-label'}),
+            createHTMLElement('select', {
+              id: 'theme-select',
+              children: Object.entries(THEME_PRESETS).map(([key, preset]) => createHTMLElement('option', { value: key, textContent: preset.name, selected: key === userTheme })),
+              eventListener: { change: (e) => {
+                const selected = e.target.value;
+                tempThemeSwitch = false;
+                applyTheme(selected);
+                const customPanel = unQuery('#flxn-custom-theme-panel');
+                if (customPanel) { customPanel.style.display = selected === 'custom' ? 'flex' : 'none'; }
+              }}
+            })
+          ]
+        }),
+        createHTMLElement('div', {
+          id: 'flxn-custom-theme-panel',
+          style: `display: ${userTheme === 'custom' ? 'flex' : 'none'};`,
+          children: [
+            { key: 'bg', label: 'Main Background' },
+            { key: 'inputBg', label: 'Input Background' },
+            { key: 'text', label: 'Text Color' },
+            { key: 'accentText', label: 'Accent Text' },
+            { key: 'accentBg', label: 'Accent Background' },
+            { key: 'btnTextColor', label: 'Button Text' }
+          ].map(prop => createHTMLElement('input', {
+            type: 'color',
+            class: 'flxn-color-picker',
+            value: config.customTheme[prop.key],
+            dataset: { flxNotesTooltip: prop.label, tooltipDelay: 50 },
+            eventListener: {
+              input: (e) => {
+                config.customTheme[prop.key] = e.target.value;
+                THEME_PRESETS.custom[prop.key] = e.target.value;
+                if (userTheme === 'custom') applyTheme('custom');
               }
-            }))
-          }),
-          shortcutDetails,
-        ]}),
-        createHTMLElement('div', { class: 'un-modal-footer',
+            }
+          }))
+        }),
+      ]
+    });
+
+    const leftColumn = createHTMLElement('div', { class: 'flxn-settings-col', children: [ profileLabel,  isProfileConfigured(currentProfile) ? profileDetails : profileActionContainer, themeControls ] });
+
+    const rightColumn = createHTMLElement('div', { class: 'flxn-settings-col', children: shortcutDetails });
+
+    const settingsLayoutWrapper = createHTMLElement('div', { class: 'flxn-settings-layout', children: [leftColumn, rightColumn] });
+
+    const isSyncReady = isProfileConfigured(currentProfile);
+
+    const modal = createHTMLElement('dialog', { class: 'flxn-modal', id: MODAL_IDS.SETTINGS,
+      children: [
+        createHTMLElement('div', {
+          class: 'flxn-modal-header-wrapper', style: { cursor: 'move' },
+          children: [createHTMLElement('h3', { class: 'flxn-modal-header', textContent: 'Settings' })]
+        }),
+        storageInfo,
+        createHTMLElement('div', { class: 'flxn-modal-content', children: [settingsLayoutWrapper] }),
+        createHTMLElement('div', { class: 'flxn-modal-footer',
           children: [
             createHTMLElement('button', { style: 'width:100px;',
               innerHTML: safeHTML(`<span style="display:flex;align-items:center;justify-content:center;gap:6px;">${UI_ICONS.export} Export</span>`),
@@ -2851,7 +3549,7 @@
                   { label: 'JSON', action: () => exportNotes() },
                   { label: 'Markdown', action: () => exportNotesAsMarkdown() },
                   { label: 'CSV', action: () => exportNotesAsCSV() }
-                ]);
+                ], ctxNamespace);
               }
             }),
             createHTMLElement('button', { style: 'width:100px;margin-left:8px;',
@@ -2862,7 +3560,7 @@
                   {
                     label: 'Merge Import',
                     action: () => {
-                      const input = createHTMLElement('input', { type: 'file', accept: '.json' }); // Fixed 'type' -> 'file'
+                      const input = createHTMLElement('input', { type: 'file', accept: '.json' });// 
                       input.onchange = (ev) => {
                         const file = ev.target.files[0];
                         if (file) importNotes(file, 'merge');
@@ -2873,7 +3571,7 @@
                   {
                     label: 'Overwrite Import',
                     action: () => {
-                      const input = createHTMLElement('input', { type: 'file', accept: '.json' }); // Fixed 'type' -> 'file'
+                      const input = createHTMLElement('input', { type: 'file', accept: '.json' });
                       input.onchange = (ev) => {
                         const file = ev.target.files[0];
                         if (file) importNotes(file, 'overwrite');
@@ -2881,25 +3579,40 @@
                       input.click();
                     }
                   }
-                ]);
+                ], ctxNamespace);
               }
             }),
             createHTMLElement('button', {
               innerHTML: safeHTML(`<span style="display:flex;align-items:center;justify-content:center;gap:6px;">${UI_ICONS.sync} Sync</span>`),
-              style: 'width:100px;margin-left:8px;',
+              style: 'width:100px;margin-left:8px;', disabled: !isSyncReady,
               eventListener: async () => {
                 await syncNotesData(true);
               }
             })
           ]
         })
-      ]});
+      ]
+    });
+    const checkSettingsWidth = (el) => {
+      const rect = el.getBoundingClientRect();
+      if (rect.width > 800) {
+        el.classList.add('flxn-wide-mode');
+        shortcutDetails.open = true;
+        if (isConfigured) { profileDetails.open = true; }
+      } else el.classList.remove('flxn-wide-mode');
+    };
 
     getAppRoot().appendChild(modal);
-    addModalCloseBtn(modal);
-    requestAnimationFrame(() => modal.classList.add('show'));
+    applyModalCascade(modal, savedCoords);
+    requestAnimationFrame(() => {
+      modal.classList.add('show');
+      updateStorageUsageDisplay();
+      bringToFront(modal);
+      makeElementDragAndResize(modal, modal.querySelector('div.flxn-modal-header-wrapper'), {
+        onAnyResize: checkSettingsWidth
+      });
+    });
     trapTabFocus(modal);
-    makeElementDragAndResize(modal, modal.querySelector('h3'));
 
     $('theme-select').value = userTheme;
 
@@ -2927,6 +3640,12 @@
   }
 
   function createMergeTagsModal(fromTag) {
+    const existingModal = $(MODAL_IDS.TAG_MERGE);
+    let savedCoords = null;
+    if (existingModal) {
+      if (existingModal.style.top) savedCoords = { top: existingModal.style.top, left: existingModal.style.left };
+      closeModalDialogue(existingModal);
+    }
     const allTags = getAllTags();
     if (allTags.length < 2) {
       alert('You need at least 2 tags to merge.');
@@ -2934,12 +3653,15 @@
     }
 
     const modal = createHTMLElement('dialog', {
-      className: 'un-modal',
-      id: 'un-merge-tags-modal',
+      className: 'flxn-modal',
+      id: MODAL_IDS.TAG_MERGE,
       style: 'padding: 16px; max-width: 320px;',
       children: [
-        createHTMLElement('h3', { class: 'un-modal-header', textContent: '🔀 Merge Tags' }),
-        createHTMLElement('div', { class: 'un-modal-content',
+        createHTMLElement('div', {
+          class: 'flxn-modal-header-wrapper', style: { cursor: 'move' },
+          children: [createHTMLElement('h3', { class: 'flxn-modal-header', textContent: '🔀 Merge Tags' })]
+        }),
+        createHTMLElement('div', { class: 'flxn-modal-content',
           children: [
             createHTMLElement('label', {
               textContent: 'From:',
@@ -2969,7 +3691,7 @@
           ]
         }),
         createHTMLElement('div', {
-          class: 'un-modal-footer',
+          class: 'flxn-modal-footer',
           style: 'margin-top: 12px; display: flex; justify-content: space-between;',
           children: [
             createHTMLElement('button', { textContent: 'Cancel', eventListener: () => modal.remove() }),
@@ -2999,8 +3721,11 @@
     });
 
     getAppRoot().appendChild(modal);
-    addModalCloseBtn(modal);
-    requestAnimationFrame(() => modal.classList.add('show'));
+    applyModalCascade(modal, savedCoords);
+    requestAnimationFrame(() => {
+      modal.classList.add('show');
+      bringToFront();
+    });
     trapTabFocus(modal);
 
     if (fromTag) {
@@ -3014,7 +3739,7 @@
   }
 
   function renderTagList() {
-    const tagContainer = $('un-tag-list');
+    const tagContainer = $('flxn-tag-list');
     if (!tagContainer) return;
 
     tagContainer.textContent = '';
@@ -3031,7 +3756,7 @@
       const state = activeTagFilters[tagKey];
 
       const tagEl = createHTMLElement('span', {
-        className: `un-tag-chip ${state || ''}`,
+        className: `flxn-tag-chip ${state || ''}`,
         textContent: tag,
         eventListener: {
           'click': () => {
@@ -3052,14 +3777,14 @@
               {
                 label: `${UI_ICONS.search} Filter by this tag`,
                 action: () => {
-                  $('un-search-input').value = tag;
+                  $('flxn-search-input').value = tag;
                   renderNotes();
                 }
               },
               {
                 label: `${UI_ICONS.edit} Rename tag`,
-                action: () => {
-                  const newName = prompt(`Rename tag "${tag}" to:`, tag);
+                action: async () => {
+                  const newName = await promptUser(`Rename tag "${tag}" to:`, tag);
                   if (newName && newName.trim() !== tag) {
                     renameTag(tag, newName.trim());
                   }
@@ -3067,8 +3792,8 @@
               },
               {
                 label: `${UI_ICONS.trash} Delete tag`,
-                action: () => {
-                  if (confirm(`Delete tag "${tag}" from all notes?`)) {
+                action: async () => {
+                  if (await confirmAction(`Delete tag "${tag}" from all notes?`)) {
                     deleteTag(tag);
                   }
                 }
@@ -3079,7 +3804,7 @@
                   createMergeTagsModal(tag);
                 }
               }
-            ]);
+            ], ctxNamespace);
           }
         }
       });
@@ -3089,12 +3814,12 @@
 
   function createTagInput(existingTags = []) {
     const wrapper = createHTMLElement('div', {
-      className: 'un-tag-input-wrapper',
+      className: 'flxn-tag-input-wrapper',
     });
 
     const input = createHTMLElement('input', {
       type: 'text',
-      id: 'un-tag-input',
+      id: 'flxn-tag-input',
       style: `
         border: none;
         outline: none;
@@ -3115,12 +3840,12 @@
   }
 
   function addTagChip(wrapper, tag) {
-    const existing = [...wrapper.querySelectorAll('.un-tag-chip')]
+    const existing = [...wrapper.querySelectorAll('.flxn-tag-chip')]
       .map(el => el.dataset.tag.toLowerCase());
     if (existing.includes(tag.toLowerCase())) return;
 
     const chip = createHTMLElement('span', {
-      className: 'un-tag-chip',
+      className: 'flxn-tag-chip',
       dataset: { tag },
       textContent: tag,
     });
@@ -3138,32 +3863,6 @@
   // ------------------------
   // Shortcut keys config
   // ------------------------
-  function getShortcutFromEvent(e) {
-    const parts = [];
-    if (e.ctrlKey) parts.push('Ctrl');
-    if (e.shiftKey) parts.push('Shift');
-    if (e.altKey) parts.push('Alt');
-    if (e.metaKey) parts.push('Meta');
-
-    if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) {
-        return;
-    }
-
-    if (!['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) {
-      let mainKey = e.code;
-
-      if (mainKey.startsWith('Key')) mainKey = mainKey.replace('Key', '');
-      else if (mainKey.startsWith('Digit')) mainKey = mainKey.replace('Digit', '');
-      else if (mainKey === 'Backquote') mainKey = 'Backquote';
-      else if (mainKey === 'Space') mainKey = 'Space';
-      else mainKey = e.key.toUpperCase();
-
-      parts.push(mainKey);
-    }
-
-    return { stored: parts.join('+') };
-  }
-
   function updateShortcutConfig(key, newShortcut) {
     const oldShortcut = getShortcutConfig(key);
 
@@ -3179,15 +3878,10 @@
     }
   }
 
-  function shortcutToDisplay(shortcut) {
-    return shortcut.replace(/Key([A-Z])/, '$1').replace(/Digit(\d)/, '$1');
-  }
-
   function getShortcutConfig(key, forDisplay = false) {
     const shortcutConfig = config.shortcuts || {};
-
-    const stored = shortcutConfig[key] || DEFAULT_SHORTCUT_KEYS[key];
-    return forDisplay ? shortcutToDisplay(stored) : stored;
+    const shortcut = shortcutConfig[key] || DEFAULT_SHORTCUT_KEYS[key];
+    return forDisplay ? FluxKit.utils.formatShortcutForDisplay(shortcut) : shortcut;
   }
 
   // ------------------------
@@ -3270,7 +3964,7 @@
     const maxConsecutiveGap = options.maxConsecutiveGap ?? 6;
     const maxTotalSpan = options.maxTotalSpan ?? Math.max(50, qlen * 8);
 
-    // 1) Exact substring - fastest and best
+    // Exact substring
     const idx = s.indexOf(q);
     if (idx !== -1) {
       return {
@@ -3281,8 +3975,7 @@
       };
     }
 
-    // Greedy subsequence search with evaluation of candidates:
-    // try each start index where first char matches
+    // Greedy subsequence search with evaluation of candidates
     let best = null;
     for (let start = 0; start < s.length; start++) {
       if (s[start] !== q[0]) continue;
@@ -3338,7 +4031,7 @@
     const res = getBestFuzzyInRange(fieldText, term, options);
     if (!res) return null;
 
-    return res; // { indices, type, span, maxGap }
+    return res;
   }
 
   /**
@@ -3620,86 +4313,42 @@
   }
 
   function getTagsFromWrapper(wrapper) {
-    return [...wrapper.querySelectorAll('.un-tag-chip')].map(el => el.dataset.tag);
+    return [...wrapper.querySelectorAll('.flxn-tag-chip')].map(el => el.dataset.tag);
   }
 
   // ------------------------
   // MD Editor
   // ------------------------
-  const EASYMDE_SVG_ICONS = {
-    // Text Formatting
-    'fa-bold': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/></svg>',
-    'fa-italic': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg>',
-    'fa-strikethrough': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4H9a3 3 0 0 0-2.83 4"/><path d="M14 12a4 4 0 0 1 0 8H6"/><line x1="4" y1="12" x2="20" y2="12"/></svg>',
-    'fa-header': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16"/><path d="M4 18V6"/><path d="M20 18V6"/></svg>',
-
-    // Blocks
-    'fa-code': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>',
-    'fa-quote-left': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972v11c0 1.25.75 2 2 2h2c0 1 0 2-1 3"/><path d="M13 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2h-4c-1.25 0-2 .75-2 1.972v11c0 1.25.75 2 2 2h2c0 1 0 2-1 3"/></svg>',
-    'fa-eraser': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>',
-
-    // Lists
-    'fa-list-ul': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>',
-    'fa-list-ol': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><path d="M4 6H2l2.5-2.5V6"/><path d="M3 12.5h1.5A1.5 1.5 0 0 1 6 14v1.5a1.5 1.5 0 0 1-1.5 1.5H3"/><path d="M3 20h2.5"/><path d="M4 19l2-2"/></svg>',
-    'fa-check-square-o': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
-
-    // Inserts
-    'fa-link': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
-    'fa-picture-o': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>',
-    'fa-image': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>',
-    'fa-table': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/><line x1="15" y1="9" x2="15" y2="21"/></svg>',
-    'fa-minus': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>',
-
-    // Layout & View
-    'fa-eye': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
-    'fa-columns': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7"/></svg>',
-    'fa-arrows-alt': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>',
-
-    // Misc
-    'fa-question-circle': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
-    'fa-undo': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>',
-    'fa-redo': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>'
+  const EASYMDE_ICONS = {
+    'fa-bold': FluxKit.ui.icons.bold, 'fa-italic': FluxKit.ui.icons.italic, 'fa-strikethrough': FluxKit.ui.icons.strikethrough, 'fa-header': FluxKit.ui.icons.heading,
+    'fa-code': FluxKit.ui.icons.code, 'fa-quote-left': FluxKit.ui.icons.quote, 'fa-eraser': FluxKit.ui.icons.eraser,
+    'fa-list-ul': FluxKit.ui.icons.listUl, 'fa-list-ol': FluxKit.ui.icons.listOl, 'fa-check-square-o': FluxKit.ui.icons.checkSquare,
+    'fa-link': FluxKit.ui.icons.link, 'fa-picture-o': FluxKit.ui.icons.image, 'fa-image': FluxKit.ui.icons.image, 'fa-table': FluxKit.ui.icons.table, 'fa-minus': FluxKit.ui.icons.minus,
+    'fa-eye': FluxKit.ui.icons.preview, 'fa-columns': FluxKit.ui.icons.columns, 'fa-arrows-alt': FluxKit.ui.icons.maximize,
+    'fa-question-circle': FluxKit.ui.icons.question, 'fa-undo': FluxKit.ui.icons.undo, 'fa-redo': FluxKit.ui.icons.redo,
   };
 
-  /**
-   * Monitors the toolbar for failed FontAwesome icons and replaces them with SVGs.
-   */
-  function monitorToolbarIcons(mdeInstance) {
-    const testEl = document.createElement('i');
-    testEl.className = 'fa fa-bold';
-    testEl.style.position = 'absolute';
-    testEl.style.visibility = 'hidden';
-    document.body.appendChild(testEl);
+  function injectToolbarIcons(mdeInstance) {
+    const toolbar = mdeInstance.gui.toolbar;
+    if (!toolbar) return;
 
-    setTimeout(() => {
-      const isFontBroken = testEl.offsetWidth < 5;
-      document.body.removeChild(testEl);
+    toolbar.querySelectorAll('i').forEach(iconElement => {
+      if (iconElement.dataset.iconInjected) return;
 
-      if (isFontBroken) {
-        logMessage('FontAwesome blocked. Injecting SVG fallbacks into EasyMDE...');
+      const className = Array.from(iconElement.classList).find(c => c.startsWith('fa-'));
+      const flxIcon = EASYMDE_ICONS[className];
 
-        const toolbar = mdeInstance.gui.toolbar;
-        if (!toolbar) return;
+      if (flxIcon) {
+        const span = document.createElement('span');
+        span.className = 'flx-icon-fallback';
+        span.innerHTML = safeHTML(flxIcon);
 
-        toolbar.querySelectorAll('i').forEach(iconElement => {
-          if (iconElement.dataset.svgInjected) return;
+        iconElement.parentNode.insertBefore(span, iconElement);
+        iconElement.style.display = 'none';
 
-          const className = Array.from(iconElement.classList).find(c => c.startsWith('fa-'));
-          const svgHtml = EASYMDE_SVG_ICONS[className];
-
-          if (svgHtml) {
-            const span = document.createElement('span');
-            span.className = 'icon-svg-fallback';
-            span.innerHTML = safeHTML(svgHtml);
-
-            iconElement.parentNode.insertBefore(span, iconElement);
-            iconElement.style.display = 'none';
-
-            iconElement.dataset.svgInjected = 'true';
-          }
-        });
+        iconElement.dataset.iconInjected = 'true';
       }
-    }, 1000);
+    });
   }
 
   function injectEasyMdeCSS() {
@@ -3744,7 +4393,7 @@
       const scrollInfo = mdeInstance.codemirror.getScrollInfo();
       const cursor = mdeInstance.codemirror.getCursor();
 
-      mdeInstance.value(newText); // Update the text
+      mdeInstance.value(newText);
 
       mdeInstance.codemirror.scrollTo(scrollInfo.left, scrollInfo.top);
       mdeInstance.codemirror.setCursor(cursor);
@@ -3774,9 +4423,9 @@
 
       onToggleFullScreen: (isFullScreen) => {
         if (isFullScreen) {
-          rootModal.classList.add('un-fullscreen-active');
+          rootModal.classList.add('flxn-fullscreen-active');
         } else {
-          rootModal.classList.remove('un-fullscreen-active');
+          rootModal.classList.remove('flxn-fullscreen-active');
         }
       }
     });
@@ -3789,8 +4438,27 @@
    * This exports the lightweight notes.json structure (including base64 thumbnails).
    * Native files in WebDAV/Repo are safely preserved on the server.
    */
-  function exportNotes() {
-    const notes = getNotes();
+  async function exportNotes() {
+    showNotification('Preparing export... This might take a second.', { icon: UI_ICONS.sync });
+    
+    const notes = JSON.parse(JSON.stringify(getNotes()));
+
+    for (const note of notes) {
+      if (note.attachments) {
+        for (const att of note.attachments) {
+          if (att._systemRef === 'scratchpad-vector') {
+            try {
+              const data = await getAttachmentData(att);
+              if (data) {
+                att.data = data instanceof Blob ? await data.text() : data;
+              }
+            } catch (e) {
+              logWarning('Failed to embed vector for export', e);
+            }
+          }
+        }
+      }
+    }
 
     const blob = new Blob([JSON.stringify(notes, null, 2)], { type: 'application/json' });
     const href = URL.createObjectURL(blob);
@@ -3810,17 +4478,13 @@
             (note.url ? `- 🔗 [${note.url}](${note.url})\n` : '') +
             (note.tags?.length ? `- 🏷️ ${note.tags.join(', ')}\n` : '');
 
-      // UPDATED: Inject Attachment Roster with Relative Links
       if (note.attachments && note.attachments.length > 0) {
         content += `- 📎 Attachments:\n`;
         note.attachments.forEach(a => {
           if (a.storagePath) {
-            // Check if it's an image to use the Markdown image embed syntax
             const isImg = a.filename.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i);
-            // Links exactly to the relative asset folder (e.g., ./assets/filename.jpg)
             content += `  - ${isImg ? '!' : ''}[${a.filename}](./${a.storagePath})\n`;
           } else {
-            // Fallback for base64 Gist attachments that don't have a file path
             content += `  - ${a.filename} (Embedded)\n`;
           }
         });
@@ -3843,10 +4507,8 @@
   function exportNotesAsCSV() {
     const notes = getNotes();
     const rows = [
-      // Added 'attachments' column
       ['id', 'title', 'description', 'url', 'tags', 'attachments', 'createdAt'],
       ...notes.map(note => {
-        // Safely extract filenames
         const attNames = (note.attachments || []).map(a => a.filename).join('; ');
 
         return [
@@ -3855,7 +4517,7 @@
           JSON.stringify(note.description || ''),
           note.url || '',
           (note.tags || []).join('; '),
-          JSON.stringify(attNames), // Stringified to protect against commas in filenames
+          JSON.stringify(attNames),
           note.createdAt
         ];
       })
@@ -3874,30 +4536,76 @@
 
   function importNotes(file, mode = 'merge') {
     const reader = new FileReader();
-    reader.onload = (e) => {
+    
+    reader.onload = async (e) => {
       try {
         const importedNotes = JSON.parse(e.target.result);
         if (!Array.isArray(importedNotes)) throw new Error('Invalid file format');
 
-        // 1. Silently upgrade V1 schemas (hasImage) to V2 (attachments)
-        migrateNoteFormat(importedNotes);
+        const capabilities = getCapabilities(getCurrentProfile());
+        const MAX_SIZE = capabilities.maxFileSize;
 
-        const capabilities = getCapabilities();
-        let nativeDowngradeCount = 0;
+        let vectorsRestored = 0;
+        let vectorsSkipped = 0;
+        let attachmentsSkipped = 0;
+        let manualAssetsNeeded = 0;
+        let oversizedCount = 0;
 
-        // 2. Cross-Grade Sanitation
-        importedNotes.forEach(note => {
+        for (const note of importedNotes) {
           if (note.attachments) {
-            note.attachments.forEach(att => {
-              // If importing into Gist from WebDAV
-              if (capabilities.requiresBatchedBase64 && att.providerStorage === 'native') {
-                att.providerStorage = 'base64';
-                att.storagePath = null; // Strip the irrelevant server path
-                nativeDowngradeCount++;
+            const validAttachments = [];
+
+            for (const att of note.attachments) {
+              const isVector = att._systemRef === 'scratchpad-vector';
+              const isNativeBinary = att.providerStorage === 'native' && !isVector;
+
+              if (capabilities.requiresBatchedBase64) {
+                if (isVector) {
+                  vectorsSkipped++;
+                  continue;
+                }
+                if (isNativeBinary) {
+                  attachmentsSkipped++;
+                  continue;
+                }
+                
+                validAttachments.push(att);
+              } 
+              else {
+                if (isVector && att.data) {
+                  const dataSize = typeof att.data === 'string' ? att.data.length : att.data.size;
+                  
+                  if (dataSize > MAX_SIZE) {
+                    oversizedCount++;
+                    continue;
+                  }
+
+                  const blob = new Blob([att.data], { type: 'application/json' });
+                  await queueAttachmentForUpload(att.id, blob);
+
+                  att.storagePath = `assets/${generateAssetFilename(att.filename, att.id, note.title)}`;
+                  att.providerStorage = 'native';
+                  
+                  delete att.data;
+                  vectorsRestored++;
+                  validAttachments.push(att);
+                } 
+                else if (isNativeBinary && !att.data) {
+                  manualAssetsNeeded++;
+                  if (!att.storagePath) {
+                    att.storagePath = `assets/${generateAssetFilename(att.filename, att.id, note.title)}`;
+                  }
+                  validAttachments.push(att);
+                } 
+                else {
+                  validAttachments.push(att);
+                }
               }
-            });
+            }
+            
+            note.attachments = validAttachments;
           }
-        });
+        }
 
         if (mode === 'overwrite') {
           config.notes = importedNotes;
@@ -3920,12 +4628,21 @@
           showNotification(`Notes imported and merged!`, { icon: UI_ICONS.import });
         }
 
-        // 3. Notify the user if we had to sever high-res links during migration
-        if (nativeDowngradeCount > 0) {
-          setTimeout(() => {
-            showNotification(`Note: ${nativeDowngradeCount} native file links were converted for Gist compatibility.`, { icon: UI_ICONS.info });
-          }, 2500);
-        }
+        setTimeout(() => {
+          if (capabilities.requiresBatchedBase64 && (vectorsSkipped > 0 || attachmentsSkipped > 0)) {
+             showNotification(`⚠️ Gist sync is limited. Skipped ${vectorsSkipped} vectors & ${attachmentsSkipped} files. Upgrade to WebDAV or GitHub Repo to unlock native files!`, { icon: UI_ICONS.warning, duration: 8000 });
+          } else {
+            if (oversizedCount > 0) {
+              showNotification(`⚠️ ${oversizedCount} vectors exceeded the ${(MAX_SIZE/1024/1024).toFixed(1)}MB limit and were skipped.`, { icon: UI_ICONS.warning, duration: 6000 });
+            }
+            let msg = '';
+            if (vectorsRestored > 0) msg += `Restored ${vectorsRestored} scratchpad vectors. `;
+            if (manualAssetsNeeded > 0) msg += `Note: ${manualAssetsNeeded} files must be manually copied to the new 'assets' folder.`;
+            if (msg) showNotification(msg, { icon: UI_ICONS.info, duration: 6000 });
+          }
+        }, 2000);
+
+        triggerBackgroundSync();
 
       } catch (err) {
         alert('Failed to import notes: ' + err.message);
@@ -3956,53 +4673,86 @@
     try {
       const notes = getNotes() || [];
       const trashed = config.trashedNotes || [];
-      const notesJson = JSON.stringify({ notes, trashed });
-      const notesBytes = new Blob([notesJson]).size;
 
-      const mbUsed = notesBytes / (1024 * 1024);
-      const limit = config.storageLimitMB || 20;
-      const percent = Math.min(100, (mbUsed / limit) * 100);
+      const strippedNotes = notes.map(n => {
+        const clone = { ...n };
+        if (clone.attachments) {
+           clone.attachments = clone.attachments.map(a => {
+              const { data, ...rest } = a;
+              return rest;
+           });
+        }
+        return clone;
+      });
 
-      const status =
-        percent >= 100 ? 'over' :
-        percent >= 90 ? 'critical' :
-        percent >= 80 ? 'warning' :
-        'ok';
+      const notesJson = JSON.stringify({ notes: strippedNotes, trashed });
+      let totalBytes = new Blob([notesJson]).size;
 
-      return { usedMB: mbUsed, limitMB: limit, percent, status };
+      notes.forEach(note => {
+        if (note.attachments) {
+          note.attachments.forEach(att => {
+            totalBytes += (att.size || 0);
+          });
+        }
+      });
+
+      const usedMB = totalBytes / (1024 * 1024);
+      const maxFileMB = getCapabilities(getCurrentProfile()).maxFileSize / (1024 * 1024);
+      return { usedMB, maxFileMB, usedStr: formatMB(usedMB) };
+      
     } catch (err) {
       logError('Storage calculation failed:', err);
-      return { usedMB: 0, limitMB: config.storageLimitMB || 20, percent: 0, status: 'ok' };
+      return { usedMB: 0, usedStr: '0 MB' };
     }
   }
 
-  function checkStorageWarning() {
-    const { usedMB, limitMB, status } = calculateStorageUsage();
-    if (status === 'warning') {
-      showNotification(`Storage nearing limit. Consider deleting older notes or images.`, { icon: UI_ICONS.warning });
-    } else if (status === 'critical') {
-      showNotification(`Critically low storage! Cleanup recommended.`, { icon: UI_ICONS.warning });
-    } else if (status === 'over') {
-      showNotification(`Storage limit exceeded! Sync may fail until space is freed.`, { icon: UI_ICONS.ban });
-    }
+  function collectMetaStats(mergedNotes, notesStr, metaStr) {
+    let totalAttachments = 0;
+    let attachmentsSize = 0;
+
+    (mergedNotes || []).forEach(note => {
+      if (note.attachments) {
+        totalAttachments += note.attachments.length;
+        note.attachments.forEach(att => {
+          attachmentsSize += (att.size || 0);
+        });
+      }
+    });
+
+    const totalBytes = attachmentsSize + (notesStr?.length || 0) + (metaStr?.length || 0);
+    const usedMB = totalBytes / (1024 * 1024);
+
+    return {
+      totalAttachments,
+      totalBytes,
+      usedMB: usedMB.toFixed(2),
+      usedStr: formatMB(usedMB)
+    };
   }
 
   function updateStorageUsageDisplay() {
-    const el = unQuery('.un-modal #storage-usage');
+    const el = unQuery('.flxn-modal #storage-usage');
     if (!el) return;
-    const { usedMB, limitMB, percent } = calculateStorageUsage();
+    const { usedStr } = calculateStorageUsage();
+
+    const tooltip = 'Total storage space consumed by your notes and attachments.';
+
     el.innerHTML = safeHTML(`
-      💾 Storage used: <strong>${usedMB.toFixed(2)} MB</strong> / ${limitMB} MB
-      <div style="background: var(--bg-muted); height:6px; border-radius:4px; overflow:hidden; margin-top:4px;">
-        <div style="
-          width:${percent}%;
-          height:100%;
-          background:${percent > 90 ? '#e74c3c' : percent > 70 ? '#f39c12' : '#2ecc71'};
-          transition: width 0.3s ease;
-        "></div>
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span data-flx-notes-tooltip="${tooltip}">💾 Storage used: <strong>${usedStr}</strong></span>
+        <button id="flxn-open-storage-mgr" style="padding: 2px 8px; font-size: 11px; cursor: pointer;">Manage</button>
       </div>
     `);
+
+    const btn = el.querySelector('#flxn-open-storage-mgr');
+    if (btn) {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        openStorageManagerModal();
+      });
+    }
   }
+  
 
   // ------------------------
   // Data Sync
@@ -4023,7 +4773,7 @@
   function allocateImageToFile(attId, imageData, imageMap, meta) {
     const serialized = JSON.stringify({ [attId]: imageData });
     const size = serialized.length;
-    const MAX_BATCH_SIZE = 4 * 1024 * 1024;
+    const MAX_BATCH_SIZE = getCapabilities(getCurrentProfile());
 
     // Find the file with minimum current size that fits
     const candidateFiles = Object.entries(imageMap)
@@ -4075,7 +4825,7 @@
       });
 
       if (changed) {
-        if (Object.keys(localData).length === 0) changedFiles[fileName] = { content: "" };
+        if (Object.keys(localData).length === 0) changedFiles[fileName] = { content: "{}" };
         else changedFiles[fileName] = { content: JSON.stringify(localData, null, 2) };
       }
     }
@@ -4085,7 +4835,7 @@
 
   function cleanupTrashedNotes(trashedNotes, allNotes) {
     const now = Date.now();
-    const cutoff = now - DELETION_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+    const cutoff = now - TOMBSTONE_RETENTION_DAYS * 24 * 60 * 60 * 1000;
     const activeIds = new Set(allNotes.map(n => n.id));
     return trashedNotes.filter(d => (new Date(d.trashedAt).getTime() > cutoff) || activeIds.has(d.id));
   }
@@ -4109,20 +4859,82 @@
       if (!Object.keys(data).length) {
         delete imageMap[fileName];
         meta.imageFiles = (meta.imageFiles || []).filter(f => f !== fileName);
+        
+        config.trashQueue = config.trashQueue || [];
+        if (!config.trashQueue.find(i => i.path === fileName)) {
+          config.trashQueue.push({
+            path: fileName,
+            profile: getCurrentProfileName()
+          });
+        }
       }
     }
   }
 
-  function collectMetaStats(imageMap, notesFile, metaFile) {
-    const totalImages = Object.values(imageMap).reduce((sum, m) => sum + Object.keys(m).length, 0);
-    const totalImageFiles = Object.keys(imageMap).length;
-    const totalBytes = estimateSize(imageMap) + (notesFile?.content?.length || 0) + (metaFile?.content?.length || 0);
-    return { totalImages, totalImageFiles, totalBytes, usedMB: (totalBytes / 1024 / 1024).toFixed(2) };
+  function queueAssetForDeletion(attachment) {
+    if (attachment.providerStorage === 'native') {
+      removeQueuedUpload(attachment.id).catch(() => {});
+      
+      if (attachment.storagePath) {
+        config.trashQueue = config.trashQueue || [];
+        if (!config.trashQueue.find(i => i.path === attachment.storagePath)) {
+          config.trashQueue.push({
+            path: attachment.storagePath,
+            profile: getCurrentProfileName()
+          });
+          saveConfig(config);
+        }
+      }
+    }
+  }
+
+  async function processTrashQueue() {
+    if (!config.trashQueue || config.trashQueue.length === 0) return;
+    
+    let remainingQueue = [];
+    let currentProfileName = getCurrentProfileName();
+    let currentProfile = getCurrentProfile();
+
+    const itemsToProcess = config.trashQueue.filter(item => item.profile === currentProfileName);
+    const itemsToSkip = config.trashQueue.filter(item => item.profile !== currentProfileName);
+    
+    remainingQueue.push(...itemsToSkip);
+
+    if (itemsToProcess.length === 0) return;
+
+    logMessage(`Processing ${itemsToProcess.length} items in Trash Queue...`);
+    
+    for (const item of itemsToProcess) {
+      try {
+        await FluxKit.sync.deleteAsset(currentProfile, item.path);
+        logDebug(`Successfully trashed cloud asset: ${item.path}`);
+      } catch (e) {
+        logWarning(`Failed to delete asset ${item.path}, keeping in queue`, e);
+        remainingQueue.push(item);
+      }
+    }
+    
+    config.trashQueue = remainingQueue;
+    saveConfig(config);
   }
 
   function ensureID(note) {
     if (!note.id) note.id = generateId();
     return note.id;
+  }
+
+  function generateAssetFilename(originalName, assetId, noteTitle = '') {
+    const cleanTitle = noteTitle ? noteTitle.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 25).replace(/_+$/, '') + '-' : '';
+    
+    const name = originalName.replace(/[^a-zA-Z0-9\.\-_]/g, '_');
+    const lastDotIndex = name.lastIndexOf('.');
+
+    if (lastDotIndex === -1) return `${cleanTitle}${name}_${assetId}`;
+    
+    const finalName = name.substring(0, lastDotIndex);
+    const ext = name.substring(lastDotIndex);
+    
+    return `${cleanTitle}${finalName}_${assetId}${ext}`; 
   }
 
   async function syncNotesData(snapshot = true) {
@@ -4147,22 +4959,18 @@
       window.activeSyncs.add(profile.name);
       updateSyncIndicatorUI();
 
-      const unloadWarning = (e) => {
-        e.preventDefault();
-        e.returnValue = `Sync in progress. Closing this tab may corrupt your files!`;
-      };
-      if (window.activeSyncs.size === 1) window.addEventListener('beforeunload', unloadWarning);
-
       try {
         if (!isProfileConfigured(profile)) {
           const isLocalProvider = profile.provider === 'Local';
           const isBlankDefault = !profile.provider && !profile.token;
 
           if (showMessages && !isLocalProvider && !isBlankDefault) {
-            showNotification(`Storage profile "${profile.name}" not configured properly.`, { icon: UI_ICONS.warning });
+            showNotification(`Storage profile "${profile.name}" not configured properly.`, { icon: UI_ICONS.warning, id: `${profile.name}-sync` });
           }
           return;
         }
+
+        await processTrashQueue();
 
         const syncData = await FluxKit.sync.fetch(profile);
         const files = syncData.files || {};
@@ -4172,7 +4980,6 @@
         const TOTAL_QUOTA = meta.totalQuota || MAX_GIST_TOTAL_SIZE;
 
         const remoteNotes = JSON.parse(files["notes.json"]?.content || "[]");
-        migrateNoteFormat(remoteNotes);
 
         const remoteTrashed = meta.trashedNotes || [];
         const remoteImages = {};
@@ -4195,29 +5002,41 @@
           if (note.attachments) {
             for (const att of note.attachments) {
 
-              // 1. Restore runtime data for UI display if missing (Thumbnails)
               if (!att.data && att.thumbnailFile && localImageMap[att.thumbnailFile]?.[att.id]) {
                 att.data = localImageMap[att.thumbnailFile][att.id];
               }
-              // Legacy fallback
               else if (!att.data && note.imageFile && localImageMap[note.imageFile]?.[note.id]) {
                 att.data = localImageMap[note.imageFile][note.id];
               }
 
-              // 2. Process NEW thumbnails/base64 payloads
               if (att.data && att.data.startsWith('data:image/') && !att.thumbnailFile) {
                 att.thumbnailFile = allocateImageToFile(att.id, att.data, localImageMap, meta);
               }
 
-              // 3. Process Native Blob Uploads
               if (att.providerStorage === 'native') {
+                if (att.uploadPending && att.sourceOrigin !== window.location.origin) {
+                  logMessage(`Skipping trapped attachment: ${att.filename} (Located on ${att.sourceOrigin})`);
+                  continue; 
+                }
                 try {
                   const rawBlob = await getQueuedUpload(att.id);
                   if (rawBlob) {
-                    // Prepend assets/ directory to keep file system organized!
-                    att.storagePath = `assets/${att.id}_${att.filename.replace(/\s+/g, '_')}`;
+                    if (!att.storagePath) {
+                      const capabilities = getCapabilities(getCurrentProfile());
+                      const folderPrefix = capabilities.requiresBatchedBase64 ? '' : 'assets/';
+                      att.storagePath = `${folderPrefix}${generateAssetFilename(att.filename, att.id, note.title)}`;
+                    }
                     nativeFilesToUpload[att.storagePath] = { content: rawBlob };
                     blobsToClearFromDB.push(att.id); // Queue for cleanup
+
+                    const liveNote = getNotes().find(n => n.id === note.id);
+                    if (liveNote && liveNote.attachments) {
+                      const liveAtt = liveNote.attachments.find(a => a.id === att.id);
+                      if (liveAtt) liveAtt.storagePath = att.storagePath;
+                    }
+                  } else if (att.uploadPending) {
+                    logWarning(`Expected blob not found in IndexedDB for ${att.id}. Unlocking tab.`);
+                    localUploadsPending = Math.max(0, localUploadsPending - 1);
                   }
                 } catch (e) {
                   logWarning("Could not load local blob for", att.id);
@@ -4233,7 +5052,13 @@
 
         const newNotes = mergedNotes.map(n => {
           const clone = structuredClone(n);
-          if (clone.attachments) clone.attachments.forEach(a => delete a.data);
+          if (clone.attachments) {
+            clone.attachments.forEach(a => {
+              delete a.data;
+              delete a.uploadPending;
+              delete a.sourceOrigin;
+            });
+          };
           delete clone.screenshot; delete clone.hasImage; delete clone.imageFile;
           return clone;
         });
@@ -4246,7 +5071,7 @@
           imageFiles: Object.keys(localImageMap),
           trashedNotes: cleanedTrashed,
           lastUpdated: new Date().toISOString(),
-          imageStats: collectMetaStats(localImageMap, files["notes.json"], files["meta.json"]),
+          stats: collectMetaStats(mergedNotes, newNotesContent, JSON.stringify(meta)),
         };
 
         const changedImages = buildImageUploadPayload(localImageMap, remoteImages);
@@ -4261,12 +5086,12 @@
         Object.assign(filesToUpload, nativeFilesToUpload);
 
         if (Object.keys(filesToUpload).length === 0) {
-          if (showMessages) showNotification(`Everything already synced!`, { icon: UI_ICONS.success });
+          if (showMessages) showNotification(`Everything already synced!`, { icon: UI_ICONS.success, id: `${profile.name}-sync` });
 
           const currentProfile = getCurrentProfile();
           if (currentProfile.name === profile.name) {
-            config.notes = mergedNotes;
-            config.trashedNotes = cleanedTrashed;
+            config.notes = mergeNotes(config.notes || [], mergedNotes, config.trashedNotes || [], cleanedTrashed, cfg.lastSyncTime);
+            config.trashedNotes = mergeTrashedLists(config.trashedNotes || [], cleanedTrashed);
             config.lastSyncTime = new Date().toISOString();
 
             saveConfig(config);
@@ -4281,19 +5106,32 @@
 
           for (const id of blobsToClearFromDB) {
             await removeQueuedUpload(id);
+            [mergedNotes, config.notes].forEach(arr => {
+              (arr || []).forEach(n => {
+                if (n.attachments) {
+                  const a = n.attachments.find(att => att.id === id);
+                  if (a) {
+                    delete a.uploadPending;
+                    delete a.sourceOrigin;
+                  }
+                }
+              });
+            });
           }
         } catch (err) {
           if (err.message.includes('QUOTA_EXCEEDED')) {
-             showNotification(err.message, { icon: UI_ICONS.warning });
+             showNotification(err.message, { icon: UI_ICONS.warning, id: `${profile.name}-sync` });
              return;
           }
           throw err;
+        } finally {
+          renderNotes();
         }
 
         const currentProfile = getCurrentProfile();
         if (currentProfile.name === profile.name) {
-          config.notes = mergedNotes;
-          config.trashedNotes = cleanedTrashed;
+          config.notes = mergeNotes(config.notes || [], mergedNotes, config.trashedNotes || [], cleanedTrashed, cfg.lastSyncTime);
+          config.trashedNotes = mergeTrashedLists(config.trashedNotes || [], cleanedTrashed);
           config.lastSyncTime = new Date().toISOString();
 
           saveConfig(config);
@@ -4303,17 +5141,13 @@
         prunePreviewCache();
 
         if (showMessages) {
-          const usage = collectMetaStats(localImageMap, filesToUpload["notes.json"] || {content:""}, filesToUpload["meta.json"] || {content:""});
-          showNotification(`Sync complete for ${currentProfile.name} (${usage.usedMB}MB used).`, { icon: UI_ICONS.success });
+          showNotification(`Sync complete for ${profile.name} (${newMeta.stats.usedStr} used).`, { icon: UI_ICONS.success, id: `${profile.name}-sync` });
         }
       } catch (err) {
         logError("Sync error:", err);
-        if (showMessages) showNotification(`Sync failed. Check Gist settings or connection.`, { icon: UI_ICONS.error });
+        if (showMessages) showNotification(`Sync failed. Check profile settings or connection.`, { icon: UI_ICONS.error, id: `${profile.name}-sync` });
       } finally {
         window.activeSyncs.delete(profile.name);
-        if (window.activeSyncs.size === 0) {
-          window.removeEventListener('beforeunload', unloadWarning);
-        }
         updateSyncIndicatorUI();
       }
     };
@@ -4326,7 +5160,6 @@
     const map = new Map();
     const lastSyncTime = new Date(lastSyncTimeStr).getTime();
 
-    // 1. Build Trashed Map
     const trashedMap = new Map();
     [...localTrashed, ...remoteTrashed].forEach(d => {
       const existing = trashedMap.get(d.id);
@@ -4335,22 +5168,17 @@
       }
     });
 
-    // 2. Map remote notes for O(1) lookup
     const remoteMap = new Map(remoteNotes.map(n => [n.id, n]));
 
     for (const localNote of localNotes) {
       const id = localNote.id || crypto.randomUUID();
 
-      // Skip if deleted
       const deletion = trashedMap.get(id);
-      if (deletion && new Date(deletion.trashedAt) > new Date(localNote.updatedAt || localNote.createdAt)) {
-        continue;
-      }
+      if (deletion && new Date(deletion.trashedAt) > new Date(localNote.updatedAt || localNote.createdAt)) continue;
 
       const remoteNote = remoteMap.get(id);
 
       if (!remoteNote) {
-        // Exists locally but not remotely (new local note)
         map.set(id, localNote);
         continue;
       }
@@ -4373,23 +5201,18 @@
         forkedNote.isConflict = true;
 
         map.set(forkedNote.id, forkedNote);
-      } else {
-        map.set(id, remoteTime > localTime ? remoteNote : localNote);
-      }
+      } 
+      else map.set(id, remoteTime > localTime ? remoteNote : localNote);
 
       remoteMap.delete(id);
     }
 
-    // 3. Add remaining remote notes (new notes from other devices)
     for (const remoteNote of remoteMap.values()) {
       const deletion = trashedMap.get(remoteNote.id);
-      if (deletion && new Date(deletion.trashedAt) > new Date(remoteNote.updatedAt || remoteNote.createdAt)) {
-        continue;
-      }
+      if (deletion && new Date(deletion.trashedAt) > new Date(remoteNote.updatedAt || remoteNote.createdAt)) continue;
       map.set(remoteNote.id, remoteNote);
     }
 
-    // Sort by latest update
     return Array.from(map.values()).sort(
       (a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt)
     );
@@ -4485,7 +5308,7 @@
       }
 
       if (isProfileConfigured(currentProfile)) {
-        showNotification(`Saving "${currentProfile.name}" in background...`, { icon: UI_ICONS.save });
+        showNotification(`Saving "${currentProfile.name}" in background...`, { icon: UI_ICONS.save, id: `${newProfileName}-pswitch` });
         try {
           const backupSnapshot = getSnapshot();
 
@@ -4503,7 +5326,7 @@
         config.notes = cached.notes;
         config.trashedNotes = cached.trashedNotes;
         config.lastSyncTime = cached.lastSyncTime;
-        showNotification(`Loaded "${newProfileName}" from local cache.`, { icon: UI_ICONS.zap });
+        showNotification(`Loaded "${newProfileName}" from local cache.`, { icon: UI_ICONS.zap, id: `${newProfileName}-pswitch` });
       } else {
         config.notes = [];
         config.trashedNotes = [];
@@ -4513,13 +5336,14 @@
       saveConfig(config);
       renderNotes();
 
-      showNotification(`Switched to "${newProfileName}".`, { icon: UI_ICONS.success });
+      showNotification(`Switched to "${newProfileName}".`, { icon: UI_ICONS.success, id: `${newProfileName}-pswitch` });
+      checkPendingUploadsOnLoad();
       try {
         await syncNotesData({ ...getSnapshot(), fireAndForget: false, showMessages: true });
         startAutoSyncScheduler();
       } catch (syncErr) {
         logWarning("Initial fetch for new profile failed.", syncErr);
-        showNotification(`Switched to "${newProfileName}", but sync failed.`, { icon: UI_ICONS.warning });
+        showNotification(`Switched to "${newProfileName}", but sync failed.`, { icon: UI_ICONS.warning, id: `${newProfileName}-pswitch` });
       }
 
     } catch (err) {
@@ -4586,13 +5410,65 @@
     }
   }
 
+  async function completelyDeleteProfile(profileName) {
+    const profileIndex = config.profiles.findIndex(p => p.name === profileName);
+    if (profileIndex === -1) return;
+
+    const profileObj = config.profiles[profileIndex];
+    showNotification(`Deleting "${profileName}"... syncing final changes.`, { icon: UI_ICONS.sync });
+
+    if (isProfileConfigured(profileObj)) {
+      try {
+        const notesToSync = profileName === getCurrentProfileName() ? getNotes() : (loadCachedProfileData(profileName)?.notes || []);
+        const trashedToSync = profileName === getCurrentProfileName() ? config.trashedNotes : (loadCachedProfileData(profileName)?.trashedNotes || []);
+        
+        await syncNotesData({
+          profile: profileObj,
+          notes: notesToSync,
+          trashedNotes: trashedToSync,
+          config: config,
+          showMessages: false,
+          fireAndForget: false 
+        });
+      } catch(e) {
+        logWarning(`Final sync failed for deleted profile ${profileName}`, e);
+      }
+    }
+
+    config.profiles.splice(profileIndex, 1);
+    
+    if (getCurrentProfileName() === profileName) {
+      const fallback = config.profiles[0] ? config.profiles[0].name : 'Default';
+      if (!config.profiles.length) {
+         config.profiles.push({ provider: 'Local', name: 'Default' });
+      }
+      config.currentProfile = fallback;
+      
+      const cached = loadCachedProfileData(fallback);
+      config.notes = cached ? cached.notes : [];
+      config.trashedNotes = cached ? cached.trashedNotes : [];
+      config.lastSyncTime = cached ? cached.lastSyncTime : null;
+    }
+
+    saveConfig(config);
+
+    const cacheKey = getProfileCacheKey(profileName);
+    GM_deleteValue(cacheKey);
+
+    await cleanOrphanedDatabases();
+    
+    checkPendingUploadsOnLoad(); 
+
+    showNotification(`Profile "${profileName}" completely removed.`, { icon: UI_ICONS.success });
+  }
+
   // ------------------------
   // Attachments
   // ------------------------
   let isScreenshotHelperInstalled = false;
 
   function toggleShadowHostVisibility(visible) {
-    const host = document.getElementById('un-shadow-host');
+    const host = document.getElementById('flxn-shadow-host');
     if (host) host.style.visibility = visible ? 'visible' : 'hidden';
   }
 
@@ -4622,42 +5498,6 @@
         u8arr[n] = bstr.charCodeAt(n);
     }
     return new Blob([u8arr], {type:mime});
-  }
-
-  function openScreenshotPreview(src, onClose = null) {
-    const existing = getAppRoot().querySelector('#un-screenshot-backdrop');
-    if (existing) return;
-
-    const img = createHTMLElement('img', {
-      id: 'un-screenshot-preview',
-      src,
-      eventListener: {
-        click: (e) => {
-          e.stopPropagation();
-          if (e.metaKey || e.ctrlKey) {
-            fetch(src)
-              .then(res => res.blob())
-              .then(blob => {
-                const blobUrl = URL.createObjectURL(blob);
-                window.open(blobUrl, '_blank');
-              });
-            return;
-          }
-        }
-      }
-    });
-
-    const backdrop = createHTMLElement('div', {
-      id: 'un-screenshot-backdrop',
-      children: [img],
-      eventListener: {
-        click: () => {
-          backdrop.remove();
-          if (typeof onClose === 'function') onClose();
-        }
-      },
-    });
-    getAppRoot().appendChild(backdrop);
   }
 
   async function getAttachmentData(att) {
@@ -4734,59 +5574,10 @@
     });
   }
 
-  function compressImage(dataUrl, maxWidth = 1600, quality = 0.85, minQuality = 0.3) {
-    return new Promise((resolve) => {
-      if (dataUrl.length < 150000) {
-        return resolve(dataUrl);
-      }
-
-      const img = new Image();
-      img.onload = () => {
-        const scale = Math.min(1, maxWidth / img.width);
-        const width = img.width * scale;
-        const height = img.height * scale;
-
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, width, height);
-        ctx.drawImage(img, 0, 0, width, height);
-
-        quality = Math.min(1, Math.max(minQuality, quality));
-
-        let mime = 'image/jpeg';
-        const testCanvas = document.createElement('canvas');
-        const testCtx = testCanvas.getContext('2d');
-        if (testCtx && canvas.toDataURL('image/webp').startsWith('data:image/webp')) {
-          mime = 'image/webp';
-        }
-
-        const compressed = canvas.toDataURL(mime, quality);
-
-        const THRESHOLD = 0.90;
-        if (compressed.length < dataUrl.length * THRESHOLD) {
-          resolve(compressed);
-        } else {
-          resolve(dataUrl);
-        }
-      };
-
-      img.onerror = () => {
-        logWarning('Image failed to load for compression');
-        resolve(dataUrl);
-      };
-
-      img.src = dataUrl;
-    });
-  }
-
   function requestNativeScreenshot(callback, retries = 3, delay = 2000) {
     logMessage('Requesting screenshot');
 
-    const uniqueId = 'un-' + getUniqueId();
+    const uniqueId = 'flxn-' + getUniqueId();
 
     let timeoutId;
 
@@ -4846,10 +5637,7 @@
       config = newValue;
       window.FluxNotes = config;
       logMessage('🔄 Config updated from another tab or site:', config);
-      const viewModal = $(MODAL_IDS.VIEW);
-      if (viewModal) {
-        openViewModal();
-      }
+      renderNotes();
     }
   });
 
@@ -4887,20 +5675,42 @@
     },
   };
 
-  function handleShortcut(e) {
+  async function handleShortcut(e) {
     if (window.activeUnPadInstance && window.activeUnPadInstance.claimsKey(e)) return;
-    if (isShorcutUpdating || ['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) {
-      return;
+    const activeModals = Array.from(getAppRoot().querySelectorAll('.flxn-modal.show'));
+    if (activeModals.length > 0) {
+      const topModal = activeModals.sort((a, b) => {
+        return (parseInt(b.style.zIndex) || 0) - (parseInt(a.style.zIndex) || 0);
+      })[0];
+      
+      const padContainer = topModal.querySelector('#flxn-scratchpad-wrapper');
+      const topZ = parseInt(topModal.style.zIndex) || 0;
+      if (padContainer && padContainer.style.display === 'block' && padContainer._fluxPadInstance && topZ > 10000) {
+        if (padContainer._fluxPadInstance.claimsKey(e)) return; 
+      }
     }
 
+    if (isShortcutUpdating || FluxKit.utils.shouldIgnoreKeystroke(e)) return;
+
     if (e.key === 'Escape') {
-      const fullscreenScreenshot = $('un-screenshot-backdrop');
-      if (fullscreenScreenshot) {
-        fullscreenScreenshot.remove();
-        return;
+      const openModals = Array.from(getAppRoot().querySelectorAll('.flxn-modal.show'));
+      if (openModals.length > 0) {
+        const sortedModals = openModals.sort((a, b) => (parseInt(b.style.zIndex) || 0) - (parseInt(a.style.zIndex) || 0));
+        
+        const topModal = sortedModals[0];
+        if (typeof topModal.requestSafeClose === 'function') {
+          await topModal.requestSafeClose();
+        } else {
+          closeModalDialogue(topModal);
+        }
+        
+        const newSortedModals = openModals.sort((a, b) => (parseInt(b.style.zIndex) || 0) - (parseInt(a.style.zIndex) || 0));
+        if (newSortedModals.length > 0 && newSortedModals[0] !== topModal) {
+          const newTopModal = newSortedModals[0];
+          requestAnimationFrame(() => bringToFront(newTopModal));
+        }
       }
-      const modals = [ $(MODAL_IDS.NOTE), $(MODAL_IDS.VIEW), $(MODAL_IDS.SETTINGS) ];
-      modals.forEach(modal => closeModal(modal));
+      return;
     }
 
     shortcutActions = {
@@ -4937,7 +5747,7 @@
       },
     };
 
-    const { stored } = getShortcutFromEvent(e);
+    const { stored } = FluxKit.utils.getShortcutFromEvent(e);
     if (stored && shortcutActions[stored]) {
       e.preventDefault();
       e.stopPropagation();
@@ -4962,6 +5772,27 @@
     });
 
     window.postMessage({ type: "FLUX_HANDSHAKE_INITIATED" }, "*");
-    window.addEventListener('keydown', handleShortcut, true);
+    document.addEventListener('keydown', handleShortcut, true);
+    document.addEventListener('mousedown', (e) => {
+      const path = e.composedPath ? e.composedPath() : [e.target];
+      const isInsideApp = path.some(node => 
+        node.nodeType === Node.ELEMENT_NODE && 
+        (node.id === 'flxn-shadow-host' || 
+        node.classList.contains('flxn-modal') || 
+        node.classList.contains('flxkit-custom-tooltip') || 
+        node.classList.contains('flxkit-context-menu'))
+      );
+
+      if (!isInsideApp) {
+        const openModals = Array.from(getAppRoot().querySelectorAll('.flxn-modal.show'));
+        if (openModals.length > 0) {
+          const sortedModals = openModals.sort((a, b) => (parseInt(a.style.zIndex) - (parseInt(b.style.zIndex) || 0) || 0));
+          sortedModals.forEach((m, idx) => {
+            m.style.zIndex = (9900 + idx).toString(); 
+          })
+        }
+        updateActiveScratchpadState();
+      }
+    }, { capture: true });
   });
 })();

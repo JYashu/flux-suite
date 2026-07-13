@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FluxKit Core
 // @namespace    https://github.com/JYashu
-// @version      1.0.0
+// @version      1.1.0
 // @description  A high-performance UI toolkit.
 // @author       JYashu
 // @license      Apache-2.0
@@ -49,50 +49,92 @@
 
   const emojiMap = { dolphin:'🐬', sloth:'🦥', mammoth:'🦣', elephant:'🐘', ladybug:'🐞', bat:'🦇', llama:'🦙', swan:'🦢', eagle:'🦅', snail:'🐌', butterfly:'🦋', flamingo:'🦩', whale:'🐋', orca:'🐳', seal:'🦭', octopus:'🐙', sauropod:'🦕', shell:'🐚', jellyfish:'🪼', dodo:'🦤', web:'🕸️', spider:'🕷️', cat:'𓃠', fish:'𓆡', turtle:'𓆉', moai:'🗿', alien:'👾', kiss:'💋', genie:'🧞‍♂️', gear:'⚙' };
 
-  FluxKit.ui.icons ??= {
-    pin: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.74L9.6 6a3 3 0 0 1 5.8 0l.6 4.74A2 2 0 0 0 17.43 12.5l.57.5v2H6v-2l.57-.5A2 2 0 0 0 8 10.74z"/></svg>',
-    pinned: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.74L9.6 6a3 3 0 0 1 5.8 0l.6 4.74A2 2 0 0 0 17.43 12.5l.57.5v2H6v-2l.57-.5A2 2 0 0 0 8 10.74z"/></svg>',
-    export: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>',
-    import: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
-    sync: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>',
-    preview: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
-    camera: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>',
-    edit: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
-    trash: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>',
-    search: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
-    merge: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>',
-    bookmark: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>',
-    settings: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
-    clear: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>',
-    zap: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
-    save: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>',
-    warning: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
-    refresh: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>',
-    document: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>',
-    ban: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>',
-    success: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
-    error: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
-    hourglass: `<svg class="hourglass-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 22h14"></path><path d="M5 2h14"></path><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"></path><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"></path><polygon class="sand-top" points="7.5,6 16.5,6 12,11.5" fill="currentColor" stroke="none"></polygon><polygon class="sand-bottom" points="12,12.5 7.5,18 16.5,18" fill="currentColor" stroke="none"></polygon><line class="sand-stream" x1="12" y1="11.5" x2="12" y2="18" stroke="currentColor" stroke-width="1.5"></line></svg>`,
-    close: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>',
-    info: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 12v3a1 1 0 0 0 1 1"></path><path d="M12 8h.01"></path></svg>',
-    externalLink: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>',
-    undo: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>',
-    redo: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"/></svg>',
-    eraser: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>',
-    scribble: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>',
-    textCaret: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2" /><path d="M14 4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2" /></svg>',
-    image: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>',
-    crop: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.13 1L6 16a2 2 0 0 0 2 2h15"></path><path d="M1 6.13L16 6a2 2 0 0 1 2 2v15"></path></svg>',
-    focus: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path></svg>',
-    maximize: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>',
-    dots: `<span style="display:flex;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></span>`,
-    pointer: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"></path><path d="M13 13l6 6"></path></svg>`,
-    chevronRight: `<span style="display:flex;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></span>`,
-    edit: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>`,
-    minus: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="19" x2="19" y2="5"></line></svg>`,
-    square: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>`,
-    circle: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle></svg>`,
-  };
+  const ICON = `
+    width="1.2em"
+    height="1.2em"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    vector-effect="non-scaling-stroke"
+  `;
+
+  FluxKit.ui.icons = {
+    ban: `<svg ${ICON}><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM4.93 4.93l14.14 14.14" /></svg>`,
+    bold: `<svg ${ICON}><path d="M 9 4 H 12 A 4 4 0 0 1 12 12 H 6 V 8 M 6 12 V 20 H 14 A 4 4 0 0 0 14 12 H 12" /></svg>`,
+    book: `<svg ${ICON}><path d="M 12 7 V 20.5 M 6 18.5 A 1.5 1.5 0 0 1 4.5 17 V 6.5 A 1.5 1.5 0 0 1 6 5 L 12 7 M 12 20.5 L 18 18.5 A 1.5 1.5 0 0 0 19.5 17 V 6.5 A 1.5 1.5 0 0 0 18 5 L 12 7" /></svg>`,
+    bookmark: `<svg ${ICON}><path d="M 18 17 V 5 A 2 2 0 0 0 16 3 H 8 A 2 2 0 0 0 6 5 V 21 L 12 16 L 18 21" /></svg>`,
+    camera: `<svg ${ICON}><circle cx="12" cy="11.5" r="6"/><path d="M 17 7 H 20 A 2 2 0 0 1 22 9 V 18 A 2 2 0 0 1 20 20 H 4 A 2 2 0 0 1 2 18 V 9 A 2 2 0 0 1 4 7 H 7 M 3.5 4.5 H 5.5"/></svg>`,
+    checkSquare: `<svg ${ICON}><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11M9 11l3 3 10-10" /></svg>`,
+    chevronRight: `<svg ${ICON}><path d="M9 18l6-6-6-6" /></svg>`,
+    circle: `<svg ${ICON}><circle cx="12" cy="12" r="10" /></svg>`,
+    close: `<svg ${ICON}><path d="M18 6L6 18M6 6l12 12" /></svg>`,
+    code: `<svg ${ICON}><path d="M7 18l-5-6 5-6M17 18l5-6-5-6M10 19l4-14" /></svg>`,
+    columns: `<svg ${ICON}><path d="M 12 3 V 21 M 15 3 H 19 A 2 2 0 0 1 21 5 V 19 A 2 2 0 0 1 19 21 H 5 A 2 2 0 0 1 3 19 V 5 A 2 2 0 0 1 5 3 H 9" /></svg>`,
+    crop: `<svg ${ICON}><path d="M6.13 1L6 16a2 2 0 0 0 2 2h15"></path><path d="M1 6.13L16 6a2 2 0 0 1 2 2v15"></path></svg>`,
+    document: `<svg ${ICON}><path d="M 14 5 V 8 H 19 L 14 3 H 7 A 2 2 0 0 0 5 5 V 19 A 2 2 0 0 0 7 21 H 17 A 2 2 0 0 0 19 19 V 11" /></svg>`,
+    documentText: `<svg ${ICON}><path d="M 14 5 V 8 H 19 L 14 3 H 7 A 2 2 0 0 0 5 5 V 19 A 2 2 0 0 0 7 21 H 17 A 2 2 0 0 0 19 19 V 11 M 9 9 H 12 M 9 13 H 15 M 9 17 H 15" /></svg>`,
+    dots: `<svg ${ICON}><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>`,
+    edit: `<svg ${ICON}><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5" /></svg>`,
+    eraser: `<svg ${ICON}><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>`,
+    error: `<svg ${ICON}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14M9 9l6 6M9 15 21 3" /></svg>`,
+    export: `<svg ${ICON}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5v12m0-12l-5 5" /></svg>`,
+    externalLink: `<svg ${ICON}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" /></svg>`,
+    fileAdd: `<svg ${ICON}><path d="M 14 3 H 7 A 2 2 0 0 0 5 5 V 19 A 2 2 0 0 0 7 21 H 11 M 14 3 L 19 8 V 13 M 14 3 V 7 A 1 1 0 0 0 15 8 H 19 M 13 18 H 19 M 16 15 V 21" /></svg>`,
+    fileDelete: `<svg ${ICON}><path d="M 14 3 H 7 A 2 2 0 0 0 5 5 V 19 A 2 2 0 0 0 7 21 H 10 M 14 3 L 19 8 V 12 M 14 3 V 7 A 1 1 0 0 0 15 8 H 19 M 13.5 15.5 L 18.5 20.5 M 18.5 15.5 L 13.5 20.5" /></svg>`,
+    focus: `<svg ${ICON}><circle cx="12" cy="12" r="3"></circle><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path></svg>`,
+    heading: `<svg ${ICON}><path d="M6 4v16m0-8h12m0-8v16" /></svg>`,
+    hourglass: `<svg ${ICON}><path d="M5 22h14 M5 2h14 M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22 M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2" /><path d="M 12 15 L 8 17 V 21 H 16 V 17 Z" fill="currentColor" fill-opacity="0.6" stroke="none" /></svg>`,
+    hourglassSpin: `
+      <svg ${ICON}>
+        <style>
+          .hg-x { transform-origin: 12px 12px; transform-box: view-box; animation: hg-fl 2.5s cubic-bezier(0.45, 0, 0.55, 1) infinite; } .hg-tr { transform-origin: 12px 7.5px; transform-box: view-box; animation: hg-tr 2.5s linear infinite; } .hg-tt { transform-origin: 12px 11px; transform-box: view-box; animation: hg-tt 2.5s linear infinite; } .hg-bt { transform-origin: 12px 16.5px; transform-box: view-box; animation: hg-bt 2.5s linear infinite; } .hg-br { transform-origin: 12px 21.5px; transform-box: view-box; animation: hg-br 2.5s linear infinite; } .hg-st { transform-origin: 12px 11px; transform-box: view-box; animation: hg-st-op 2.5s linear infinite, hg-st-sc 2.5s linear infinite; }
+          @keyframes hg-fl { 0%, 80% { transform: rotate(0deg); } 100% { transform: rotate(180deg); } } @keyframes hg-tr { 0% { transform: scaleY(1); } 40%, 100% { transform: scaleY(0); } } @keyframes hg-tt { 0%, 40% { transform: scaleY(1); } 80%, 100% { transform: scaleY(0); } } @keyframes hg-br { 0% { transform: scaleY(0); } 40%, 100% { transform: scaleY(1); } } @keyframes hg-bt { 0%, 40% { transform: scaleY(0); } 80%, 100% { transform: scaleY(1); } } @keyframes hg-st-op { 0%, 5% { opacity: 0; } 10%, 75% { opacity: 1; } 80%, 100% { opacity: 0; } } @keyframes hg-st-sc { 0% { transform: scaleY(1); } 40% { transform: scaleY(0.579); } 80%, 100% { transform: scaleY(0.211); } }
+        </style>
+        <g class="hg-x"><path d="M5 22h14 M5 2h14 M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22 M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"></path><rect x="7.5" width="9" class="hg-tr" fill="currentColor" fill-opacity="0.6" stroke="none" y="4" height="3.57"></rect><polygon class="hg-tt" points="8.5,7.5 15.5,7.5 12,11" fill="currentColor" fill-opacity="0.6" stroke="none"></polygon><polygon class="hg-bt" points="12,13 8.5,16.51 15.5,16.51" fill="currentColor" fill-opacity="0.6" stroke="none"></polygon><rect width="9" x="7.5" height="6" class="hg-br" y="16.5" fill="currentColor" fill-opacity="0.6" stroke="none"></rect><line class="hg-st" x1="12" y1="12" x2="12" y2="20.5" stroke="currentColor" stroke-width="1.5" stroke-opacity="0.6"></line></g>
+      </svg>
+    `,
+    image: `<svg ${ICON}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>`,
+    import: `<svg ${ICON}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5V3m0 12l5-5" /></svg>`,
+    info: `<svg ${ICON}><path d="M12 12v3a1 1 0 0 0 1 1M12 8v.01M17 3.34A10 10 0 1 1 7 3.34" /></svg>`,
+    italic: `<svg ${ICON}><path d="M19 4h-9m5 0-6 16m5 0H5" /></svg>`,
+    line: `<svg ${ICON}><path d="M5 19L19 5" /></svg>`,
+    link: `<svg ${ICON}><path d="M 10 13 a 5 5 0 0 0 7.54 .54 l 3 -3 a 5 5 0 0 0 -7.07 -7.07 l -1.72 1.71 m 2.25 4.82 a 5 5 0 0 0 -7.54 -.54 l -3 3 a 5 5 0 0 0 7.07 7.07 l 1.71 -1.71" /></svg>`,
+    listOl: `<svg ${ICON}><path d="M10 6h11M10 12h11M10 18h11M4 6h1v4M4 10h2M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" /></svg>`,
+    listUl: `<svg ${ICON}><path d="M8 6h13M8 12h13M8 18h13M3 6v.01M3 12v.01M3 18v.01" /></svg>`,
+    loader: `<svg ${ICON}><style> @keyframes flxn-loader-spin { 100% { transform: rotate(360deg); } } </style><path style="transform-origin: center; animation: flxn-loader-spin 1.5s linear infinite;" d="M12 3a9 9 0 1 1-9 9" /></svg>`,
+    maximize: `<svg ${ICON}><path d="M8 3H5a2 2 0 0 0-2 2v3 M16 3h3a2 2 0 0 1 2 2v3 M8 21H5a2 2 0 0 1-2-2v-3 M16 21h3a2 2 0 0 0 2-2v-3" /></svg>`,
+    merge: `<svg ${ICON} style="transform: rotate(270deg);"><path d="M 7 3 V 9 A 5 5 0 0 0 12 14 V 21 L 8 17 M 12 21 L 16 17 M 17 3 V 9 A 5 5 0 0 1 15 13" /></svg>`,
+    minus: `<svg ${ICON}><path d="M5 12h14" /></svg>`,
+    paperclip: `<svg ${ICON}><path d="M 10 17 L 17 10 A 3.5 3.5 0 0 0 12 5 L 5 12 A 5.5 5.5 0 0 0 12.8 19.8 L 19.5 13" /></svg>`,
+    pin: `<svg ${ICON}><path d="M 12 21 V 17 M 10 15 H 8 V 13 A 2 2 0 0 1 10 11 L 9 7 A 3 3 0 0 1 15 7 L 14 11 A 2 2 0 0 1 16 13 V 15 H 14" /></svg>`,
+    pinned: `<svg ${ICON}><path fill="currentColor" d="M 12 21 V 17 M 10 15 H 8 V 13 A 2 2 0 0 1 10 11 L 9 7 A 3 3 0 0 1 15 7 L 14 11 A 2 2 0 0 1 16 13 V 15 H 14" /></svg>`,
+    plus: `<svg ${ICON}><path d="M12 5v14M5 12h14" /></svg>`,
+    pointer: `<svg ${ICON}><path d="M 4 4 L 10.5 20.5 L 13 13 L 20.5 10.5 Z" /></svg>`,
+    preview: `<svg ${ICON}><path d="M 4 14.3 A 12 12 0 0 1 2 12 A 12 12 0 0 1 17 7.7 M 20 9.7 A 12 12 0 0 1 22 12 A 12 12 0 0 1 7 16.3 M 14 10.5 A 2.5 2.5 0 1 1 10 10.5" /></svg>`,
+    question: `<svg ${ICON}><path d="M 17 3.34 A 10 10 0 1 1 7 3.34 M 12 17 V 17.01 M 9 9 A 3 3 0 0 1 15 9 C 15 11.5 12 11.5 12 14" /></svg>`,
+    quote: `<svg ${ICON}><path d="M 6 5 A 2 2 0 0 0 4 7 V 17 A 2 2 0 0 0 6 19 H 8 M 11 8 H 20 M 11 12 H 16 M 11 16 H 20" /></svg>`,
+    redo: `<svg ${ICON}><path d="M21 7v6h-6m6 0-2.7-2.7A9 9 0 0 0 3 17" /></svg>`,
+    refresh: `<svg ${ICON}><path d="M3 3v5h5m-5 0 2.3-2.3A9 9 0 1 1 3 12" /></svg>`,
+    save: `<svg ${ICON}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="7 3 7 8 15 8"/><path d="M12 11.5a3 3 0 1 1-3 3"/></svg>`,
+    scribble: `<svg ${ICON}><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>`,
+    search: `<svg ${ICON}><path d="M 21 21 L 18 18 C 15 15 13 17 10 17 A 7 7 0 1 1 16.5 13" /></svg>`,
+    settings: `<svg ${ICON}><path stroke-width="1.5" d="M 9.87 4.04 A 2.75 2.75 0 0 1 14.13 4.04 A 2.75 2.75 0 0 0 17.83 6.17 A 2.75 2.75 0 0 1 19.96 9.87 A 2.75 2.75 0 0 0 19.96 14.13 A 2.75 2.75 0 0 1 17.83 17.83 A 2.75 2.75 0 0 0 14.13 19.96 A 2.75 2.75 0 0 1 9.87 19.96 A 2.75 2.75 0 0 0 6.17 17.83 A 2.75 2.75 0 0 1 4.04 14.13 A 2.75 2.75 0 0 0 4.04 9.87 A 2.75 2.75 0 0 1 6.17 6.17 M 12 9.25 a 2.75 2.75 0 1 0 0 5.5 a 2.75 2.75 0 1 0 0 -5.5" /></svg>`,
+    square: `<svg ${ICON}><rect x="3" y="3" width="18" height="18" rx="2" /></svg>`,
+    strikethrough: `<svg ${ICON}><path d="M16 4H9a3 3 0 0 0-2.83 4"/><path d="M14 12a4 4 0 0 1 0 8H6"/><line x1="4" y1="12" x2="20" y2="12"/></svg>`,
+    success: `<svg ${ICON}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4L12 14.01 9 11.01" /></svg>`,
+    sync: `<svg ${ICON}><path d="M21 4v6h-6m6 0-2.6-2.6a9 9 0 0 0-14.9 1.6M3 20v-6h6m-6 0 2.6 2.6a9 9 0 0 0 14.9-1.6" /></svg>`,
+    table: `<svg ${ICON}><path d="M 17 21 H 5 A 2 2 0 0 1 3 19 V 5 A 2 2 0 0 1 5 3 H 19 A 2 2 0 0 1 21 5 V 17 M 9 3 V 21 M 3 9 H 21 M 3 15 H 21"/></svg>`,
+    textCaret: `<svg ${ICON}><path d="M10 4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2" /><path d="M14 4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2" /></svg>`,
+    trash: `<svg ${ICON}><path d="M 4 7 h 5 a 3 3 0 0 1 6 0 h 5 M 6 10 l 1.5 9.5 a 1.5 1.5 0 0 0 1.5 1.5 h 6 a 1.5 1.5 0 0 0 1.5 -1.5 L 18 10" /></svg>`,
+    undo: `<svg ${ICON}><path d="M3 7v6h6m-6 0 2.7-2.7A9 9 0 0 1 21 17" /></svg>`,
+    warning: `<svg ${ICON}><path d="M12 9v4m0 4v.01M10.27 3.51a2 2 0 0 1 3.46 0l8 14A2 2 0 0 1 20 21H4a2 2 0 0 1-1.73-3Z" /></svg>`,
+    windowMinimize: `<svg ${ICON}><line x1="4" y1="12" x2="20" y2="12"></line></svg>`,
+    windowRestore: `<svg ${ICON}><rect x="3" y="9" width="12" height="12" rx="2" ry="2"></rect><path d="M9 3h10a2 2 0 0 1 2 2v10"></path></svg>`,
+    zap: `<svg ${ICON}><polygon points="10 3 18 3 14 12 19 12 8 21 11 12 6 12" /></svg>`,
+  }
 
   let ttPolicy = {
     createHTML: (string) => string,
@@ -657,20 +699,12 @@
           }
           break;
 
-        case "flxTitle":
-        case "flxTooltip":
-          if (typeof value === "string") el.dataset.tooltip = value;
-          else if (value && typeof value === "object") {
-            Object.assign(el.dataset, value);
-          }
+        case "title":
+          el.setAttribute('title', value);
           break;
 
-        case "flxPopover":
-          if (typeof value === "string") el.dataset.tooltip = value;
-          else if (value && typeof value === "object") {
-            Object.assign(el.dataset, value);
-          }
-          el.dataset.tooltipInteractive = "true";
+        case "popover":
+          el.setAttribute('popover', value);
           break;
 
         case "class":
@@ -711,6 +745,28 @@
           break;
 
         default:
+          const lowerKey = key.toLowerCase();
+          if (lowerKey.startsWith('data-') || lowerKey.startsWith('aria-')) {
+            el.setAttribute(key, value);
+            break;
+          }
+          const tipMatch = key.match(/(.+)(title|tooltip|popover)$/i);
+          const isPopover = /popover$/i.test(key);
+          if (tipMatch) {
+            const dataKey = FluxKit.utils.toCamelCase(tipMatch[1] + 'Tooltip');
+
+            if (typeof value === "string") {
+              el.dataset[dataKey] = value;
+            } else if (value && typeof value === "object") {
+              Object.assign(el.dataset, value);
+            }
+
+            if (isPopover) {
+              el.dataset.tooltipInteractive = "true";
+            }
+            break;
+          }
+
           if (typeof value === "boolean") {
             if (value) el.setAttribute(key, "");
             else el.removeAttribute(key);
@@ -814,32 +870,47 @@
     );
   }
 
-  if (!FluxKit.utils.initPopupWindows) {
-    const __popupRoots = new WeakSet();
+  if (!FluxKit.utils._popupWindowListener) {
+    FluxKit.utils._popupWindowListener = true;
+    
+    const namespacedPopupOptions = new Map();
+    namespacedPopupOptions.set('default', {});
 
-    FluxKit.utils.initPopupWindows = ((rootElement = document, options = {}) => {
-      if (__popupRoots.has(rootElement)) return;
-      __popupRoots.add(rootElement);
+    document.addEventListener('click', (e) => {
+      const path = e.composedPath ? e.composedPath() : [e.target];
+      const trigger = path.find(node => 
+        node.nodeType === Node.ELEMENT_NODE && node.hasAttribute('data-popup')
+      );
+      
+      if (!trigger) return;
+      
+      const url = trigger.dataset.popupUrl || trigger.href;
+      if (!url || url === window.location.href || url.startsWith('javascript:')) return;
 
-      rootElement.addEventListener('click', (e) => {
-        const anchor = e.target.closest('a[data-popup]');
-        if (!anchor) return;
-        
-        e.preventDefault();
-        e.stopPropagation();
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const ns = trigger.dataset.popupNamespace || 'default';
+      
+      const activeOptions = namespacedPopupOptions.get(ns) || namespacedPopupOptions.get('default');
 
-        const url = anchor.href;
-        
-        if (!url || url === window.location.href) return;
-        
-        FluxKit.utils.openPopupWindow(url, { 
-          ...options,
-          title: anchor.dataset.popup || 'FluxKit Window',
-          width: anchor.dataset.popupWidth ? parseInt(anchor.dataset.popupWidth, 10) : 560,
-          height: anchor.dataset.popupHeight ? parseInt(anchor.dataset.popupHeight, 10) : 640
-        });
-      }, true);
-    });
+      FluxKit.utils.openPopupWindow(url, { 
+        ...activeOptions,
+        title: trigger.dataset.popup || activeOptions.title || 'FluxKit Window',
+        width: trigger.dataset.popupWidth ? parseInt(trigger.dataset.popupWidth, 10) : (activeOptions.width || 560),
+        height: trigger.dataset.popupHeight ? parseInt(trigger.dataset.popupHeight, 10) : (activeOptions.height || 640)
+      });
+    }, true); 
+
+    FluxKit.utils.initPopupWindows = (options = {}) => {
+      const ns = options.namespace || 'default';
+      
+      const cleanOptions = { ...options };
+      delete cleanOptions.namespace;
+
+      const existingOptions = namespacedPopupOptions.get(ns) || {};
+      namespacedPopupOptions.set(ns, { ...existingOptions, ...cleanOptions });
+    };
   }
 
   if (document.readyState === 'loading') {
@@ -857,18 +928,20 @@
   FluxKit.utils.makeElementDragAndResize ??= (element, header = null, options = {}) => {
     const opt = {
       resizable: true, keepInViewport: true, dragThreshold: 3,
-      minWidth: 160, minHeight: 90, initWidth: null, initHeight: null, maxWidth: Infinity, maxHeight: Infinity, lockAspectRatio: false, aspectRatio: null, /* inferred if null */
+      minWidth: 160, minHeight: 90, initWidth: null, initHeight: null, maxWidth: Infinity, maxHeight: Infinity, lockAspectRatio: false, aspectRatio: null,
       noDragSelector: 'button, input, select, textarea, a, [role="button"], [role="link"], [contenteditable="true"], [data-no-drag]',
+      minimize: false, minimizeWidth: 240, maximizePadding: 20, maximize: false, close: false,
+      controlsOrder: ['minimize', 'maximize', 'close'], controlsGap: 4, autoFocus: true, focusZIndex: 100, 
+      dblClickMaximize: true, closeOnEscape: false, closeRemovesElement: true,
+      onMinimize: null, onRestoreFromMinimize: null, onMaximize: null, onRestore: null, onClose: null,
       onDragStart: null, onDragging: null, onDragEnd: null, onResizeStart: null, onResizing: null, onResizeEnd: null,
-      onClick: null, // genuine dragElement on handle (not after drag)
+      onAnyResize: null, onClick: null,
       ...options,
     };
     const ctrl = new AbortController();
     const { signal } = ctrl;
 
-    if (!getComputedStyle(element).position || getComputedStyle(element).position === 'static') {
-      element.style.position = 'fixed';
-    }
+    if (!getComputedStyle(element).position || getComputedStyle(element).position === 'static') element.style.position = 'fixed';
 
     (function initPositionSafely() {
       const prevTransition = element.style.transition || '';
@@ -876,97 +949,92 @@
 
       element.style.transition = 'none';
       element.style.visibility = 'hidden';
-      element.style.willChange = 'left, top';
+      element.style.willChange = 'left, top, width, height';
 
       const cs = getComputedStyle(element);
-      if (cs.position === 'static') {
-        element.style.position = 'fixed';
-      }
+      if (cs.position === 'static') element.style.position = 'fixed';
 
       requestAnimationFrame(() => {
         const rect = element.getBoundingClientRect();
-
-        let left = rect.left;
-        let top = rect.top;
-
-        if (opt.initLeft != null) left = opt.initLeft;
-        if (opt.initTop != null) top = opt.initTop;
+        let left = opt.initLeft != null ? opt.initLeft : rect.left;
+        let top = opt.initTop != null ? opt.initTop : rect.top;
 
         element.style.left = `${Math.round(left)}px`;
         element.style.top = `${Math.round(top)}px`;
         element.style.transform = 'none';
 
         requestAnimationFrame(() => {
-          element.style.visibility = prevVisibility || '';
-          setTimeout(() => {
+          element.style.visibility = prevVisibility;
+          requestAnimationFrame(() => {
             element.style.transition = prevTransition;
-          }, 20);
+          });
         });
       });
     })();
 
-    const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
     const dragElement = header || element;
-    const ogCursor = getComputedStyle(dragElement).cursor;
-    dragElement.style.cursor ||= 'move';
-    dragElement.style.touchAction = 'none';
+    let dragging = false, resizing = false, moved = false, suppressNextClick = false;
+    let startX, startY, startLeft, startTop, startW, startH;
+    let isMaximized = false, isMinimized = false;
+    let preMaxState = null, preMinState = null;
+    let resizer = null;
 
-    let dragging = false, resizing = false, moved = false;
-    let suppressNextClick = false;
-    let startX = 0, startY = 0, startLeft = 0, startTop = 0, startW = 0, startH = 0;
+    const getAspect = () => opt.aspectRatio || (startW / startH) || 1;
+    const getViewportW = () => document.documentElement.clientWidth;
+    const getViewportH = () => document.documentElement.clientHeight;
+    const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
 
-    const getRect = () => element.getBoundingClientRect();
-    const getAspect = () => opt.aspectRatio || (getRect().width / Math.max(1, getRect().height));
+    FluxKit.utils._flxnTopZ ??= opt.focusZIndex;
+    const bringToFront = () => {
+      if (!opt.autoFocus) return;
+      element.style.zIndex = String(++FluxKit.utils._flxnTopZ);
+    };
+    element.addEventListener('pointerdown', bringToFront, { capture: true, signal });
+    bringToFront();
 
-    let isMaximized = false;
-
-    // ---- DRAG ----
     const onPointerDownDrag = (e) => {
-      if (isMaximized) return;
-      if (e.button != null && e.button !== 0) return;
-      if (e.target && e.target.closest(opt.noDragSelector)) return;
+      if (isMaximized || (e.button != null && e.button !== 0)) return;
+      if (e.target.closest(opt.noDragSelector)) return;
 
-      const r = getRect();
+      const rect = element.getBoundingClientRect();
       startX = e.clientX;
       startY = e.clientY;
-      startLeft = parseFloat(element.style.left) || r.left;
-      startTop = parseFloat(element.style.top) || r.top;
+      startLeft = rect.left;
+      startTop = rect.top;
+
       moved = false;
       dragging = false;
       dragElement.setPointerCapture?.(e.pointerId);
     };
 
     const onPointerMoveDrag = (e) => {
-      if (resizing) return;
-      if (!dragElement.hasPointerCapture?.(e.pointerId)) return;
+      if (resizing || !dragElement.hasPointerCapture?.(e.pointerId)) return;
+
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
+
       if (!dragging && Math.hypot(dx, dy) > opt.dragThreshold) {
         dragging = true;
         moved = true;
-        suppressNextClick = true; // guard the ghost click
+        suppressNextClick = true;
         element.style.userSelect = 'none';
         opt.onDragStart?.(e, element);
       }
 
       if (!dragging) return;
-
-      dragElement.style.cursor = 'move';
       e.preventDefault();
 
       let left = startLeft + dx;
       let top = startTop + dy;
 
-      const r = getRect();
       if (opt.keepInViewport) {
-        left = clamp(left, 0, window.innerWidth - r.width);
-        top = clamp(top, 0, window.innerHeight - r.height);
+        const rect = element.getBoundingClientRect();
+        left = clamp(left, 0, getViewportW() - rect.width);
+        top = clamp(top, 0, getViewportH() - rect.height);
       }
 
       element.style.left = `${left}px`;
       element.style.top = `${top}px`;
-      element.style.transform = 'none';
-
       opt.onDragging?.(e, element);
     };
 
@@ -974,16 +1042,20 @@
       if (dragging) {
         dragging = false;
         element.style.userSelect = '';
-        dragElement.style.cursor = ogCursor || 'move';
         opt.onDragEnd?.(e, element);
       }
       dragElement.releasePointerCapture?.(e.pointerId);
       requestAnimationFrame(() => { suppressNextClick = false; });
     };
 
+    if (getComputedStyle(dragElement).position === 'static') {
+      dragElement.style.position = 'relative';
+    }
+
     dragElement.addEventListener('pointerdown', onPointerDownDrag, { signal });
     window.addEventListener('pointermove', onPointerMoveDrag, { signal });
     window.addEventListener('pointerup', onPointerUpDrag, { signal });
+    window.addEventListener('pointercancel', onPointerUpDrag, { signal });
 
     dragElement.addEventListener('click', (e) => {
       if (suppressNextClick) {
@@ -994,26 +1066,23 @@
       }
     }, { capture: true, passive: false, signal });
 
-    // ---- RESIZE (bottom-right) ----
-    let resizer = null;
+    // ---- RESIZE LOGIC ----
     if (opt.resizable) {
-      resizer = element.querySelector(':scope > .element-resizer') || FluxKit.utils.createHTMLElement('div');
-      if (!resizer.parentNode) {
-        resizer.className = 'element-resizer';
-        Object.assign(resizer.style, {
-          width: '14px', height: '14px', position: 'absolute',
-          right: '0', bottom: '0', cursor: 'se-resize',
-          background: 'transparent', zIndex: 2,
+      resizer = element.querySelector(':scope > .element-resizer');
+      if (!resizer) {
+        resizer = FluxKit.utils.createHTMLElement('div', {
+          className: 'element-resizer',
+          style: 'width: 14px; height: 14px; position: absolute; right: 0; bottom: 0; cursor: se-resize; background: transparent; z-index: 2;'
         });
         element.appendChild(resizer);
       }
 
       const onPointerDownResize = (e) => {
         if (e.button != null && e.button !== 0) return;
-        const r = getRect();
+        const rect = element.getBoundingClientRect();
         startX = e.clientX; startY = e.clientY;
-        startW = r.width; startH = r.height;
-        moved = false; resizing = true; suppressNextClick = true; // block post-resize click
+        startW = rect.width; startH = rect.height;
+        moved = false; resizing = true; suppressNextClick = true;
         resizer.setPointerCapture?.(e.pointerId);
         element.style.userSelect = 'none';
         opt.onResizeStart?.(e, element);
@@ -1023,35 +1092,28 @@
         if (!resizing) return;
         e.preventDefault();
 
-        const aspect = getAspect();
         let w = startW + (e.clientX - startX);
         let h = startH + (e.clientY - startY);
 
         if (opt.lockAspectRatio) {
-          // maintain aspect based on whichever axis moved more
-          if (Math.abs(e.clientX - startX) >= Math.abs(e.clientY - startY)) {
-            h = w / aspect;
-          } else {
-            w = h * aspect;
-          }
+          const aspect = getAspect();
+          if (Math.abs(e.clientX - startX) >= Math.abs(e.clientY - startY)) { h = w / aspect; }
+          else { w = h * aspect; }
         }
 
         w = clamp(w, opt.minWidth, opt.maxWidth);
         h = clamp(h, opt.minHeight, opt.maxHeight);
 
         if (opt.keepInViewport) {
-          const r = getRect();
-          w = Math.min(w, window.innerWidth - r.left);
-          h = Math.min(h, window.innerHeight - r.top);
+          const rect = element.getBoundingClientRect();
+          w = Math.min(w, getViewportW() - rect.left);
+          h = Math.min(h, getViewportH() - rect.top);
         }
 
         element.style.width = `${w}px`;
         element.style.height = `${h}px`;
 
-        moved = true;
-        if (isMaximized) {
-          isMaximized = false;
-        }
+        if (isMaximized) isMaximized = false;
         opt.onResizing?.(e, element);
       };
 
@@ -1060,99 +1122,306 @@
         resizing = false;
         element.style.userSelect = '';
         resizer.releasePointerCapture?.(e.pointerId);
-        opt.onResizeEnd?.(e, element);
+
+        if (opt.onResizeEnd) opt.onResizeEnd(element);
+        if (opt.onAnyResize) opt.onAnyResize(element);
+
         setTimeout(() => { suppressNextClick = false; }, 0);
       };
 
       resizer.addEventListener('pointerdown', onPointerDownResize, { signal });
       window.addEventListener('pointermove', onPointerMoveResize, { signal });
       window.addEventListener('pointerup', onPointerUpResize, { signal });
-      resizer.addEventListener('dblclick', () => {
-        element.style.transition = 'width 0.25s ease, height 0.25s ease, left 0.25s ease, top 0.25s ease';
+      window.addEventListener('pointercancel', onPointerUpResize, { signal });
+    }
 
-        if (!isMaximized) {
-          const margin = 40; // padding from viewport edges
-          let viewportW = window.innerWidth - margin;
-          let viewportH = window.innerHeight - margin;
+    // ---- MAXIMIZE LOGIC ----
+    const toggleMaximize = (e) => {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
 
-          let targetW = viewportW;
-          let targetH = viewportH;
+      const originalTransition = element.style.transition;
+      const originalCursor = dragElement.style.cursor;
+      element.style.transition = 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)';
 
-          if (opt.lockAspectRatio) {
-            const aspect = getAspect();
-            if (targetW / targetH > aspect) {
-              targetW = targetH * aspect;
-            } else {
-              targetH = targetW / aspect;
-            }
-          }
+      if (!isMaximized) {
+        const rect = element.getBoundingClientRect();
+        preMaxState = {
+          width: element.style.width || `${rect.width}px`,
+          height: element.style.height || `${rect.height}px`,
+          top: element.style.top || `${rect.top}px`,
+          left: element.style.left || `${rect.left}px`,
+          transform: element.style.transform,
+          maxWidth: element.style.maxWidth || '',
+          maxHeight: element.style.maxHeight || ''
+        };
 
-          const maxW = clamp(targetW, opt.minWidth, opt.maxWidth);
-          const maxH = clamp(targetH, opt.minHeight, opt.maxHeight);
+        element.style.setProperty('max-width', 'none', 'important');
+        element.style.setProperty('max-height', 'none', 'important');
+        element.style.top = `${opt.maximizePadding}px`;
+        element.style.left = `${opt.maximizePadding}px`;
+        element.style.width = `calc(100vw - ${opt.maximizePadding * 2}px)`;
+        element.style.height = `calc(100vh - ${opt.maximizePadding * 2}px)`;
+        element.style.transform = 'none';
+        dragElement.style.cursor = 'default';
 
-          const left = (window.innerWidth - maxW) / 2;
-          const top = (window.innerHeight - maxH) / 2;
+        isMaximized = true;
+        controlBtns.maximize?._setIcon(true);
+        if (opt.onMaximize) opt.onMaximize(element);
+      } else {
+        if (preMaxState) {
+          element.style.maxWidth = preMaxState.maxWidth;
+          element.style.maxHeight = preMaxState.maxHeight;
+          element.style.width = preMaxState.width;
+          element.style.height = preMaxState.height;
+          element.style.transform = preMaxState.transform;
 
-          element.style.width = `${maxW}px`;
-          element.style.height = `${maxH}px`;
-          element.style.left = `${left}px`;
-          element.style.top = `${top}px`;
+          let targetLeft = parseFloat(preMaxState.left) || 0;
+          let targetTop = parseFloat(preMaxState.top) || 0;
 
-          dragElement.style.cursor = 'default';
-
-          isMaximized = true;
-        } else {
-          let targetW = opt.initWidth || opt.minWidth;
-          let targetH = opt.initHeight || opt.minHeight;
-
-          if (opt.lockAspectRatio) {
-            const aspect = getAspect();
-            if (targetW / targetH > aspect) {
-              targetW = targetH * aspect;
-            } else {
-              targetH = targetW / aspect;
-            }
-          }
-
-          const minW = clamp(targetW, opt.minWidth, opt.maxWidth);
-          const minH = clamp(targetH, opt.minHeight, opt.maxHeight);
-          element.style.width = `${minW}px`;
-          element.style.height = `${minH}px`;
           if (opt.keepInViewport) {
-            const left = parseFloat(element.style.left || 0);
-            const top = parseFloat(element.style.top || 0);
-
-            let newLeft = left;
-            let newTop = top;
-
-            if (newLeft + minW > window.innerWidth) {
-              newLeft = Math.max(0, window.innerWidth - minW);
-            }
-            if (newTop + minH > window.innerHeight) {
-              newTop = Math.max(0, window.innerHeight - minH);
-            }
-
-            element.style.left = `${newLeft}px`;
-            element.style.top = `${newTop}px`;
+            const restoredW = parseFloat(preMaxState.width) || 0;
+            const restoredH = parseFloat(preMaxState.height) || 0;
+            if (targetLeft + restoredW > getViewportW()) targetLeft = Math.max(0, getViewportW() - restoredW);
+            if (targetTop + restoredH > getViewportH()) targetTop = Math.max(0, getViewportH() - restoredH);
           }
 
-          dragElement.style.cursor = ogCursor || 'move';
-          isMaximized = false;
+          element.style.left = `${targetLeft}px`;
+          element.style.top = `${targetTop}px`;
         }
 
-        setTimeout(() => {
-          opt.onResizeEnd?.(element);
-        }, 50);
-        setTimeout(() => {
-          element.style.transition = '';
-        }, 300);
+        dragElement.style.cursor = originalCursor;
+        isMaximized = false;
+        controlBtns.maximize?._setIcon(false);
+        if (opt.onRestore) opt.onRestore(element);
+      }
+
+      setTimeout(() => {
+        element.style.transition = originalTransition;
+        if (opt.onAnyResize) opt.onAnyResize(element);
+      }, 300);
+    };
+
+    // ---- MINIMIZE LOGIC ----
+    const toggleMinimize = (e) => {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      if (isMaximized) toggleMaximize(e);
+
+      const originalTransition = element.style.transition;
+      element.style.transition = 'all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1)';
+
+      if (!isMinimized) {
+        const rect = element.getBoundingClientRect();
+        const headerRect = dragElement.getBoundingClientRect();
+
+        preMinState = {
+          width: element.style.width || `${rect.width}px`,
+          height: element.style.height || `${rect.height}px`,
+          minWidth: element.style.minWidth,
+          minHeight: element.style.minHeight,
+          overflow: element.style.overflow
+        };
+
+        const trueMinimizedHeight = headerRect.bottom - rect.top;
+
+        element.style.minWidth = '0px';
+        element.style.minHeight = '0px';
+        element.style.width = `${opt.minimizeWidth || 240}px`;
+        element.style.height = `${trueMinimizedHeight}px`;
+        element.style.overflow = 'hidden';
+
+        if (resizer) resizer.style.display = 'none';
+        element.classList.add('flxn-minimized');
+        isMinimized = true;
+
+        controlBtns.minimize?._setIcon(true);
+        if (opt.onMinimize) opt.onMinimize(element);
+      } else {
+        if (preMinState) {
+          element.style.width = preMinState.width;
+          element.style.height = preMinState.height;
+          element.style.minWidth = preMinState.minWidth;
+          element.style.minHeight = preMinState.minHeight;
+          element.style.overflow = preMinState.overflow;
+
+          let currentLeft = parseFloat(element.style.left) || 0;
+          let currentTop = parseFloat(element.style.top) || 0;
+
+          if (opt.keepInViewport) {
+            const restoredW = parseFloat(preMinState.width) || 0;
+            const restoredH = parseFloat(preMinState.height) || 0;
+            if (currentLeft + restoredW > getViewportW()) currentLeft = Math.max(0, getViewportW() - restoredW);
+            if (currentTop + restoredH > getViewportH()) currentTop = Math.max(0, getViewportH() - restoredH);
+          }
+
+          element.style.left = `${currentLeft}px`;
+          element.style.top = `${currentTop}px`;
+        }
+
+        if (resizer) resizer.style.display = '';
+        element.classList.remove('flxn-minimized');
+        isMinimized = false;
+
+        controlBtns.minimize?._setIcon(false);
+        if (opt.onRestoreFromMinimize) opt.onRestoreFromMinimize(element);
+      }
+
+      setTimeout(() => {
+        element.style.transition = originalTransition;
+        if (opt.onAnyResize) opt.onAnyResize(element);
+      }, 300);
+    };
+
+    // ---- CLOSE LOGIC ----
+    const destroy = () => { try { ctrl.abort(); } catch (e) {} };
+
+    const toggleClose = (e) => {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      const result = opt.onClose ? opt.onClose(element) : undefined;
+      if (result === false) return;
+
+      destroy();
+      if (opt.closeRemovesElement) element.remove();
+      else element.style.display = 'none';
+    };
+
+    if (opt.closeOnEscape) {
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && element.contains(document.activeElement)) toggleClose(e);
       }, { signal });
     }
 
-    return () => {
-      try {ctrl.abort()} catch (e) {}
+    const controlBtns = {};
+
+    const makeControlButton = (name, rawCfg, { iconOff, iconOn, tooltipOff, tooltipOn, onClick }) => {
+      if (!rawCfg || rawCfg.injectButton === false) return null;
+
+      const existing = dragElement.querySelector(`:scope > .window-${name}-btn`);
+      if (existing) return existing;
+
+      const cfg = typeof rawCfg === 'object' ? rawCfg : {};
+      const size = cfg.iconSize || 24;
+      const color = cfg.color || 'currentColor';
+      const defaultOpacity = cfg.opacity ?? 0.6;
+      const zIndex = cfg.zIndex ?? 10;
+      const hoverOpacity = cfg.hoverOpacity ?? 1;
+      const hoverTransform = cfg.hoverTransform || null;
+
+      const btn = FluxKit.utils.createHTMLElement('button', {
+        className: `flxn-icon-btn window-${name}-btn flxkit-no-drag`,
+        style: `
+          position: absolute !important;
+          width: ${size}px !important; height: ${size}px !important;
+          padding: 0 !important; margin: 0 !important;
+          min-width: 0 !important; min-height: 0 !important;
+          display: inline-flex !important; align-items: center !important; justify-content: center !important;
+          background: transparent !important; border: none !important; box-shadow: none !important; outline: none !important;
+          color: ${color} !important; cursor: pointer !important;
+          opacity: ${defaultOpacity} !important; transition: opacity 0.2s ease !important;
+          transform: none !important;
+          transition: opacity 0.2s ease, transform 0.2s ease !important;
+          z-index: ${zIndex} !important;
+        `,
+        eventListener: {
+          click: onClick,
+          mouseenter: (e) => {
+            e.currentTarget.style.setProperty('opacity', hoverOpacity, 'important');
+            if (hoverTransform) {
+              e.currentTarget.style.setProperty('transform', hoverTransform, 'important');
+            }
+          },
+          mouseleave: (e) => {
+            e.currentTarget.style.setProperty('opacity', defaultOpacity, 'important');
+            if (hoverTransform) {
+              e.currentTarget.style.setProperty('transform', 'none', 'important');
+            }
+          }
+        }
+      });
+
+      btn.type = 'button';
+      btn._size = size;
+      btn._setIcon = (active) => {
+        const iconHTML = active ? (iconOn ?? iconOff) : iconOff;
+        btn.innerHTML = FluxKit.utils.safeHTML(
+          `<span style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;transition:transform .3s ease;">${iconHTML}</span>`
+        );
+        const tip = active ? (tooltipOn ?? tooltipOff) : tooltipOff;
+        if (tip) { btn.dataset.tooltip = tip; btn.setAttribute('aria-label', tip); }
+      };
+      btn._setIcon(false);
+
+      dragElement.appendChild(btn);
+      return btn;
     };
-  }
+
+    const layoutControlButtons = () => {
+      const gap = opt.controlsGap;
+      const order = opt.controlsOrder.filter(name => controlBtns[name]);
+      let autoOffset = 16;
+
+      for (let i = order.length - 1; i >= 0; i--) {
+        const name = order[i];
+        const btn = controlBtns[name];
+        const cfg = typeof opt[name] === 'object' ? opt[name] : {};
+        const top = cfg.iconTop != null ? cfg.iconTop : 6;
+
+        if (cfg.iconRight != null) {
+          btn.style.right = `${cfg.iconRight}px`;
+          autoOffset = cfg.iconRight + btn._size + gap;
+        } else {
+          btn.style.right = `${autoOffset}px`;
+          autoOffset += btn._size + gap;
+        }
+        btn.style.top = `${top}px`;
+      }
+    };
+
+    if (opt.minimize) {
+      controlBtns.minimize = makeControlButton('minimize', opt.minimize, {
+        iconOff: (typeof opt.minimize === 'object' && opt.minimize.icons?.off) || FluxKit.ui.icons.minus,
+        iconOn: (typeof opt.minimize === 'object' && opt.minimize.icons?.on) || FluxKit.ui.icons.plus,
+        tooltipOff: 'Minimize', tooltipOn: 'Expand',
+        onClick: toggleMinimize
+      });
+    }
+
+    if (opt.maximize) {
+      controlBtns.maximize = makeControlButton('maximize', opt.maximize, {
+        iconOff: (typeof opt.maximize === 'object' && opt.maximize.icons?.off) || FluxKit.ui.icons.square,
+        iconOn: (typeof opt.maximize === 'object' && opt.maximize.icons?.on) || FluxKit.ui.icons.windowRestore || FluxKit.ui.icons.square,
+        tooltipOff: 'Maximize', tooltipOn: 'Restore',
+        onClick: toggleMaximize
+      });
+    }
+
+    if (opt.close) {
+      controlBtns.close = makeControlButton('close', opt.close, {
+        iconOff: (typeof opt.close === 'object' && opt.close.icon) || FluxKit.ui.icons.close,
+        tooltipOff: 'Close',
+        onClick: toggleClose
+      });
+    }
+
+    layoutControlButtons();
+
+    // ---- DOUBLE-CLICK ROUTER ----
+    [dragElement, resizer].forEach(el => {
+      if (!el) return;
+      el.addEventListener('dblclick', (e) => {
+        if (e.target.closest(opt.noDragSelector)) return;
+        if (isMinimized) toggleMinimize(e);
+        else if (opt.dblClickMaximize) toggleMaximize(e);
+      }, { signal });
+    });
+
+    // Expose the controls so callers can drive them from elsewhere
+    destroy.toggleMinimize = toggleMinimize;
+    destroy.toggleMaximize = toggleMaximize;
+    destroy.toggleClose = toggleClose;
+    destroy.bringToFront = bringToFront;
+
+    return destroy;
+  };
 
   FluxKit.utils.trapTabFocus ??= (element, initialFocus = null) => {
     const focusable = element.querySelectorAll(
@@ -1187,6 +1456,219 @@
       }
     });
   }
+
+  FluxKit.utils.compressImage ??= (dataUrl, maxWidth = 1600, quality = 0.85, minQuality = 0.3) => {
+    return new Promise((resolve) => {
+      if (dataUrl.length < 150000) {
+        return resolve(dataUrl);
+      }
+
+      const isPng = dataUrl.startsWith('data:image/png');
+
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxWidth / img.width);
+        const width = img.width * scale;
+        const height = img.height * scale;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+
+        if (!isPng) {
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, width, height);
+        }
+        
+        ctx.drawImage(img, 0, 0, width, height);
+
+        quality = Math.min(1, Math.max(minQuality, quality));
+
+        let mime = isPng ? 'image/png' : 'image/jpeg';
+        
+        const testCanvas = document.createElement('canvas');
+        if (testCanvas.toDataURL('image/webp').startsWith('data:image/webp')) {
+          mime = 'image/webp';
+        }
+
+        const compressed = canvas.toDataURL(mime, quality);
+
+        const THRESHOLD = 0.90;
+        if (compressed.length < dataUrl.length * THRESHOLD) {
+          resolve(compressed);
+        } else {
+          resolve(dataUrl);
+        }
+      };
+
+      img.onerror = () => {
+        logWarning('Image failed to load for compression');
+        resolve(dataUrl);
+      };
+
+      img.src = dataUrl;
+    });
+  }
+
+  FluxKit.utils.shouldIgnoreKeystroke ??= (e, options = {}) => {
+    const config = {
+      ignoreInputs: true,
+      ignoreContentEditable: true,
+      allowEscape: true,
+      allowModifiers: false,
+      allowedKeys: [],
+      ignoreSelectors: [],
+      ...options
+    };
+
+    const path = e.composedPath ? e.composedPath() : [e.target];
+    const target = path.length > 0 ? path[0] : e.target;
+    if (!target) return false;
+
+    if (config.allowEscape && e.key === 'Escape') return false;
+    if (config.allowedKeys.includes(e.key)) return false;
+    if (config.allowModifiers && (e.ctrlKey || e.metaKey || e.altKey)) return false;
+
+    if (config.ignoreInputs) {
+      const tag = target.tagName?.toUpperCase();
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return true;
+    }
+
+    if (config.ignoreContentEditable && target.isContentEditable) {
+      return true;
+    }
+
+    if (config.ignoreSelectors.length > 0 && target.closest) {
+      if (config.ignoreSelectors.some(selector => target.closest(selector))) return true;
+    }
+
+    return false;
+  }
+
+  FluxKit.utils.getShortcutFromEvent ??= function(e, options = {}) {
+    const config = {
+      joinChar: '+',             
+      displayJoinChar: ' + ',    
+      normalizeOS: false,        
+      includeModifiers: ['ctrl', 'meta', 'alt', 'shift'], 
+      osAgnosticStorage: true, 
+      ...options
+    };
+
+    let key = e.key;
+    const isModifierOnly = ['Control', 'Shift', 'Alt', 'Meta', 'OS'].includes(key);
+    const isMac = navigator.userAgent.toLowerCase().includes('mac');
+    
+    let parts = [];
+    let displayParts = [];
+
+    const hasCtrl = (config.normalizeOS && isMac) ? e.metaKey : e.ctrlKey;
+    const hasMeta = (config.normalizeOS && isMac) ? false : e.metaKey;
+
+    const allowedMods = config.includeModifiers.map(m => m.toLowerCase());
+
+    if (hasCtrl && allowedMods.includes('ctrl')) { 
+      parts.push('ctrl'); 
+      displayParts.push('Ctrl'); 
+    }
+    if (hasMeta && allowedMods.includes('meta')) { 
+      parts.push(config.osAgnosticStorage ? 'meta' : (isMac ? 'cmd' : 'meta')); 
+      displayParts.push(isMac ? 'Cmd' : 'Win'); 
+    }
+    if (e.altKey && allowedMods.includes('alt')) { 
+      parts.push(config.osAgnosticStorage ? 'alt' : (isMac ? 'opt' : 'alt')); 
+      displayParts.push(isMac ? 'Opt' : 'Alt'); 
+    }
+    if (e.shiftKey && allowedMods.includes('shift')) { 
+      parts.push('shift'); 
+      displayParts.push('Shift'); 
+    }
+
+    if (!isModifierOnly) {
+      let normalizedKey = key === ' ' ? 'space' : key;
+      if (e.altKey && (key.length === 1 || key === 'Dead')) {
+        if (e.keyCode >= 65 && e.keyCode <= 90) {
+          normalizedKey = String.fromCharCode(e.keyCode).toLowerCase();
+        } 
+        else if (e.keyCode >= 48 && e.keyCode <= 57) {
+          normalizedKey = String.fromCharCode(e.keyCode);
+        } 
+        else if (e.code) {
+            const codeMap = {
+              Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Backslash: '\\', 
+              Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/', Backquote: '`'
+            };
+            
+            if (codeMap[e.code]) {
+              normalizedKey = codeMap[e.code];
+            } 
+            else if (e.code.startsWith('Key')) {
+              normalizedKey = e.code.replace('Key', '').toLowerCase();
+            } 
+            else if (e.code.startsWith('Digit')) {
+              normalizedKey = e.code.replace('Digit', '');
+            }
+        }
+      }
+      if (normalizedKey === 'Dead') normalizedKey = '';
+
+      if (normalizedKey) {
+        normalizedKey = normalizedKey.toLowerCase();
+        parts.push(normalizedKey);
+        
+        const displayKey = normalizedKey.charAt(0).toUpperCase() + normalizedKey.slice(1);
+        displayParts.push(displayKey);
+      }
+    }
+
+    return {
+      stored: parts.join(config.joinChar),
+      display: displayParts.join(config.displayJoinChar),
+      isModifierOnly: isModifierOnly,
+      rawKey: key
+    };
+  };
+
+  FluxKit.utils.formatShortcutForDisplay ??= function(storedString, options = {}) {
+    if (!storedString) return '';
+
+    const config = {
+      joinChar: '+',
+      displayJoinChar: ' + ',
+      ...options
+    };
+
+    const isMac = navigator.userAgent.toLowerCase().includes('mac');
+    const parts = storedString.split(config.joinChar);
+    
+    const displayParts = parts.map(part => {
+      const lowerPart = part.toLowerCase();
+      
+      switch (lowerPart) {
+        case 'ctrl':
+        case 'control':
+          return 'Ctrl';
+        case 'meta':
+        case 'cmd':
+        case 'win':
+        case 'os':
+          return isMac ? 'Cmd' : 'Win';
+        case 'alt':
+        case 'opt':
+        case 'option':
+          return isMac ? 'Opt' : 'Alt';
+        case 'shift':
+          return 'Shift';
+        case 'space':
+          return 'Space';
+        default:
+          return lowerPart.charAt(0).toUpperCase() + lowerPart.slice(1);
+      }
+    });
+
+    return displayParts.join(config.displayJoinChar);
+  };
 
   FluxKit.theme ??= {
     presets: {
@@ -1674,6 +2156,150 @@
     }
   };
 
+  function createCustomDialog(type, message, options = {}, resolve) {
+    const baseIsDark = FluxKit.theme.isSystemDark();
+    const baseTheme = FluxKit.theme.get(baseIsDark);
+    const theme = { ...baseTheme, ...(options.theme || {}) };
+    
+    const { 
+      title = type === 'confirm' ? 'Confirmation' : 'Input Required', 
+      confirmText = type === 'confirm' ? 'Yes' : 'Submit', 
+      cancelText = 'Cancel',
+      defaultValue = '',
+      placeholder = '',
+      rootElement = document.body
+    } = options;
+
+    const overlay = FluxKit.utils.createHTMLElement('div', {
+      className: 'flxkit-dialog-overlay',
+      style: 'position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 2147483647; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); opacity: 0; transition: opacity 0.2s ease;'
+    });
+
+    const modal = FluxKit.utils.createHTMLElement('div', {
+      className: 'flxkit-dialog-modal',
+      style: `background: var(--un-bg, ${theme.bg}); color: var(--un-text, ${theme.text}); font-family: var(--un-font, system-ui); width: 400px; max-width: 90vw; border-radius: 12px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); border: 1px solid var(--un-border-subtle, rgba(128,128,128,0.2)); transform: scale(0.95); transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);`
+    });
+
+    const header = FluxKit.utils.createHTMLElement('h3', { 
+      textContent: title, 
+      style: 'margin: 0 0 12px 0; font-size: 18px; font-weight: 600;' 
+    });
+
+    const bodyText = FluxKit.utils.createHTMLElement('p', { 
+      innerHTML: FluxKit.utils.safeHTML(message), 
+      style: 'margin: 0 0 20px 0; font-size: 14px; opacity: 0.9; line-height: 1.5;' 
+    });
+
+    let inputEl = null;
+    if (type === 'prompt') {
+      inputEl = FluxKit.utils.createHTMLElement('input', {
+        type: 'text',
+        value: defaultValue,
+        placeholder: placeholder,
+        style: `width: 100%; padding: 8px 12px; margin-bottom: 20px; box-sizing: border-box; background: var(--un-input-bg, ${theme.inputBg}); color: var(--un-text, ${theme.text}); border: 1px solid var(--un-accent-bg, ${theme.accentBg}); border-radius: 6px; font-family: inherit; font-size: 14px; outline: none;`
+      });
+      
+      inputEl.addEventListener('focus', () => inputEl.style.boxShadow = `0 0 0 2px var(--un-accent-b3, ${theme.accentBg}80)`);
+      inputEl.addEventListener('blur', () => inputEl.style.boxShadow = 'none');
+    }
+
+    const actions = FluxKit.utils.createHTMLElement('div', {
+      style: 'display: flex; justify-content: flex-end; gap: 10px;'
+    });
+
+    let isResolved = false; 
+
+    const closeDialog = (returnValue) => {
+      if (isResolved) return;
+      isResolved = true;
+      ['keydown', 'keyup', 'keypress'].forEach(evt => 
+        window.removeEventListener(evt, handleGlobalKeys, { capture: true })
+      );
+      overlay.style.opacity = '0';
+      modal.style.transform = 'scale(0.95)';
+      setTimeout(() => overlay.remove(), 200);
+      resolve(returnValue);
+    };
+
+    if (cancelText !== null) {
+      const btnCancel = FluxKit.utils.createHTMLElement('button', {
+        textContent: cancelText,
+        style: `padding: 6px 16px; border-radius: 6px; font-family: inherit; font-size: 14px; cursor: pointer; background: transparent; color: var(--un-text, ${theme.text}); border: 1px solid var(--un-border-subtle, rgba(128,128,128,0.3)); transition: all 0.2s ease;`,
+        eventListener: { click: () => closeDialog(type === 'prompt' ? null : false) }
+      });
+      btnCancel.addEventListener('mouseenter', () => btnCancel.style.background = 'var(--un-icon-hover-bg, rgba(128,128,128,0.1))');
+      btnCancel.addEventListener('mouseleave', () => btnCancel.style.background = 'transparent');
+      actions.appendChild(btnCancel);
+    }
+
+    const btnConfirm = FluxKit.utils.createHTMLElement('button', {
+      textContent: confirmText,
+      style: `padding: 6px 16px; border-radius: 6px; font-family: inherit; font-size: 14px; cursor: pointer; background: var(--un-accent-bg, ${theme.accentBg}); color: var(--un-btn-text, #fff); border: none; transition: all 0.2s ease; font-weight: 500;`,
+      eventListener: { click: () => closeDialog(type === 'prompt' ? inputEl.value : true) }
+    });
+    btnConfirm.addEventListener('mouseenter', () => btnConfirm.style.filter = 'brightness(1.1)');
+    btnConfirm.addEventListener('mouseleave', () => btnConfirm.style.filter = 'brightness(1)');
+    actions.appendChild(btnConfirm);
+
+    const handleGlobalKeys = (e) => {
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+
+      if (e.type === 'keydown') {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          closeDialog(type === 'prompt' ? null : false);
+        } else if (e.key === 'Enter') {
+          if (e.target && e.target.tagName === 'BUTTON') return;
+          
+          e.preventDefault();
+          closeDialog(type === 'prompt' ? inputEl.value : true);
+        }
+      }
+    };
+
+    ['keydown', 'keyup', 'keypress'].forEach(evt => 
+      window.addEventListener(evt, handleGlobalKeys, { capture: true })
+    );
+
+    modal.appendChild(header);
+    modal.appendChild(bodyText);
+    if (inputEl) modal.appendChild(inputEl);
+    modal.appendChild(actions);
+    overlay.appendChild(modal);
+    
+    rootElement.appendChild(overlay);
+
+    requestAnimationFrame(() => {
+      overlay.style.opacity = '1';
+      modal.style.transform = 'scale(1)';
+      if (inputEl) {
+          inputEl.focus();
+          inputEl.select();
+      } else {
+          btnConfirm.focus();
+      }
+    });
+  }
+
+  FluxKit.ui.confirm ??= (message, options = {}) => {
+    return new Promise(resolve => {
+      createCustomDialog('confirm', message, options, resolve);
+    });
+  };
+
+  FluxKit.ui.prompt ??= (message, options = {}) => {
+    return new Promise(resolve => {
+      createCustomDialog('prompt', message, options, resolve);
+    });
+  };
+
+  FluxKit.ui.alert ??= (message, options = {}) => {
+    return new Promise(resolve => {
+      createCustomDialog('confirm', message, { ...options, cancelText: null }, resolve);
+    });
+  };
+
   if (!FluxKit.ui.initNotification) {
     const notifRegistry = new Map();
     const injectedRoots = new WeakSet();
@@ -1968,8 +2594,9 @@
       }
     };
 
-    FluxKit.ui.createContextMenu = (x, y, options, width = 160, overrides = {}) => {
+    FluxKit.ui.createContextMenu = (x, y, options, overrides = {}) => {
       const namespace = overrides.namespace || 'default';
+      const width = overrides.width || 160;
 
       let activeConfig = ctxMenuRegistry.get(namespace) || {
         rootElement: document.body, fontFamily: 'system-ui, sans-serif', autoDark: true
@@ -2017,7 +2644,7 @@
         opacity: '0',
         transform: 'translateY(-4px) scale(0.96)',
         transition: 'opacity 0.15s ease, transform 0.15s ease',
-        zIndex: '999999',
+        zIndex: '2147483647',
         visibility: 'hidden',
         outline: 'none'
       });
@@ -2210,7 +2837,10 @@
 
     FluxKit.ui.initTooltips = function(config = {}) {
       const currentRoot = config.rootElement || document;
-      const targetAttr = config.attribute || 'data-tooltip';
+
+      let targetAttr = config.attribute ? FluxKit.utils.toKebabCase(config.attribute) : 'data-tooltip';
+      if (!targetAttr.startsWith('data-')) targetAttr = `data-${targetAttr}`;
+      if (!targetAttr.endsWith('-tooltip')) targetAttr = `${targetAttr}-tooltip`;
 
       let rootConfigs = initializedRoots.get(currentRoot);
       if (!rootConfigs) {
@@ -2220,7 +2850,7 @@
 
       if (rootConfigs.has(targetAttr)) {
         const existingConfig = rootConfigs.get(targetAttr);
-        Object.assign(existingConfig, config);
+        Object.assign(existingConfig, { ...config, attribute: targetAttr });
         return;
       }
 
@@ -2228,14 +2858,14 @@
         rootElement: document.body,
         fontFamily: 'system-ui, sans-serif',
         delay: 400,
-        attribute: 'data-tooltip',
         autoDark: true,
-        ...config
+        ...config,
+        attribute: targetAttr,
       };
 
       rootConfigs.set(targetAttr, instanceConfig);
 
-      const attrDelay = `${instanceConfig.attribute}-delay`;
+      const attrDelay = `data-tooltip-delay`;
       const attrInteractive = `data-tooltip-interactive`;
 
       const tooltipHTML = `
@@ -2565,6 +3195,7 @@
           border: activeConfig.border || theme.border,
           borderSubtle: activeConfig.borderSubtle || theme.separator,
           headerBg: activeConfig.headerBg || theme.accentBg,
+          headerText: FluxKit.theme.ensureContrast(activeConfig.headerBg || theme.accentBg, activeConfig.btnTextColor || theme.btnTextColor, '#ffffff'),
           btnHoverBg: activeConfig.btnHoverBg || theme.btnHoverBg,
           boxShadow: activeConfig.boxShadow || theme.boxShadow,
           accentText: activeConfig.accentText || (isDark ? '#60a5fa' : '#2563eb')
@@ -2598,7 +3229,7 @@
             }
             .flxkit-viewer-header {
               display: flex; justify-content: space-between; align-items: center; gap: 16px;
-              padding: 12px 16px; background: var(--fluxkit-header-bg); color: var(--fluxkit-accent-text);
+              padding: 12px 16px; background: var(--fluxkit-header-bg); color: var(--fluxkit-header-text);
               border-bottom: 1px solid var(--fluxkit-border-subtle);
             }
             .image-mode .flxkit-viewer-header {
@@ -2609,7 +3240,7 @@
             .flxkit-viewer-header .flxkit-icon-action-btn {
               width: 28px; height: 28px; border-radius: 50%; font-size: 12px;
               display: flex; align-items: center; justify-content: center;
-              background: transparent; color: var(--fluxkit-accent-text); opacity: 0.8;
+              background: transparent; color: var(--fluxkit-header-text); opacity: 0.8;
               border: none; cursor: pointer; transition: all 0.2s ease;
             }
             .flxkit-viewer-header .flxkit-icon-action-btn:hover {
@@ -2786,6 +3417,7 @@
         backdrop.style.setProperty('--fluxkit-border', renderTheme.border);
         backdrop.style.setProperty('--fluxkit-border-subtle', renderTheme.borderSubtle);
         backdrop.style.setProperty('--fluxkit-header-bg', renderTheme.headerBg);
+        backdrop.style.setProperty('--fluxkit-header-text', renderTheme.headerText);
         backdrop.style.setProperty('--fluxkit-btn-hover-bg', renderTheme.btnHoverBg);
         backdrop.style.setProperty('--fluxkit-box-shadow', renderTheme.boxShadow);
         backdrop.style.setProperty('--fluxkit-accent-text', renderTheme.accentText);
@@ -2849,6 +3481,7 @@
           backdrop.style.setProperty('--fluxkit-border', renderTheme.border);
           backdrop.style.setProperty('--fluxkit-border-subtle', renderTheme.borderSubtle);
           backdrop.style.setProperty('--fluxkit-header-bg', renderTheme.headerBg);
+          backdrop.style.setProperty('--fluxkit-header-text', renderTheme.headerText);
           backdrop.style.setProperty('--fluxkit-btn-hover-bg', renderTheme.btnHoverBg);
           backdrop.style.setProperty('--fluxkit-box-shadow', renderTheme.boxShadow);
           backdrop.style.setProperty('--fluxkit-accent-text', renderTheme.accentText);
@@ -2971,6 +3604,10 @@
             onerror: () => reject({ error: new Error('Fetch request failed') })
           });
         });
+      },
+
+      deleteFile: function(gistId, token, filename) {
+        return FluxKit.api.githubGist.uploadDataToGistFile("bulk", gistId, token, { files: { [filename]: null } }, true);
       }
     },
 
@@ -2984,7 +3621,9 @@
             headers: {
               'Authorization': `token ${token}`,
               'Accept': 'application/vnd.github.v3+json',
-              'X-GitHub-Api-Version': '2022-11-28'
+              'X-GitHub-Api-Version': '2022-11-28',
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache'
             },
             responseType: responseType === 'blob' ? 'blob' : 'text',
             onload: (res) => {
@@ -3061,7 +3700,7 @@
         const endpoint = `/repos/${owner}/${repo}/contents/${fullPath}`;
 
         // Fetch file first to get its 'sha' (GitHub requires this to update an existing file)
-        const existing = await FluxKit.api.githubRepo.request('GET', endpoint, token);
+        const existing = await FluxKit.api.githubRepo.request('GET', `${endpoint}?t=${Date.now()}`, token);
         const sha = existing ? existing.sha : undefined;
 
         // Convert payload to Base64
@@ -3071,6 +3710,20 @@
           message: `Sync ${filename}`,
           content: b64Content,
           sha: sha
+        });
+        return true;
+      },
+
+      deleteFile: async function(token, owner, repo, folderPath, filename) {
+        const fullPath = [folderPath, filename].filter(Boolean).join('/');
+        const endpoint = `/repos/${owner}/${repo}/contents/${fullPath}`;
+        
+        const existing = await FluxKit.api.githubRepo.request('GET', `${endpoint}?t=${Date.now()}`, token);
+        if (!existing || !existing.sha) return true; // File doesn't exist
+        
+        await FluxKit.api.githubRepo.request('DELETE', endpoint, token, {
+          message: `Deleted ${filename} via Flux Notes`,
+          sha: existing.sha
         });
         return true;
       }
@@ -3212,6 +3865,24 @@
             onerror: () => reject(new Error('Network error'))
           });
         });
+      },
+
+      deleteFile: function(targetUrl, username, password, filename) {
+        return new Promise((resolve, reject) => {
+          GM_xmlhttpRequest({
+            method: 'DELETE',
+            url: `${targetUrl}/${filename}`,
+            headers: { 'Authorization': 'Basic ' + btoa(`${username}:${password}`) },
+            onload: (res) => {
+              if ((res.status >= 200 && res.status < 300) || res.status === 404) {
+                resolve(true);
+              } else {
+                reject(new Error(res.status));
+              }
+            },
+            onerror: () => reject(new Error('Network error'))
+          });
+        });
       }
     },
 
@@ -3313,6 +3984,16 @@
       uploadFile: async (token, filePath, content) => {
         const argObj = { path: filePath, mode: 'overwrite', autorename: false, mute: true };
         return await FluxKit.api.dropbox.request(token, 'files/upload', true, argObj, content, 'json');
+      },
+
+      deleteFile: async (token, filePath) => {
+        try {
+          await FluxKit.api.dropbox.request(token, 'files/delete_v2', false, null, { path: filePath }, 'json');
+          return true;
+        } catch (e) {
+          if (e.status === 409 || e.status === 404) return true; // File doesn't exist
+          throw e;
+        }
       }
     },
 
@@ -3372,10 +4053,11 @@
         let url;
 
         if (cleanPath === "") {
-          url = `https://graph.microsoft.com/v1.0/me/drive/root${isContent ? '/content' : '/children'}`;
+          url = `https://graph.microsoft.com/v1.0/me/drive/root${method === 'DELETE' ? '' : (isContent ? '/content' : '/children')}`;
         } else {
           const encodedPath = cleanPath.split('/').map(encodeURIComponent).join('/');
-          url = `https://graph.microsoft.com/v1.0/me/drive/root:/${encodedPath}:${isContent ? '/content' : '/children'}`;
+          const suffix = method === 'DELETE' ? '' : (isContent ? ':/content' : ':/children');
+          url = `https://graph.microsoft.com/v1.0/me/drive/root:/${encodedPath}${suffix}`;
         }
 
         return new Promise((resolve, reject) => {
@@ -3455,6 +4137,16 @@
 
       uploadFile: async (token, filePath, content) => {
         return await FluxKit.api.onedrive.request(token, filePath, 'PUT', content, true);
+      },
+
+      deleteFile: async (token, filePath) => {
+        try {
+          await FluxKit.api.onedrive.request(token, filePath, 'DELETE');
+          return true;
+        } catch (e) {
+          if (e.status === 404) return true; // File doesn't exist
+          throw e;
+        }
       }
     }
   }
@@ -3620,6 +4312,61 @@
       _arguments: { 'callback': { Type: 'Function', Required: 'Yes', Notes: 'The logic to run safely.' } }
     },
 
+    shouldIgnoreKeystroke: {
+      _summary: 'Determines if a keyboard event should be ignored by global shortcut listeners.',
+      _description: 'Automatically pierces Shadow DOMs to find the true event target. By default, it returns true if the user is typing in an input, textarea, or contenteditable element, preventing accidental hotkey triggers while retaining support for the Escape key.',
+      _command: 'FluxKit.utils.shouldIgnoreKeystroke(event, options?)',
+      _arguments: {
+        'event': { Type: 'KeyboardEvent', Required: 'Yes', Description: 'The raw DOM keydown/keyup event.' },
+        'options': { Type: 'Object', Required: 'No', Description: 'Configuration overrides to fine-tune the bypass logic.' }
+      },
+      _config: {
+        'ignoreInputs': { Type: 'Boolean', Default: 'true', Description: 'Returns true if the target is an INPUT, TEXTAREA, or SELECT tag.' },
+        'ignoreContentEditable': { Type: 'Boolean', Default: 'true', Description: 'Returns true if the target is a rich-text element (isContentEditable).' },
+        'allowEscape': { Type: 'Boolean', Default: 'true', Description: 'Always returns false (processes key) if the key pressed is "Escape".' },
+        'allowModifiers': { Type: 'Boolean', Default: 'false', Description: 'If true, allows Ctrl/Cmd/Alt shortcuts to pass through even if the user is actively typing.' },
+        'allowedKeys': { Type: 'Array<String>', Default: '[]', Description: 'Specific keys (e.g., ["Enter", "Tab"]) that should always bypass the block.' },
+        'ignoreSelectors': { Type: 'Array<String>', Default: '[]', Description: 'Custom CSS selectors to manually block (e.g., [".CodeMirror", ".notion-editor"]).' }
+      },
+      _returns: 'Boolean (true = abort shortcut, false = safe to process)',
+      _example: "document.addEventListener('keydown', (e) => {\n  if (FluxKit.utils.shouldIgnoreKeystroke(e, { allowModifiers: true })) return;\n  \n  if (e.key === 'Escape') closeAllModals();\n});"
+    },
+
+    getShortcutFromEvent: {
+      _summary: 'Parses a KeyboardEvent into standardized, human-readable and machine-matchable strings.',
+      _description: 'Resolves browser inconsistencies (like e.key returning uppercase letters when Shift is held) and enforces strict modifier ordering (Ctrl -> Meta -> Alt -> Shift) so that complex keystrokes always evaluate to the exact same canonical string.',
+      _command: 'FluxKit.utils.getShortcutFromEvent(event, options?)',
+      _arguments: {
+        'event': { Type: 'KeyboardEvent', Required: 'Yes', Description: 'The raw DOM keydown event.' },
+        'options': { Type: 'Object', Required: 'No', Description: 'Configuration overrides.' }
+      },
+      _config: {
+        'joinChar': { Type: 'String', Default: '"+"', Description: 'Character used to join the machine-readable string.' },
+        'displayJoinChar': { Type: 'String', Default: '" + "', Description: 'Character used to join the UI display string.' },
+        'normalizeOS': { Type: 'Boolean', Default: 'false', Description: 'If true, treats Mac "Cmd" (Meta) as "Ctrl", allowing you to save a single "ctrl+f" shortcut that works natively across both OS environments.' },
+        'includeModifiers': { Type: 'Array<String>', Default: "['ctrl', 'meta', 'alt', 'shift']", Description: 'Pass a restricted array (e.g. ["meta"]) to create fuzzy-match strings that ignore other active modifiers.'},
+        'osAgnosticStorage': { Type: 'Boolean', Default: 'true', Description: 'If true, the "stored" return string will aggressively normalize to "meta" and "alt" regardless of the OS, while the "display" string preserves native terms like "Cmd" and "Opt".' }
+      },
+      _returns: 'Object { stored: String, display: String, isModifierOnly: Boolean, rawKey: String }',
+      _example: "const { stored, display } = FluxKit.utils.getShortcutFromEvent(e);\n// Output on Mac pressing Cmd+Opt+F: \n// stored: 'meta+alt+f' (Agnostic!)\n// display: 'Cmd + Opt + F' (Native!)"
+    },
+
+    formatShortcutForDisplay: {
+      _summary: 'Translates a machine-readable shortcut string back into an OS-native, human-readable UI string.',
+      _description: 'Perfect for hydrating UI settings menus. Takes an OS-agnostic string from your database (like "meta+alt+s") and automatically formats it as "Cmd + Opt + S" on Mac, or "Win + Alt + S" on Windows.',
+      _command: 'FluxKit.utils.formatShortcutForDisplay(storedString, options?)',
+      _arguments: {
+        'storedString': { Type: 'String', Required: 'Yes', Description: 'The lowercase, machine-readable string (e.g., "meta+shift+f").' },
+        'options': { Type: 'Object', Required: 'No', Description: 'Configuration overrides for string splitting/joining.' }
+      },
+      _config: {
+        'joinChar': { Type: 'String', Default: '"+"', Description: 'Character used to split the incoming machine string.' },
+        'displayJoinChar': { Type: 'String', Default: '" + "', Description: 'Character used to join the output UI display string.' }
+      },
+      _returns: 'String',
+      _example: "const uiText = FluxKit.utils.formatShortcutForDisplay('meta+alt+s');\n// Returns 'Cmd + Opt + S' on macOS\n// Returns 'Win + Alt + S' on Windows"
+    },
+
     createLogger: {
       _command: 'FluxKit.utils.createLogger(configKey, pluginKey?)', _summary: 'Instantiates an isolated, stream-based logger for a specific script.',
       _arguments: {
@@ -3631,8 +4378,8 @@
 
     createHTMLElement: {
       _command: 'FluxKit.utils.createHTMLElement(tagName, attributes?)',
-      _summary: 'Versatile DOM element creator that with deep attribute, style, and event binding support.',
-      _description: 'Provides a clean, declarative way to build complex DOM trees. Automatically handles style objects, dataset objects, safe innerHTML injection, event listeners, and custom FluxKit properties (like flxPopover or icons).',
+      _summary: 'Versatile DOM element creator with deep attribute, style, and event binding support.',
+      _description: 'Provides a clean, declarative way to build complex DOM trees. Automatically handles style objects, dataset objects, safe innerHTML injection, event listeners, and custom FluxKit properties.',
       _arguments: {
         tagName: { Type: 'String', Required: 'Yes', Notes: 'e.g., "div", "button", "span"' },
         attributes: { Type: 'Object', Required: 'No', Notes: 'Configuration dictionary for the element.' }
@@ -3644,13 +4391,23 @@
         dataset: { Type: 'Object', Description: 'Object of data attributes (keys are auto camel-cased).' },
         eventListener: { Type: 'Function | Array | Object', Description: 'Bind single click, array of events, or dictionary map.' },
         children: { Type: 'Array | HTMLElement | String', Description: 'Elements or strings to append as children.' },
-        icon: { Type: 'String', Description: 'Injects an SVG from FluxKit.ui.icons.[icon]' },
-        innerHTML: { Type: 'String', Description: 'HTML string, automatically sanitized via FluxKit.utils.safeHTML if available.' },
-        flxTitle: { Type: 'String | Object', Description: 'Alias for flxTooltip. Sets up standard tooltip attributes.' },
-        flxTooltip: { Type: 'String | Object', Description: 'Automatically binds the element to the FluxKit.ui tooltip system (sets data-tooltip).' },
-        flxPopover: { Type: 'String | Object', Description: 'Spawns an interactive tooltip that stays open when hovered or clicked (sets data-tooltip and data-tooltip-interactive="true").' }
+        icon: { Type: 'String', Description: 'Injects an SVG from FluxKit.ui.icons.[icon].' },
+        innerHTML: { Type: 'String', Description: 'HTML string, automatically sanitized via FluxKit.utils.safeHTML.' },
+        title: { Type: 'String', Description: 'Standard HTML title attribute (Native browser tooltip behavior).' },
+        '*Title': { 
+          Type: 'String | Object', 
+          Description: 'Any property ending in "Title" (e.g., flxTitle) maps to a custom tooltip (data-flx-tooltip). Standard "title" remains native.' 
+        },
+        '*Tooltip': { 
+          Type: 'String | Object', 
+          Description: 'Any property ending in "Tooltip" (e.g., flxNotes) maps to a custom tooltip (data-flx-notes-tooltip).' 
+        },
+        '*Popover': { 
+          Type: 'String | Object', 
+          Description: 'Any property ending in "Popover" (e.g., flxNotesPopover) maps to a custom popover (data-flx-notes-tooltip and data-tooltip-interactive="true").' 
+        }
       },
-      _example: `const btn = FluxKit.utils.createHTMLElement('button', {\n  class: 'primary-btn',\n  id: 'delete-btn',\n  icon: 'trash',\n  flxPopover: 'Clicking this deletes your current <b>draft</b>.',\n  children: 'Delete Data',\n  eventListener: () => delete()\n});`,
+      _example: `const btn = FluxKit.utils.createHTMLElement('button', {\n  class: 'primary-btn',\n  id: 'delete-btn',\n  icon: 'trash',\n  myCustomPopover: 'Clicking this deletes your current <b>draft</b>.',\n  children: 'Delete Data',\n  eventListener: () => delete()\n});`,
       _returns: 'HTMLElement'
     },
 
@@ -3683,21 +4440,21 @@
     },
 
     initPopupWindows: {
-      _summary: 'Activates the data-popup click interceptor on a DOM root.',
-      _description: 'Auto-initializes on `document` by default. Any anchor tag with a `data-popup` attribute will automatically be hijacked into a centered popup window. Call this manually ONLY if you are injecting UI into a custom ShadowRoot, or want specific window configuration.',
-      _command: 'FluxKit.utils.initPopupWindows(rootElement?, options?)',
+      _summary: 'Sets default options for the auto-initialized popup interceptor.',
+      _description: 'The popup interceptor runs automatically on the document and pierces Shadow DOMs. To prevent conflicts when multiple FluxKit scripts run on the same page, pass a unique `namespace` property in your options object.',
+      _command: 'FluxKit.utils.initPopupWindows(options)',
       _arguments: {
-        rootElement: { Type: 'HTMLElement', Required: 'No', Notes: 'Defaults to the main document. Pass your ShadowRoot here if your UI is encapsulated.' },
-        options: { Type: 'Object', Required: 'No', Notes: 'Global configuration overrides for this root.' },
+        options: { Type: 'Object', Required: 'No', Notes: 'Configuration overrides (e.g., namespace, width, height).' }
       },
       _config: {
+        'namespace': { Type: 'String', Default: '"default"', Description: 'A unique ID for your script (e.g., "myApp") to isolate your window configurations.' },
         'title': { Type: 'String', Default: '"FluxKit Window"' },
         'width': { Type: 'Number', Default: '560' },
         'height': { Type: 'Number', Default: '640' },
         'resizable': { Type: 'String', Default: '"yes"' },
         'scrollbars': { Type: 'String', Default: '"yes"' }
       },
-      _example: `// 1. Initialize the listener on your app's root\nFluxKit.utils.initPopupWindows(myShadowRoot);\n\n// 2. Any link created like this will now auto-popup!\nconst btn = FluxKit.utils.createHTMLElement('a', {\n  href: 'https://example.com',\n  dataset: { popup: 'My Custom Window', popupWidth: '800' },\n  textContent: 'Open Guide'\n});`
+      _example: `// 1. Initialize your specific script's configuration\nFluxKit.utils.initPopupWindows({\n  namespace: 'myAwesomeApp',\n  width: 800,\n  height: 600\n  });\n\n// 2. Tag your buttons with your namespace!\nconst btn = FluxKit.utils.createHTMLElement('button', {\n  dataset: {\n    popup: 'OAuth Flow',\n    popupUrl: 'https://auth.example.com',\n    popupNamespace: 'myAwesomeApp' // <--- Links perfectly to your config!\n  },\n  textContent: 'Login'\n});`
     },
 
     getRandomIcon: {
@@ -3709,20 +4466,51 @@
 
     makeElementDragAndResize: {
       _command: 'FluxKit.utils.makeElementDragAndResize(element, header?, options?)',
-      _summary: 'Injects advanced window-management logic (drag, resize, snap) into a DOM element.',
+      _summary: 'Transforms a DOM element into a native OS-level window with drag, resize, maximize, minimize, and close capabilities.',
       _arguments: {
-        'element': { Type: 'HTMLElement', Required: 'Yes', Notes: 'The root element to make draggable.' },
-        'header': { Type: 'HTMLElement', Required: 'No', Notes: 'The specific grab-handle. Defaults to the root element.' },
-        'options': { Type: 'Object', Required: 'No' }
+        'element': { Type: 'HTMLElement', Required: 'Yes', Notes: 'The root modal/container to make draggable.' },
+        'header': { Type: 'HTMLElement', Required: 'No', Notes: 'The specific grab-handle (title bar). Defaults to the root element.' },
+        'options': { Type: 'Object', Required: 'No', Notes: 'Configuration for bounds, features, and lifecycle hooks.' }
       },
       _config: {
-        '_description': 'Advanced constraints and event hooks.',
-        'resizable': { Type: 'Boolean', Default: 'true', Description: 'Adds a bottom-right resize handle.' },
-        'keepInViewport': { Type: 'Boolean', Default: 'true', Description: 'Prevents dragging off-screen.' },
-        'lockAspectRatio': { Type: 'Boolean', Default: 'false', Description: 'Forces proportional resizing.' },
-        'minWidth / minHeight': { Type: 'Number', Default: '160 / 90', Description: 'Minimum bounds.' },
-        'onDragStart / onDragging': { Type: 'Function', Default: 'None', Description: 'Event hooks.' }
-      }
+        '_description': 'Window management configurations and pointer event hooks.',
+        'resizable': { Type: 'Boolean', Default: 'true', Description: 'Injects a bottom-right resize handle.' },
+        'minimize': {
+          Type: 'Boolean | Object',
+          Default: 'false',
+          Description: 'Enables window-shade collapsing and injects a titlebar button. Pass `true` for defaults, or an object to customize: `{ iconRight: 16, iconTop: 6, iconSize: 24, color: "currentColor", opacity: 0.6, hoverOpacity: 1, icons: { off: <collapsed-icon>, on: <expanded-icon> }, injectButton: true }`. Defaults to `FluxKit.ui.icons.minus`/`.plus` if `icons` is omitted.'
+        },
+        'maximize': {
+          Type: 'Boolean | Object',
+          Default: 'false',
+          Description: 'Enables full-screen toggling and injects a titlebar button. Same shape as `minimize`: `{ iconRight, iconTop, iconSize, color, opacity, hoverOpacity, icons: { off, on }, injectButton }`. Defaults to `FluxKit.ui.icons.square`/`.windowRestore`.'
+        },
+        'close': {
+          Type: 'Boolean | Object',
+          Default: 'false',
+          Description: 'Injects a titlebar close button that tears down all listeners and removes (or hides) the element. Shape: `{ iconRight, iconTop, iconSize, color, opacity, hoverOpacity, icon: <close-icon>, injectButton }`. Defaults to `FluxKit.ui.icons.close`.'
+        },
+        'controlsOrder': { Type: 'Array<String>', Default: "['minimize', 'maximize', 'close']", Description: 'Left-to-right auto-layout order for injected titlebar buttons (rightmost entry sits closest to the edge). Explicit `iconRight` on any button overrides its auto-computed position.' },
+        'controlsGap': { Type: 'Number', Default: '4', Description: 'Pixel gap between auto-laid-out titlebar buttons.' },
+        'minimizeWidth': { Type: 'Number', Default: '240', Description: 'The precise pixel width the window snaps to when minimized.' },
+        'minimizeHeight': { Type: 'Number', Default: 'Inferred from drag element height', Description: 'The precise pixel height the window snaps to when minimized.' },
+        'maximizePadding': { Type: 'Number', Default: '20', Description: 'The precise pixel padding around the maximized window.' },
+        'keepInViewport': { Type: 'Boolean', Default: 'true', Description: 'Clamps movement safely inside the physical screen (respecting scrollbars).' },
+        'lockAspectRatio': { Type: 'Boolean', Default: 'false', Description: 'Forces proportional resizing based on the initial aspect ratio.' },
+        'minWidth / minHeight': { Type: 'Number', Default: '160 / 90', Description: 'The absolute smallest the window can be resized to.' },
+        'autoFocus': { Type: 'Boolean', Default: 'true', Description: 'Raises the window\'s z-index above sibling windows on pointerdown, and on creation, mimicking OS window stacking.' },
+        'dblClickMaximize': { Type: 'Boolean', Default: 'true', Description: 'Whether double-clicking the titlebar toggles maximize, independent of whether a maximize button is shown.' },
+        'closeOnEscape': { Type: 'Boolean', Default: 'false', Description: 'Closes the window when Escape is pressed while focus is inside it.' },
+        'closeRemovesElement': { Type: 'Boolean', Default: 'true', Description: 'If true, close() removes the element from the DOM. If false, it sets `display: none` instead, leaving it in place for later reuse.' },
+        'onAnyResize': { Type: 'Function', Default: 'null', Description: 'Master hook fired at the end of manual resizing, maximize/restore, and minimize/restore events.' },
+        'onMaximize / onRestore': { Type: 'Function', Default: 'null', Description: 'Fired when the window expands to full screen or shrinks back.' },
+        'onMinimize / onRestoreFromMinimize': { Type: 'Function', Default: 'null', Description: 'Fired when the window rolls up into its header or rolls back down.' },
+        'onClose': { Type: 'Function', Default: 'null', Description: 'Fired before the window closes. Return `false` to veto the close.' },
+        'onDragStart / onDragging / onDragEnd': { Type: 'Function', Default: 'null', Description: 'Real-time positioning hooks.' },
+        'onResizeStart / onResizing / onResizeEnd': { Type: 'Function', Default: 'null', Description: 'Real-time scaling hooks.' }
+      },
+      _returns: 'A `destroy` function that tears down all event listeners. It also exposes `.toggleMinimize()`, `.toggleMaximize()`, `.toggleClose()`, and `.bringToFront()` so window controls can be driven externally (e.g. from a taskbar).',
+      _example: `const cleanup = FluxKit.utils.makeElementDragAndResize(modalEl, headerEl, {\n  minimize: true,\n  maximize: true,\n  close: { onClick: null }, // or simply \`close: true\`\n  onClose: () => confirm('Discard changes?'),\n});\n\n// later, e.g. from a taskbar button:\ncleanup.toggleMinimize();\n\n// full teardown:\ncleanup();`
     },
 
     trapTabFocus: {
@@ -3746,6 +4534,19 @@
       _summary: 'Converts a kebab-case or space-separated string to camelCase.',
       _arguments: { 'str': { Type: 'String', Required: 'Yes' } },
       _returns: 'String'
+    },
+
+    compressImage: {
+      _summary: 'Smart image compression utility preserving transparency and reducing bloat.',
+      _description: 'Takes a base64 Data URL and uses a hidden canvas to resize and compress it. Automatically detects PNGs to safely convert them to WebP (maintaining the alpha channel), while flattening standard images to JPEG. Aborts compression if the output does not save enough memory.',
+      _command: 'await FluxKit.utils.compressImage(dataUrl, maxWidth, quality, minQuality)',
+      _arguments: {
+        'dataUrl': { Type: 'String', Required: 'Yes', Description: 'The raw base64 Data URL image string.' },
+        'maxWidth': { Type: 'Number', Required: 'No', Description: 'The maximum width boundary for scaling (default: 1600).' },
+        'quality': { Type: 'Number', Required: 'No', Description: 'Compression ratio from 0.0 to 1.0 (default: 0.85).' },
+        'minQuality': { Type: 'Number', Required: 'No', Description: 'Lowest allowed quality fallback (default: 0.3).' }
+      },
+      _returns: 'Promise<String> (Optimized Data URL or the original if uncompressible)'
     },
   }, { isNative: true });
 
@@ -3868,6 +4669,64 @@
       }
     },
 
+    confirm: {
+      _summary: 'An asynchronous, theme-aware alternative to window.confirm().',
+      _description: 'Generates a beautifully styled confirmation modal that resolves to a boolean without blocking the main JavaScript thread. Supports Shadow DOM injection and custom themes.',
+      _command: 'await FluxKit.ui.confirm(message, options?)',
+      _arguments: {
+        'message': { Type: 'String', Required: 'Yes', Description: 'The confirmation question or HTML string.' },
+        'options': { Type: 'Object', Required: 'No', Description: 'Configuration object to customize the dialog.' }
+      },
+      _config: {
+        'title': { Type: 'String', Default: '"Confirmation"', Description: 'The header text of the dialog.' },
+        'confirmText': { Type: 'String', Default: '"Yes"', Description: 'Text for the primary confirmation button.' },
+        'cancelText': { Type: 'String', Default: '"Cancel"', Description: 'Text for the secondary dismissal button.' },
+        'theme': { Type: 'Object', Default: 'System Default', Description: 'A custom FluxKit theme object to override the default colors.' },
+        'rootElement': { Type: 'HTMLElement', Default: 'document.body', Description: 'The DOM node where the overlay will be appended. Crucial for Shadow DOM piercing.' }
+      },
+      _returns: 'Promise<Boolean> (true if confirmed, false if cancelled or escaped)',
+      _example: "if (await FluxKit.ui.confirm('Are you sure you want to delete this note?')) {\n  deleteNote();\n}"
+    },
+
+    prompt: {
+      _summary: 'An asynchronous, theme-aware alternative to window.prompt().',
+      _description: 'Generates a beautifully styled input modal that resolves to a string without blocking the main JavaScript thread. The input auto-focuses and traps the Enter/Escape keys safely.',
+      _command: 'await FluxKit.ui.prompt(message, options?)',
+      _arguments: {
+        'message': { Type: 'String', Required: 'Yes', Description: 'The instructional prompt text or HTML string.' },
+        'options': { Type: 'Object', Required: 'No', Description: 'Configuration object to customize the dialog.' }
+      },
+      _config: {
+        'title': { Type: 'String', Default: '"Input Required"', Description: 'The header text of the dialog.' },
+        'defaultValue': { Type: 'String', Default: '""', Description: 'Pre-filled text inside the input box.' },
+        'placeholder': { Type: 'String', Default: '""', Description: 'Ghost text shown when the input is empty.' },
+        'confirmText': { Type: 'String', Default: '"Submit"', Description: 'Text for the primary submission button.' },
+        'cancelText': { Type: 'String', Default: '"Cancel"', Description: 'Text for the secondary dismissal button.' },
+        'theme': { Type: 'Object', Default: 'System Default', Description: 'A custom FluxKit theme object to override the default colors.' },
+        'rootElement': { Type: 'HTMLElement', Default: 'document.body', Description: 'The DOM node where the overlay will be appended.' }
+      },
+      _returns: 'Promise<String | null> (The input string, or null if cancelled/escaped)',
+      _example: "const tagName = await FluxKit.ui.prompt('Enter a new tag:', { placeholder: 'e.g., Important' });\nif (tagName) addTag(tagName);"
+    },
+
+    alert: {
+      _summary: 'An asynchronous, theme-aware alternative to window.alert().',
+      _description: 'Generates a beautifully styled alert modal that halts the user workflow until acknowledged. Under the hood, this is the `confirm` dialog with the cancel button forcefully hidden.',
+      _command: 'await FluxKit.ui.alert(message, options?)',
+      _arguments: {
+        'message': { Type: 'String', Required: 'Yes', Description: 'The alert message or HTML string.' },
+        'options': { Type: 'Object', Required: 'No', Description: 'Configuration object to customize the dialog.' }
+      },
+      _config: {
+        'title': { Type: 'String', Default: '"Confirmation"', Description: 'The header text of the dialog.' },
+        'confirmText': { Type: 'String', Default: '"Yes"', Description: 'Text for the primary acknowledgment button.' },
+        'theme': { Type: 'Object', Default: 'System Default', Description: 'A custom FluxKit theme object to override the default colors.' },
+        'rootElement': { Type: 'HTMLElement', Default: 'document.body', Description: 'The DOM node where the overlay will be appended.' }
+      },
+      _returns: 'Promise<Boolean> (true when acknowledged, false if escaped)',
+      _example: "await FluxKit.ui.alert('Database sync complete!', { title: 'Success', confirmText: 'Awesome' });"
+    },
+
     initNotification: { _command: 'FluxKit.ui.initNotification(config?)', _summary: 'Pre-configure the global toast notification system.',
       _config: { _description: 'Sets the baseline styling and behavior for all future toasts. Features a dynamic deck that expands and pauses timers when hovered.',
         namespace: { Type: 'String', Default: '"default"', Description: 'Supports multiple isolated configurations.' },
@@ -3905,19 +4764,18 @@
       },
     },
 
-    createContextMenu: { _command: 'FluxKit.ui.createContextMenu(x, y, options, width?, overrides?)', _summary: 'Spawns an interactive, keyboard-navigable context menu.',
+    createContextMenu: { _command: 'FluxKit.ui.createContextMenu(x, y, options, overrides?)', _summary: 'Spawns an interactive, keyboard-navigable context menu.',
       _arguments: {
         x: { Type: 'Number', Required: 'Yes', Notes: 'Viewport X coordinate (e.clientX)' },
         y: { Type: 'Number', Required: 'Yes', Notes: 'Viewport Y coordinate (e.clientY)' },
         options: { Type: 'Array<Object>', Required: 'Yes', Notes: 'Array of {label, action, icon, disabled, separator, title}' },
-        width: { Type: 'Number', Required: 'No', Notes: 'Minimum width in px (default 160).' },
       },
       _example: `FluxKit.ui.createContextMenu(e.clientX, e.clientY, [\n  { label: 'Copy', action: () => copyData(), icon: '📋' },\n  { separator: true },\n  { label: 'Delete', action: () => deleteData(), disabled: true }\n]);`,
     },
 
     initTooltips: { _command: 'FluxKit.ui.initTooltips(config?)', _summary: 'Initializes an auto-anchoring tooltip system for [data-tooltip] elements.',
       _config: { _description: 'Configures the attribute to watch and global tooltip delay.',
-        attribute: { Type: 'String', Default: '"data-tooltip"', Description: 'DOM attribute to watch.' },
+        attribute: { Type: 'String', Default: '"data-tooltip"', Description: 'Flexible DOM attribute to watch. Automatically formats to ensure the "data-" prefix and "-tooltip" suffix (e.g., passing "flx" safely resolves to watch for "data-flx-tooltip").' },
         delay: { Type: 'Number', Default: '400', Description: 'Hover delay in ms before showing.' },
         autoDark: { Type: 'Boolean', Default: 'true', Description: 'Match system/site theme.' },
       },
@@ -4018,6 +4876,18 @@
           'token': { Type: 'String', Required: 'No', Notes: 'Required if the Gist is private.' }
         },
         _returns: 'Promise<Object> (Parsed Gist data)'
+      },
+
+      deleteFile: {
+        _command: 'FluxKit.api.githubGist.deleteFile(gistId, token, filename)',
+        _summary: 'Deletes a specific file from a Gist.',
+        _description: 'Performs a bulk PATCH request setting the target file content to null.',
+        _arguments: {
+          'gistId': { Type: 'String', Required: 'Yes' },
+          'token': { Type: 'String', Required: 'Yes' },
+          'filename': { Type: 'String', Required: 'Yes' }
+        },
+        _returns: 'Promise<Object> (API Response)'
       }
     },
 
@@ -4058,6 +4928,20 @@
           'folderPath': { Type: 'String', Required: 'Yes', Notes: 'e.g., "data/saves"' },
           'filename': { Type: 'String', Required: 'Yes' },
           'content': { Type: 'String | Blob | Object', Required: 'Yes', Notes: 'Auto-converted to Base64.' }
+        },
+        _returns: 'Promise<Boolean>'
+      },
+
+      deleteFile: {
+        _command: 'FluxKit.api.githubRepo.deleteFile(token, owner, repo, folderPath, filename)',
+        _summary: 'Deletes a file from a repository.',
+        _description: 'Automatically handles fetching the previous SHA file hash required by GitHub for deletion.',
+        _arguments: {
+          'token': { Type: 'String', Required: 'Yes' },
+          'owner': { Type: 'String', Required: 'Yes' },
+          'repo': { Type: 'String', Required: 'Yes' },
+          'folderPath': { Type: 'String', Required: 'Yes', Notes: 'Leave empty for root.' },
+          'filename': { Type: 'String', Required: 'Yes' }
         },
         _returns: 'Promise<Boolean>'
       }
@@ -4102,6 +4986,18 @@
           'content': { Type: 'String | Blob | Object', Required: 'Yes' }
         },
         _returns: 'Promise<Boolean>'
+      },
+
+      deleteFile: {
+        _command: 'FluxKit.api.webdav.deleteFile(targetUrl, username, password, filename)',
+        _summary: 'Deletes a file from the WebDAV server.',
+        _arguments: {
+          'targetUrl': { Type: 'String', Required: 'Yes', Notes: 'Base WebDAV directory URL.' },
+          'username': { Type: 'String', Required: 'Yes' },
+          'password': { Type: 'String', Required: 'Yes' },
+          'filename': { Type: 'String', Required: 'Yes' }
+        },
+        _returns: 'Promise<Boolean>'
       }
     },
 
@@ -4129,6 +5025,16 @@
           'content': { Type: 'String | Blob | Object', Required: 'Yes' }
         },
         _returns: 'Promise<Object> (Dropbox file metadata)'
+      },
+
+      deleteFile: {
+        _command: 'FluxKit.api.dropbox.deleteFile(token, filePath)',
+        _summary: 'Deletes a file at a specific Dropbox path.',
+        _arguments: {
+          'token': { Type: 'String', Required: 'Yes', Notes: 'OAuth2 Access Token.' },
+          'filePath': { Type: 'String', Required: 'Yes', Notes: 'Absolute path (e.g., "/Apps/FluxKit/data.json").' }
+        },
+        _returns: 'Promise<Boolean>'
       }
     },
 
@@ -4156,6 +5062,16 @@
           'content': { Type: 'String | Blob | Object', Required: 'Yes' }
         },
         _returns: 'Promise<Object> (DriveItem metadata)'
+      },
+
+      deleteFile: {
+        _command: 'FluxKit.api.onedrive.deleteFile(token, filePath)',
+        _summary: 'Deletes a file in OneDrive.',
+        _arguments: {
+          'token': { Type: 'String', Required: 'Yes' },
+          'filePath': { Type: 'String', Required: 'Yes', Notes: 'Path relative to the App Folder root.' }
+        },
+        _returns: 'Promise<Boolean>'
       }
     }
   }, { isNative: true });
