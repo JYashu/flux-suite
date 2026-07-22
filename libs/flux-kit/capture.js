@@ -943,7 +943,7 @@
   FluxKit.capture.speech ??= (function () {
     'use strict';
 
-    let currentAudio = null, audioQueue = [], isPlaying = false;
+    let audioCtx = null, currentSource = null, audioQueue = [], isPlaying = false;
 
     function chunkText(text, maxLength = 150) {
       const sentences = text.match(/[^.!?,\n]+[.!?,\n]*/g) || [text];
@@ -982,12 +982,12 @@
       return chunks.filter(Boolean);
     }
 
-    function fetchAudioBlob(url) {
+    function fetchAudioArrayBuffer(url) {
       return new Promise((resolve, reject) => {
         GM_xmlhttpRequest({
-          method: 'GET', url: url, responseType: 'blob', anonymous: true,
+          method: 'GET', url: url, responseType: 'arraybuffer', anonymous: true,
           onload: res => {
-            if (res.status === 200) resolve(URL.createObjectURL(res.response));
+            if (res.status === 200) resolve(res.response);
             else reject(new Error(`HTTP ${res.status}`));
           },
           onerror: () => reject(new Error('Network Error')),
@@ -1003,26 +1003,30 @@
       const target = audioQueue.shift();
 
       try {
-        let localUrl = target;
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') await audioCtx.resume();
 
-        if (target.includes('translate.google.com')) {
-          localUrl = await fetchAudioBlob(target);
+        let arrayBuffer;
+        if (target.startsWith('http')) {
+          arrayBuffer = await fetchAudioArrayBuffer(target);
+        } else {
+          throw new Error('Invalid audio target URL');
         }
 
-        currentAudio = new Audio(localUrl);
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
 
-        currentAudio.onended = () => {
-          if (localUrl.startsWith('blob:')) URL.revokeObjectURL(localUrl);
+        currentSource = audioCtx.createBufferSource();
+        currentSource.buffer = audioBuffer;
+        currentSource.connect(audioCtx.destination);
+
+        currentSource.onended = () => {
+          currentSource.disconnect();
+          currentSource = null;
           playNextInQueue();
         };
 
-        currentAudio.onerror = () => {
-          console.warn('[FluxTranslate] Audio chunk failed to play.');
-          if (localUrl.startsWith('blob:')) URL.revokeObjectURL(localUrl);
-          playNextInQueue();
-        };
+        currentSource.start(0);
 
-        await currentAudio.play();
       } catch (e) {
         console.warn('[FluxTranslate] Failed to fetch or play TTS chunk:', e);
         playNextInQueue();
@@ -1050,11 +1054,12 @@
     }
 
     function stop() {
-      audioQueue = []; isPlaying = false;
-      if (currentAudio) {
-        currentAudio.pause();
-        currentAudio.load(); // used .load() instead of removing the src to prevent Firefox NS_BINDING_ABORTED network panics
-        currentAudio = null;
+      audioQueue = []; 
+      isPlaying = false;
+      if (currentSource) {
+        try { currentSource.stop(); } catch(e) {}
+        currentSource.disconnect();
+        currentSource = null;
       }
     }
 

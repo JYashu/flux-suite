@@ -47,6 +47,28 @@
 
   SANDBOX.FluxKit = SANDBOX.FluxKit || {};
 
+  let ttPolicy = {
+    createHTML: (string) => string,
+    createScriptURL: (url) => url,
+    createScript: (script) => script
+  };
+
+  if (window.isSecureContext && window.trustedTypes && window.trustedTypes.createPolicy) {
+    try {
+      ttPolicy = window.trustedTypes.createPolicy('default', ttPolicy);
+    } catch (e1) {
+      try {
+        ttPolicy = window.trustedTypes.createPolicy('flxkit-policy', ttPolicy);
+      } catch (e) {
+        console.warn('[FluxKit] TrustedTypes policy restricted by CSP, using default passthrough.');
+      }
+    }
+  }
+
+  function safeHTML(html) {
+    return ttPolicy.createHTML(html || '');
+  }
+
   const emojiMap = { dolphin:'🐬', sloth:'🦥', mammoth:'🦣', elephant:'🐘', ladybug:'🐞', bat:'🦇', llama:'🦙', swan:'🦢', eagle:'🦅', snail:'🐌', butterfly:'🦋', flamingo:'🦩', whale:'🐋', orca:'🐳', seal:'🦭', octopus:'🐙', sauropod:'🦕', shell:'🐚', jellyfish:'🪼', dodo:'🦤', web:'🕸️', spider:'🕷️', cat:'𓃠', fish:'𓆡', turtle:'𓆉', moai:'🗿', alien:'👾', kiss:'💋', genie:'🧞‍♂️', gear:'⚙' };
 
   const ICON = `
@@ -149,48 +171,34 @@
     span.style.justifyContent = "center";
     
     if (options.size) span.style.fontSize = typeof options.size === "number" ? `${options.size}px` : options.size;
-    
     if (options.color) span.style.color = options.color;
-    
     if (options.class) span.className = typeof options.class === "object" ? options.class.join(" ") : options.class;
-    
     if (options.style && typeof options.style === "object") Object.assign(span.style, options.style);
 
-    if (iconSource instanceof Node) span.appendChild(iconSource.cloneNode(true));
+    let staticContent = ""; 
+
+    if (iconSource instanceof Node) {
+      span.appendChild(iconSource.cloneNode(true));
+      staticContent = iconSource.outerHTML || iconSource.textContent || "";
+    } 
     else if (typeof iconSource === "string") {
       const svgString = FluxKit.ui.icons[iconSource] || iconSource;
-      span.innerHTML = typeof safeHTML === "function" ? safeHTML(svgString) : svgString;
+      span.innerHTML = safeHTML(svgString);
+      staticContent = svgString; 
     } 
-    else console.warn(`[FluxKit] getIcon received an invalid iconSource:`, iconSource);
+    else {
+      console.warn(`[FluxKit] getIcon received an invalid iconSource:`, iconSource);
+    }
 
     span.toString = function() {
-      return this.outerHTML;
+      const css = this.style.cssText ? ` style="${this.style.cssText}"` : '';
+      const cls = this.className ? ` class="${this.className}"` : '';
+      
+      return `<span${css}${cls}>${staticContent}</span>`;
     };
 
     return span;
   };
-
-  let ttPolicy = {
-    createHTML: (string) => string,
-    createScriptURL: (url) => url,
-    createScript: (script) => script
-  };
-
-  if (window.isSecureContext && window.trustedTypes && window.trustedTypes.createPolicy) {
-    try {
-      ttPolicy = window.trustedTypes.createPolicy('default', ttPolicy);
-    } catch (e1) {
-      try {
-        ttPolicy = window.trustedTypes.createPolicy('flxkit-policy', ttPolicy);
-      } catch (e) {
-        console.warn('[FluxKit] TrustedTypes policy restricted by CSP, using default passthrough.');
-      }
-    }
-  }
-
-  function safeHTML(html) {
-    return ttPolicy.createHTML(html || '');
-  }
 
   FluxKit.ttPolicy ??= ttPolicy;
   FluxKit.utils.safeHTML ??= safeHTML;
@@ -200,51 +208,63 @@
    * for innerHTML assignments.
    */
   FluxKit.utils.withTTPatched ??= (callback) => {
-    if (!window.trustedTypes) return callback();
+    if (!window.trustedTypes || typeof FluxKit.ttPolicy === 'undefined' || !FluxKit.ttPolicy) return callback();
 
-    const sinks = [
-      { proto: Element.prototype, prop: 'innerHTML' },
-      { proto: Element.prototype, prop: 'outerHTML' },
-      { proto: Element.prototype, prop: 'insertAdjacentHTML', isMethod: true }
-    ];
+    const targets = ['innerHTML', 'outerHTML', 'insertAdjacentHTML'];
+    const originals = [];
 
-    const originals = {};
+    targets.forEach(prop => {
+      try {
+        let curr = document.createElement('div'), desc = null, targetProto = null;
 
-    sinks.forEach(({ proto, prop, isMethod }) => {
-      if (isMethod) {
-        originals[prop] = proto[prop];
-        proto[prop] = function(position, text) {
-          const safeText = typeof text === 'string' ? ttPolicy.createHTML(text) : text;
-          return originals[prop].call(this, position, safeText);
-        };
-      } else {
-        const descriptor = Object.getOwnPropertyDescriptor(proto, prop);
-        if (descriptor) {
-          originals[prop] = descriptor.set;
-          Object.defineProperty(proto, prop, {
-            set: function(val) {
-              const safeVal = typeof val === 'string' ? ttPolicy.createHTML(val) : val;
-              originals[prop].call(this, safeVal);
+        while (curr) {
+          desc = Object.getOwnPropertyDescriptor(curr, prop);
+          if (desc) {
+            targetProto = curr;
+            break;
+          }
+          curr = Object.getPrototypeOf(curr);
+        }
+
+        if (!desc || !targetProto) return;
+
+        originals.push({ proto: targetProto, prop, desc });
+
+        if (typeof desc.value === 'function') { // It's a Method (like insertAdjacentHTML)
+          Object.defineProperty(targetProto, prop, {
+            value: function(position, text) {
+              const safeText = typeof text === 'string' ? FluxKit.ttPolicy.createHTML(text) : text;
+              return desc.value.call(this, position, safeText);
             },
-            configurable: true
+            configurable: true,
+            writable: true,
+            enumerable: desc.enumerable
+          });
+        } else if (desc.set) { // It's an Accessor (like innerHTML)
+          Object.defineProperty(targetProto, prop, {
+            get: desc.get, 
+            set: function(val) {
+              const safeVal = typeof val === 'string' ? FluxKit.ttPolicy.createHTML(val) : val;
+              desc.set.call(this, safeVal);
+            },
+            configurable: true,
+            enumerable: desc.enumerable
           });
         }
+      } catch (e) {
+        // Graceful fallback if the site aggressively freezes objects
+        console.warn(`[FluxKit] Could not TT-patch ${prop}:`, e.message);
       }
     });
 
     try {
       return callback();
     } finally {
-      // Restore everything
-      sinks.forEach(({ proto, prop, isMethod }) => {
-        if (isMethod) {
-          proto[prop] = originals[prop];
-        } else if (originals[prop]) {
-          Object.defineProperty(proto, prop, {
-            set: originals[prop],
-            configurable: true
-          });
-        }
+      // Restore the exact descriptors to their rightful owners in the prototype chain
+      originals.forEach(({ proto, prop, desc }) => {
+        try {
+          Object.defineProperty(proto, prop, desc);
+        } catch (e) {}
       });
     }
   };
@@ -813,11 +833,29 @@
         el.prepend(iconEl);
       }
     }
+
     el.toString = function() {
-      return this.outerHTML;
+      let attrsString = '';
+      for (let i = 0; i < this.attributes.length; i++) {
+        const attr = this.attributes[i];
+        if ((attr.name === 'style' && !this.style.cssText) || (attr.name === 'class' && !this.className)) {
+          continue;
+        }
+        attrsString += ` ${attr.name}="${attr.value}"`;
+      }
+      
+      const voidElements = ['area','base','br','col','embed','hr','img','input','link','meta','source','track','wbr'];
+      const tagLower = tagName.toLowerCase();
+      
+      if (voidElements.includes(tagLower)) {
+        return `<${tagLower}${attrsString}>`;
+      }
+      
+      return `<${tagLower}${attrsString}>${this.innerHTML}</${tagLower}>`;
     };
+
     return el;
-  }
+  };
 
   FluxKit.utils.createSVGElement ??= (tagName, attributes = {}) => {
     const SVG_NS = "http://www.w3.org/2000/svg";
