@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FluxKit Core
 // @namespace    https://github.com/JYashu
-// @version      1.1.0
+// @version      1.2.0
 // @description  A high-performance UI toolkit.
 // @author       JYashu
 // @license      Apache-2.0
@@ -73,6 +73,7 @@
     close: `<svg ${ICON}><path d="M18 6L6 18M6 6l12 12" /></svg>`,
     code: `<svg ${ICON}><path d="M7 18l-5-6 5-6M17 18l5-6-5-6M10 19l4-14" /></svg>`,
     columns: `<svg ${ICON}><path d="M 12 3 V 21 M 15 3 H 19 A 2 2 0 0 1 21 5 V 19 A 2 2 0 0 1 19 21 H 5 A 2 2 0 0 1 3 19 V 5 A 2 2 0 0 1 5 3 H 9" /></svg>`,
+    copy: `<svg ${ICON}><rect x="5" y="7" width="10" height="14" rx="2" ry="2"/><path d="M 10 3 H 17 A 2 2 0 0 1 19 5 V 15"/></svg>`,
     crop: `<svg ${ICON}><path d="M6.13 1L6 16a2 2 0 0 0 2 2h15"></path><path d="M1 6.13L16 6a2 2 0 0 1 2 2v15"></path></svg>`,
     document: `<svg ${ICON}><path d="M 14 5 V 8 H 19 L 14 3 H 7 A 2 2 0 0 0 5 5 V 19 A 2 2 0 0 0 7 21 H 17 A 2 2 0 0 0 19 19 V 11" /></svg>`,
     documentText: `<svg ${ICON}><path d="M 14 5 V 8 H 19 L 14 3 H 7 A 2 2 0 0 0 5 5 V 19 A 2 2 0 0 0 7 21 H 17 A 2 2 0 0 0 19 19 V 11 M 9 9 H 12 M 9 13 H 15 M 9 17 H 15" /></svg>`,
@@ -122,9 +123,13 @@
     scribble: `<svg ${ICON}><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>`,
     search: `<svg ${ICON}><path d="M 21 21 L 18 18 C 15 15 13 17 10 17 A 7 7 0 1 1 16.5 13" /></svg>`,
     settings: `<svg ${ICON}><path stroke-width="1.5" d="M 9.87 4.04 A 2.75 2.75 0 0 1 14.13 4.04 A 2.75 2.75 0 0 0 17.83 6.17 A 2.75 2.75 0 0 1 19.96 9.87 A 2.75 2.75 0 0 0 19.96 14.13 A 2.75 2.75 0 0 1 17.83 17.83 A 2.75 2.75 0 0 0 14.13 19.96 A 2.75 2.75 0 0 1 9.87 19.96 A 2.75 2.75 0 0 0 6.17 17.83 A 2.75 2.75 0 0 1 4.04 14.13 A 2.75 2.75 0 0 0 4.04 9.87 A 2.75 2.75 0 0 1 6.17 6.17 M 12 9.25 a 2.75 2.75 0 1 0 0 5.5 a 2.75 2.75 0 1 0 0 -5.5" /></svg>`,
+    speaker: `<svg ${ICON}><path d="M 14 6 A 1 1 0 0 0 13 5 L 8 9 H 5 A 2 2 0 0 0 3 11 V 13 A 2 2 0 0 0 5 15 H 8 L 13 19 A 1 1 0 0 0 14 18 M 17 9 A 5 5 0 0 1 17 15 M 20 6 A 10 10 0 0 1 20 18"/></svg>`,
+    speakerLow: `<svg ${ICON}><path d="M 14 6 A 1 1 0 0 0 13 5 L 8 9 H 5 A 2 2 0 0 0 3 11 V 13 A 2 2 0 0 0 5 15 H 8 L 13 19 A 1 1 0 0 0 14 18 M 17 9 A 5 5 0 0 1 17 15"/></svg>`,
+    speakerMute: `<svg ${ICON}><path d="M 14 6 A 1 1 0 0 0 13 5 L 8 9 H 5 A 2 2 0 0 0 3 11 V 13 A 2 2 0 0 0 5 15 H 8 L 13 19 A 1 1 0 0 0 14 18 M 17 10 l 4 4 m 0 -4 l -4 4"/></svg>`,
     square: `<svg ${ICON}><rect x="3" y="3" width="18" height="18" rx="2" /></svg>`,
     strikethrough: `<svg ${ICON}><path d="M16 4H9a3 3 0 0 0-2.83 4"/><path d="M14 12a4 4 0 0 1 0 8H6"/><line x1="4" y1="12" x2="20" y2="12"/></svg>`,
     success: `<svg ${ICON}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4L12 14.01 9 11.01" /></svg>`,
+    swap: `<svg ${ICON}><path d="M 8 17 A 5 5 0 0 1 3 12 A 5 5 0 0 1 8 7 H 13 M 9 3 L 13 7 L 9 11 M 16 7 A 5 5 0 0 1 21 12 A 5 5 0 0 1 16 17 H 11 M 15 21 L 11 17 L 15 13"/></svg>`,
     sync: `<svg ${ICON}><path d="M21 4v6h-6m6 0-2.6-2.6a9 9 0 0 0-14.9 1.6M3 20v-6h6m-6 0 2.6 2.6a9 9 0 0 0 14.9-1.6" /></svg>`,
     table: `<svg ${ICON}><path d="M 17 21 H 5 A 2 2 0 0 1 3 19 V 5 A 2 2 0 0 1 5 3 H 19 A 2 2 0 0 1 21 5 V 17 M 9 3 V 21 M 3 9 H 21 M 3 15 H 21"/></svg>`,
     textCaret: `<svg ${ICON}><path d="M10 4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2" /><path d="M14 4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2" /></svg>`,
@@ -135,6 +140,35 @@
     windowRestore: `<svg ${ICON}><rect x="3" y="9" width="12" height="12" rx="2" ry="2"></rect><path d="M9 3h10a2 2 0 0 1 2 2v10"></path></svg>`,
     zap: `<svg ${ICON}><polygon points="10 3 18 3 14 12 19 12 8 21 11 12 6 12" /></svg>`,
   }
+
+  FluxKit.ui.getIcon ??= (iconSource, options = {}) => {
+    const span = document.createElement("span");
+
+    span.style.display = "inline-flex";
+    span.style.alignItems = "center";
+    span.style.justifyContent = "center";
+    
+    if (options.size) span.style.fontSize = typeof options.size === "number" ? `${options.size}px` : options.size;
+    
+    if (options.color) span.style.color = options.color;
+    
+    if (options.class) span.className = typeof options.class === "object" ? options.class.join(" ") : options.class;
+    
+    if (options.style && typeof options.style === "object") Object.assign(span.style, options.style);
+
+    if (iconSource instanceof Node) span.appendChild(iconSource.cloneNode(true));
+    else if (typeof iconSource === "string") {
+      const svgString = FluxKit.ui.icons[iconSource] || iconSource;
+      span.innerHTML = typeof safeHTML === "function" ? safeHTML(svgString) : svgString;
+    } 
+    else console.warn(`[FluxKit] getIcon received an invalid iconSource:`, iconSource);
+
+    span.toString = function() {
+      return this.outerHTML;
+    };
+
+    return span;
+  };
 
   let ttPolicy = {
     createHTML: (string) => string,
@@ -666,7 +700,9 @@
   FluxKit.utils.createHTMLElement ??= (tagName, attributes = {}) => {
     const el = document.createElement(tagName);
 
-    for (const [key, value] of Object.entries(attributes)) {
+    const { icon, iconProps, children, ...rest } = attributes;
+
+    for (const [key, value] of Object.entries(rest)) {
       if (value === undefined) continue;
 
       switch (key) {
@@ -708,7 +744,8 @@
           break;
 
         case "class":
-          if (typeof value === "string") el.className = value;
+        case "className":
+          el.className = typeof value === "object" ? value.join(" ") : value;
           break;
 
         case "eventListener":
@@ -720,23 +757,6 @@
             for (const [type, fn] of Object.entries(value)) {
               el.addEventListener(type, fn);
             }
-          }
-          break;
-
-        case "children":
-          (Array.isArray(value) ? value : [value])
-            .forEach(child => el.appendChild(
-              typeof child === "string" ? document.createTextNode(child) : child
-            ));
-          break;
-
-        case "icon":
-          if (typeof value === "string") {
-            const iconSpan = document.createElement("span");
-            iconSpan.style.display = "flex";
-            const rawIcon = FluxKit.ui.icons[value] || "";
-            iconSpan.innerHTML = safeHTML(rawIcon);
-            el.appendChild(iconSpan);
           }
           break;
 
@@ -777,6 +797,25 @@
           }
       }
     }
+
+    if (children) {
+      (Array.isArray(children) ? children : [children]).forEach(child => {
+        if (child) el.appendChild(typeof child === "string" ? document.createTextNode(child) : child);
+      });
+    }
+
+    if (icon) {
+      const { iconPosition = 'left', ...restProps } = iconProps || {};
+      const iconEl = FluxKit.ui.getIcon(icon, restProps || {});
+      if (iconPosition === 'right') {
+        el.appendChild(iconEl);
+      } else {
+        el.prepend(iconEl);
+      }
+    }
+    el.toString = function() {
+      return this.outerHTML;
+    };
     return el;
   }
 
@@ -931,7 +970,7 @@
       minWidth: 160, minHeight: 90, initWidth: null, initHeight: null, maxWidth: Infinity, maxHeight: Infinity, lockAspectRatio: false, aspectRatio: null,
       noDragSelector: 'button, input, select, textarea, a, [role="button"], [role="link"], [contenteditable="true"], [data-no-drag]',
       minimize: false, minimizeWidth: 240, maximizePadding: 20, maximize: false, close: false,
-      controlsOrder: ['minimize', 'maximize', 'close'], controlsGap: 4, autoFocus: true, focusZIndex: 100, 
+      controlsOrder: ['minimize', 'maximize', 'close'], controlsGap: 4, autoFocus: false, focusZIndex: 100, 
       dblClickMaximize: true, closeOnEscape: false, closeRemovesElement: true,
       onMinimize: null, onRestoreFromMinimize: null, onMaximize: null, onRestore: null, onClose: null,
       onDragStart: null, onDragging: null, onDragEnd: null, onResizeStart: null, onResizing: null, onResizeEnd: null,
@@ -940,6 +979,10 @@
     };
     const ctrl = new AbortController();
     const { signal } = ctrl;
+
+    const getViewportW = () => document.documentElement.clientWidth;
+    const getViewportH = () => document.documentElement.clientHeight;
+    const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
 
     if (!getComputedStyle(element).position || getComputedStyle(element).position === 'static') element.style.position = 'fixed';
 
@@ -958,6 +1001,11 @@
         const rect = element.getBoundingClientRect();
         let left = opt.initLeft != null ? opt.initLeft : rect.left;
         let top = opt.initTop != null ? opt.initTop : rect.top;
+
+        if (opt.keepInViewport) {
+          left = clamp(left, 0, Math.max(0, getViewportW() - rect.width));
+          top = clamp(top, 0, Math.max(0, getViewportH() - rect.height));
+        }
 
         element.style.left = `${Math.round(left)}px`;
         element.style.top = `${Math.round(top)}px`;
@@ -980,21 +1028,62 @@
     let resizer = null;
 
     const getAspect = () => opt.aspectRatio || (startW / startH) || 1;
-    const getViewportW = () => document.documentElement.clientWidth;
-    const getViewportH = () => document.documentElement.clientHeight;
-    const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
 
     FluxKit.utils._flxnTopZ ??= opt.focusZIndex;
     const bringToFront = () => {
       if (!opt.autoFocus) return;
+
+      const currentZ = parseInt(getComputedStyle(element).zIndex, 10) || 0;
+      const maxZ = 2147483647;
+
+      if (currentZ > FluxKit.utils._flxnTopZ) {
+        FluxKit.utils._flxnTopZ = currentZ;
+      }
+
+      if (FluxKit.utils._flxnTopZ >= maxZ) {
+        FluxKit.utils._flxnTopZ = maxZ;
+        element.style.zIndex = String(maxZ);
+        return;
+      }
+
       element.style.zIndex = String(++FluxKit.utils._flxnTopZ);
     };
     element.addEventListener('pointerdown', bringToFront, { capture: true, signal });
     bringToFront();
 
+    if (opt.keepInViewport && typeof ResizeObserver !== 'undefined') {
+      const resizeObserver = new ResizeObserver(() => {
+        if (dragging || resizing || isMaximized) return;
+
+        const rect = element.getBoundingClientRect();
+        const currentLeft = parseFloat(element.style.left) || rect.left;
+        const currentTop = parseFloat(element.style.top) || rect.top;
+        
+        const maxLeft = Math.max(0, getViewportW() - rect.width);
+        const maxTop = Math.max(0, getViewportH() - rect.height);
+        
+        let newLeft = clamp(currentLeft, 0, maxLeft);
+        let newTop = clamp(currentTop, 0, maxTop);
+
+        if (newLeft !== currentLeft || newTop !== currentTop) {
+          element.style.transition = 'left 0.2s ease, top 0.2s ease';
+          element.style.left = `${Math.round(newLeft)}px`;
+          element.style.top = `${Math.round(newTop)}px`;
+          
+          setTimeout(() => {
+            if (!dragging && !resizing) element.style.transition = '';
+          }, 200);
+        }
+      });
+      setTimeout(() => resizeObserver.observe(element), 100);
+      ctrl.signal.addEventListener('abort', () => resizeObserver.disconnect());
+    }
+
     const onPointerDownDrag = (e) => {
       if (isMaximized || (e.button != null && e.button !== 0)) return;
-      if (e.target.closest(opt.noDragSelector)) return;
+
+      const target = e.composedPath && e.composedPath().length > 0 ? e.composedPath()[0] : e.target;
+      if (target.closest && target.closest(opt.noDragSelector)) return;
 
       const rect = element.getBoundingClientRect();
       startX = e.clientX;
@@ -1346,7 +1435,7 @@
           `<span style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;transition:transform .3s ease;">${iconHTML}</span>`
         );
         const tip = active ? (tooltipOn ?? tooltipOff) : tooltipOff;
-        if (tip) { btn.dataset.tooltip = tip; btn.setAttribute('aria-label', tip); }
+        if (tip) { btn.dataset.flxTooltip = tip; btn.setAttribute('aria-label', tip); }
       };
       btn._setIcon(false);
 
@@ -1408,7 +1497,9 @@
     [dragElement, resizer].forEach(el => {
       if (!el) return;
       el.addEventListener('dblclick', (e) => {
-        if (e.target.closest(opt.noDragSelector)) return;
+        const target = e.composedPath && e.composedPath().length > 0 ? e.composedPath()[0] : e.target;        
+        if (target.closest && target.closest(opt.noDragSelector)) return;
+
         if (isMinimized) toggleMinimize(e);
         else if (opt.dblClickMaximize) toggleMaximize(e);
       }, { signal });
@@ -1636,6 +1727,7 @@
     const config = {
       joinChar: '+',
       displayJoinChar: ' + ',
+      normalizeOS: false,
       ...options
     };
 
@@ -1648,7 +1740,7 @@
       switch (lowerPart) {
         case 'ctrl':
         case 'control':
-          return 'Ctrl';
+          return (config.normalizeOS && isMac) ? 'Cmd' : 'Ctrl'; 
         case 'meta':
         case 'cmd':
         case 'win':
@@ -2128,12 +2220,13 @@
         });
       }
 
-      btnTextColor = FluxKit.theme.ensureContrast(accentBg, btnTextColor, '#ffffff');
-      accentText = FluxKit.theme.ensureContrast(
-        resolvedIsDark ? '#1e1e1e' : '#ffffff',
-        accentText,
-        basePreset.accentText
-      );
+      if (FluxKit.theme.getContrastYIQ(siteBg) === FluxKit.theme.getContrastYIQ(accentBg)) {
+        accentBg = basePreset.accentBg;
+        btnTextColor = basePreset.btnTextColor;
+      }
+
+      btnTextColor = FluxKit.theme.ensureContrast(accentBg, btnTextColor, basePreset.btnTextColor);
+      accentText = FluxKit.theme.ensureContrast(siteBg, accentText, basePreset.accentText);
       siteText = FluxKit.theme.ensureContrast(siteBg, siteText, basePreset.text);
 
       const dynamicBorder = FluxKit.theme.createAlphaColor(siteText, 0.12);
@@ -2501,7 +2594,7 @@
 
       const text = FluxKit.utils.createHTMLElement('div', { innerHTML: safeHTML(message), style: { flexGrow: '1', display: 'flex', alignItems: 'center', gap: '8px'} });
 
-      if (icon) text.prepend(FluxKit.utils.createHTMLElement('span', { style: 'display:flex;align-items:center;', innerHTML: safeHTML(icon) }));
+      if (icon) text.prepend(FluxKit.utils.createHTMLElement('span', { style: 'display:flex;align-items:center;', icon: icon }));
 
       const rightWrapper = FluxKit.utils.createHTMLElement('div', { style: { display: 'flex', alignItems: 'center', gap: '12px' } });
 
@@ -2669,7 +2762,7 @@
 
         if (opt.disabled) item.dataset.disabled = 'true';
         if (opt.title) {
-          item.dataset.tooltip = opt.title;
+          item.dataset.flxTooltip = opt.title;
           item.title = opt.title;
         }
 
@@ -2838,7 +2931,7 @@
     FluxKit.ui.initTooltips = function(config = {}) {
       const currentRoot = config.rootElement || document;
 
-      let targetAttr = config.attribute ? FluxKit.utils.toKebabCase(config.attribute) : 'data-tooltip';
+      let targetAttr = config.attribute ? FluxKit.utils.toKebabCase(config.attribute) : 'data-flx-tooltip';
       if (!targetAttr.startsWith('data-')) targetAttr = `data-${targetAttr}`;
       if (!targetAttr.endsWith('-tooltip')) targetAttr = `${targetAttr}-tooltip`;
 
@@ -2865,8 +2958,8 @@
 
       rootConfigs.set(targetAttr, instanceConfig);
 
-      const attrDelay = `data-tooltip-delay`;
-      const attrInteractive = `data-tooltip-interactive`;
+      const attrDelay = `data-flx-tooltip-delay`;
+      const attrInteractive = `data-flx-tooltip-interactive`;
 
       const tooltipHTML = `
         <div class="flxkit-tooltip-box" style="
@@ -2914,9 +3007,18 @@
         style: 'position: fixed; pointer-events: none; z-index: 2147483647; opacity: 0; transition: opacity 0.15s ease, transform 0.15s ease; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.15));'
        });
 
-      const targetContainer = currentRoot.nodeType === Node.DOCUMENT_NODE
-        ? (document.body || document.documentElement)
-        : currentRoot;
+      let topLayerHost = document.getElementById('flx-tooltip-layer');
+      if (!topLayerHost) {
+        topLayerHost = document.createElement('div');
+        topLayerHost.id = 'flx-tooltip-layer';
+        // Forcefully neutralize the browser's default Popover UI styles
+        topLayerHost.style.cssText = 'position: fixed; top: 0; left: 0; width: 0; height: 0; padding: 0; margin: 0; border: none; background: transparent; overflow: visible; pointer-events: none; z-index: 2147483647;';
+        if ('popover' in topLayerHost) topLayerHost.popover = 'manual';
+        (document.body || document.documentElement).appendChild(topLayerHost);
+        topLayerHost.attachShadow({ mode: 'open' });
+        if (topLayerHost.showPopover) topLayerHost.showPopover();
+      }
+      const targetContainer = topLayerHost.shadowRoot;
 
       if (targetContainer) targetContainer.appendChild(tooltipEl);
 
@@ -2930,6 +3032,16 @@
       currentRoot.addEventListener('mouseover', (e) => {
         const target = e.target.closest(`[${instanceConfig.attribute}]`);
         if (!target) return;
+
+        const hostParent = topLayerHost.parentElement;
+        if (hostParent && hostParent.lastElementChild !== topLayerHost) {
+          hostParent.appendChild(topLayerHost); 
+          
+          if (topLayerHost.hidePopover && topLayerHost.showPopover) {
+            topLayerHost.hidePopover();
+            topLayerHost.showPopover();
+          }
+        }
 
         if (tooltipEl.parentNode !== targetContainer) {
           targetContainer.appendChild(tooltipEl);
@@ -3094,7 +3206,7 @@
     const viewerRegistry = new Map();
     const injectedRoots = new WeakSet();
 
-    let customIcons = { close: '✖', download: '⬇️', file: '📄', code: '&lt;/&gt;' };
+    let customIcons = { close: 'close', download: 'import', file: 'document', code: 'code' };
     let customRenderers = {};
     let extensionMap = {
       image: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp'],
@@ -3138,15 +3250,18 @@
     customRenderers['html'] = secureHtmlRenderer;
     customRenderers['htm'] = secureHtmlRenderer;
 
-    document.addEventListener('keydown', (e) => {
+    window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         const openViewers = document.querySelectorAll('.flxkit-viewer-backdrop');
         if (openViewers.length > 0) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          e._fluxHandled = true;
           const topmost = openViewers[openViewers.length - 1];
-          if (topmost._destroy) topmost._destroy();
+          if (topmost._destroy) topmost._destroy('escape');
         }
       }
-    }, true);
+    }, { capture: true });
 
     return {
       init: function(config = {}) {
@@ -3267,9 +3382,17 @@
               background: var(--fluxkit-input-bg); color: var(--fluxkit-text);
               padding: 16px; border-radius: 4px; border: 1px solid var(--fluxkit-border-subtle);
             }
+            .flxkit-image-render-wrapper {
+              width: 100%; height: 100%; overflow: auto;
+              display: flex; align-items: flex-start; justify-content: flex-start; 
+              box-sizing: border-box;
+            }
+            .image-mode .flxkit-image-render-wrapper {
+              padding: 80px 80px 0px 80px; 
+            }
             .flxkit-viewer-content .flxkit-image-render {
-              max-width: 90vw; max-height: 90vh; object-fit: contain; border-radius: 4px;
-              box-shadow: 0 4px 30px rgba(0,0,0,0.4);
+              flex-shrink: 0; max-width: 100%; height: auto; width: fit-content; margin: auto;
+              border-radius: 4px; box-shadow: 0 4px 30px rgba(0,0,0,0.4); display: block; object-fit: scale-down;
             }
             .flxkit-viewer-content audio {
               background: var(--fluxkit-input-bg); padding: 20px; border-radius: 50px;
@@ -3301,8 +3424,9 @@
         let isDestroyed = false;
         let backdrop = null;
 
-        const closeViewer = () => {
+        const closeViewer = (onCloseParams) => {
           if (isDestroyed) return;
+          if (activeConfig.onClose) activeConfig.onClose(onCloseParams);
           isDestroyed = true;
           if (!backdrop) return;
           backdrop.classList.remove('active');
@@ -3324,6 +3448,21 @@
         const headerActions = FluxKit.utils.createHTMLElement('div', {
           style: 'display: flex; gap: 12px; align-items: center;'
         });
+
+        if (activeConfig.customActions && Array.isArray(activeConfig.customActions)) {
+          activeConfig.customActions.forEach(action => {
+            headerActions.appendChild(FluxKit.utils.createHTMLElement('button', {
+              class: 'flxkit-icon-action-btn', icon: action.icon, style: { color: action.iconColor || '#fff' },
+              dataset: { [FluxKit.utils.toCamelCase(`flxkvw-${namespace}-tooltip`)]: action.tooltip },
+              eventListener: { click: () => action.onClick(closeViewer, renderUrl) }
+            }));
+          });
+        }
+
+        if (!activeConfig.hideDefaultActions) {
+          headerActions.appendChild(FluxKit.utils.createHTMLElement('button', { class: 'flxkit-icon-action-btn', icon: customIcons.download, dataset: { [FluxKit.utils.toCamelCase(`flxkvw-${namespace}-tooltip`)]:'Download' }, eventListener: () => downloadFile(filename, fileData) }));
+          headerActions.appendChild(FluxKit.utils.createHTMLElement('button', { class: 'flxkit-icon-action-btn', icon: customIcons.close, dataset: { [FluxKit.utils.toCamelCase(`flxkvw-${namespace}-tooltip`)]:'Close' }, eventListener: closeViewer }));
+        }
 
         if (customRenderers[ext]) {
           contentElement = FluxKit.utils.createHTMLElement('div', {
@@ -3355,18 +3494,22 @@
           });
 
           if (category === 'text') {
-            headerActions.appendChild(FluxKit.utils.createHTMLElement('button', {
-              class: 'flxkit-icon-action-btn',
-              innerHTML: customIcons.code,
+            headerActions.insertBefore(FluxKit.utils.createHTMLElement('button', {
+              class: 'flxkit-icon-action-btn', icon: customIcons.code,
               dataset: { [FluxKit.utils.toCamelCase(`flxkvw-${namespace}-tooltip`)]: 'Toggle Source' },
               eventListener: () => { isRawMode = !isRawMode; renderCurrentView(); }
-            }));
+            }), headerActions.firstChild);
           }
         }
         else if (category === 'image') {
-          contentElement = FluxKit.utils.createHTMLElement('img', {
-            class: 'flxkit-image-render', src: renderUrl, decoding: 'async',
-            eventListener: { click: (e) => { e.stopPropagation(); if (e.metaKey || e.ctrlKey) window.open(renderUrl, '_blank'); } }
+          contentElement = FluxKit.utils.createHTMLElement('div', {
+            class: 'flxkit-image-render-wrapper',
+            children: [
+              FluxKit.utils.createHTMLElement('img', {
+                class: 'flxkit-image-render', src: renderUrl, decoding: 'async',
+                eventListener: { click: (e) => { e.stopPropagation(); if (e.metaKey || e.ctrlKey) window.open(renderUrl, '_blank'); } }
+              })
+            ]
           });
         }
         else if (category === 'pdf') { contentElement = FluxKit.utils.createHTMLElement('iframe', { src: renderUrl, style: 'width: 100%; height: 100%; border: none; background: #fff; border-radius: 4px;' }); }
@@ -3380,14 +3523,11 @@
           contentElement = FluxKit.utils.createHTMLElement('div', {
             style: 'display: flex; flex-direction: column; align-items: center; gap: 16px; opacity: 0.8;',
             children: [
-              FluxKit.utils.createHTMLElement('div', { innerHTML: customIcons.file, style: 'font-size: 48px;' }),
+              FluxKit.utils.createHTMLElement('div', { icon: customIcons.file, style: 'font-size: 48px;' }),
               FluxKit.utils.createHTMLElement('div', { textContent: 'No preview available for this file format.' })
             ]
           });
         }
-
-        headerActions.appendChild(FluxKit.utils.createHTMLElement('button', { class: 'flxkit-icon-action-btn', innerHTML: customIcons.download, dataset: { [FluxKit.utils.toCamelCase(`flxkvw-${namespace}-tooltip`)]:'Download' }, eventListener: () => downloadFile(filename, fileData) }));
-        headerActions.appendChild(FluxKit.utils.createHTMLElement('button', { class: 'flxkit-icon-action-btn', innerHTML: customIcons.close, dataset: { [FluxKit.utils.toCamelCase(`flxkvw-${namespace}-tooltip`)]:'Close' }, eventListener: closeViewer }));
 
         backdrop = FluxKit.utils.createHTMLElement('div', {
           class: `flxkit-viewer-backdrop ${category === 'image' && !customRenderers[ext] ? 'image-mode' : ''}`,
@@ -3492,6 +3632,96 @@
   })();
 
   FluxKit.api ??= {
+    translate: {
+      fetch: function (text, targetLang = 'en', sourceLang = 'auto') {
+        return new Promise((resolve, reject) => {
+          const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sourceLang}&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
+
+          GM_xmlhttpRequest({
+            method: 'GET', url: url,
+            onload: res => {
+              if (res.status === 200) {
+                try {
+                  const data = JSON.parse(res.responseText);
+
+                  // data[0] is an array of translated segments.
+                  // data[2] is the detected source language (e.g., "es", "hi").
+                  let translatedText = '';
+                  if (data[0] && Array.isArray(data[0])) {
+                    data[0].forEach(segment => { if (segment[0]) translatedText += segment[0]; });
+                  }
+
+                  resolve({
+                    original: text, translated: translatedText,
+                    detectedLanguage: data[2] || sourceLang, raw: data,
+                  });
+                } catch (e) {
+                  reject(new Error('Failed to parse translation response'));
+                }
+              } else {
+                reject(new Error(`Translation API error: ${res.status}`));
+              }
+            },
+            onerror: () => reject(new Error('Network error during translation')),
+          });
+        });
+      },
+    },
+
+    dictionary: {
+      fetch: function (word, lang = 'en') {
+        return new Promise((resolve, reject) => {
+          const url = `https://api.dictionaryapi.dev/api/v2/entries/${lang}/${encodeURIComponent(word)}`;
+
+          GM_xmlhttpRequest({
+            method: 'GET', url: url,
+            onload: res => {
+              if (res.status === 200) {
+                try {
+                  const data = JSON.parse(res.responseText);
+                  resolve(data[0]); // API returns an array of entries, grab the best match from that
+                } catch (e) {
+                  reject(new Error('Failed to parse dictionary response'));
+                }
+              } else if (res.status === 404) {
+                // 404 is a valid state here (it just means the word isn't in the dictionary)
+                resolve(null);
+              } else {
+                reject(new Error(`Dictionary API error: ${res.status}`));
+              }
+            },
+            onerror: () =>
+              reject(new Error('Network error during dictionary lookup')),
+          });
+        });
+      },
+    },
+
+    thesaurus: {
+      fetch: function (word, mode = 'syn', max = 10) {
+        return new Promise(resolve => {
+          const url = `https://api.datamuse.com/words?rel_${mode}=${encodeURIComponent(word)}&max=${max}`;
+
+          GM_xmlhttpRequest({
+            method: 'GET', url: url,
+            onload: res => {
+              if (res.status === 200) {
+                try {
+                  const data = JSON.parse(res.responseText);
+                  resolve(data.map(item => item.word));
+                } catch (e) {
+                  resolve([]); // Non-critical failure
+                }
+              } else {
+                resolve([]);
+              }
+            },
+            onerror: () => resolve([]), // Fail gracefully so it doesn't crash the main UI
+          });
+        });
+      },
+    },
+    
     githubGist: {
       verifyCredentials: function(token) {
         return new Promise((resolve) => {
@@ -4214,6 +4444,165 @@
     };
   })()
 
+  FluxKit.cache = (function () {
+    const subscribers = new Map();
+
+    const StorageEngines = {
+      memory: () => {
+        const store = new Map();
+        return {
+          async get(k) { return store.get(k); },
+          async set(k, v) { store.set(k, v); },
+          async del(k) { store.delete(k); },
+          async clear() { store.clear(); },
+          async keys() { return Array.from(store.keys()); },
+          async size() { return store.size; },
+          async entries() { return Array.from(store.entries()); },
+        };
+      },
+      localstorage: ns => {
+        const prefix = `flx_c_${ns}_`;
+        return {
+          async get(k) { const v = localStorage.getItem(prefix + k); return v ? JSON.parse(v) : undefined; },
+          async set(k, v) { localStorage.setItem(prefix + k, JSON.stringify(v)); },
+          async del(k) { localStorage.removeItem(prefix + k); },
+          async clear() { Object.keys(localStorage).forEach(k => { if (k.startsWith(prefix)) localStorage.removeItem(k); }); },
+          async keys() { return Object.keys(localStorage).filter(k => k.startsWith(prefix)).map(k => k.replace(prefix, '')); },
+          async size() { return (await this.keys()).length; },
+          async entries() {
+            return Object.keys(localStorage)
+              .filter(k => k.startsWith(prefix))
+              .map(k => [ k.replace(prefix, ''), JSON.parse(localStorage.getItem(k)) ]);
+          },
+        };
+      },
+      indexeddb: ns => {
+        const dbName = `FluxKit_DB_${ns}`;
+        const storeName = 'cacheStore';
+        const init = () =>
+          new Promise((resolve, reject) => {
+            const req = indexedDB.open(dbName, 1);
+            req.onupgradeneeded = e => { e.target.result.createObjectStore(storeName); };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+          });
+        const op = async (type, cb) => {
+          const db = await init();
+          return new Promise((resolve, reject) => {
+            const tx = db.transaction(storeName, type);
+            const req = cb(tx.objectStore(storeName));
+            tx.oncomplete = () => { db.close(); resolve(req ? req.result : undefined); };
+            tx.onerror = () => { db.close(); reject(tx.error); };
+          });
+        };
+        return {
+          async get(k) { return op('readonly', store => store.get(k)); },
+          async set(k, v) { return op('readwrite', store => store.put(v, k)); },
+          async del(k) { return op('readwrite', store => store.delete(k)); },
+          async clear() { return op('readwrite', store => store.clear()); },
+          async keys() { return op('readonly', store => store.getAllKeys()); },
+          async size() { return op('readonly', store => store.count()); },
+          async entries() { 
+            const keys = await op('readonly', store => store.getAllKeys());
+            const values = await op('readonly', store => store.getAll());
+            return keys.map((k, i) => [k, values[i]]); },
+        };
+      },
+    };
+    
+    class CacheSubscribers {
+      constructor(namespace, config = {}) {
+        this.ns = namespace;
+        this.engineType = (config.storage || 'memory').toLowerCase();
+        this.engine = (StorageEngines[this.engineType] || StorageEngines.memory)(namespace);
+        this.policy = (config.policy || 'lru').toLowerCase(); // 'lru', 'lfu', 'ttl', 'none'
+        this.maxSize = config.maxSize || Infinity;
+        this.defaultTTL = config.ttl || null; // in ms
+        this.bc = config.broadcast ? new BroadcastChannel(`flx_c_${namespace}`) : null;
+
+        if (this.bc) {
+          this.bc.onmessage = (e) => {
+            if (e.data.action === 'del') this.engine.del(e.data.key);
+            if (e.data.action === 'clear') this.clear(e.data.keepPinned, false);
+          };
+        }
+      }
+
+      async _evict() {
+        if (this.policy === 'none' || this.policy === 'ttl') return; // TTL handles itself on 'get'
+        const size = await this.engine.size();
+        if (size <= this.maxSize) return;
+
+        const entries = await this.engine.entries();
+        let keyToEvict = null;
+
+        if (this.policy === 'lru') {
+          let oldest = Infinity;
+          for (const [k, v] of entries) { if (v.meta.pinned) continue; if (v.meta.lastUsed < oldest) { oldest = v.meta.lastUsed; keyToEvict = k; } }
+        } else if (this.policy === 'lfu') {
+          let least = Infinity;
+          for (const [k, v] of entries) { if (v.meta.pinned) continue; if (v.meta.count < least) { least = v.meta.count; keyToEvict = k; } }
+        }
+
+        if (keyToEvict) await this.delete(keyToEvict, false);
+      }
+
+      async get(key) {
+        const wrapper = await this.engine.get(key);
+        if (!wrapper) return undefined;
+
+        if (!wrapper.meta.pinned && wrapper.meta.expiry && Date.now() > wrapper.meta.expiry) {
+          await this.delete(key, true);
+          return undefined;
+        }
+
+        // Update Metadata for LRU/LFU Tracking
+        wrapper.meta.count = (wrapper.meta.count || 0) + 1;
+        wrapper.meta.lastUsed = Date.now();
+        this.engine.set(key, wrapper).catch(() => {}); 
+        
+        return wrapper.payload;
+      }
+
+      async set(key, payload, options = {}) {
+        const customTTL = typeof options === 'number' ? options : options.ttl;
+        const pinned = typeof options === 'object' && options.pinned ? true : false;
+        const ttl = customTTL !== undefined && customTTL !== null ? customTTL : this.defaultTTL;
+        const expiry = ttl ? Date.now() + ttl : null;
+
+        const wrapper = { payload, meta: { count: 1, lastUsed: Date.now(), expiry, pinned } };
+
+        await this.engine.set(key, wrapper);
+        await this._evict();
+      }
+
+      async delete(key, broadcast = true) {
+        await this.engine.del(key);
+        if (this.bc && broadcast) this.bc.postMessage({ action: 'del', key });
+      }
+
+      async clear(keepPinned = false, broadcast = true) {
+        if (keepPinned) {
+          const entries = await this.engine.entries();
+          for (const [k, v] of entries) { if (!v.meta.pinned) await this.engine.del(k); }
+        } else {
+          await this.engine.clear();
+        }
+        if (this.bc && broadcast) this.bc.postMessage({ action: 'clear', keepPinned });
+      }
+    }
+    return {
+      register: function(namespace, config = {}) {
+          if (subscribers.has(namespace)) return subscribers.get(namespace);
+          const subscriber = new CacheSubscribers(namespace, config);
+          subscribers.set(namespace, subscriber);
+          return subscriber;
+      },
+      get: (namespace) => subscribers.get(namespace),
+      registerEngine: (name, factoryFn) => { StorageEngines[name.toLowerCase()] = factoryFn; }
+    };
+  })();
+
   FluxKit.help.register('core', {
     _description: 'Global toolkit methods and sandbox interactions.',
 
@@ -4357,14 +4746,15 @@
       _command: 'FluxKit.utils.formatShortcutForDisplay(storedString, options?)',
       _arguments: {
         'storedString': { Type: 'String', Required: 'Yes', Description: 'The lowercase, machine-readable string (e.g., "meta+shift+f").' },
-        'options': { Type: 'Object', Required: 'No', Description: 'Configuration overrides for string splitting/joining.' }
+        'options': { Type: 'Object', Required: 'No', Description: 'Configuration overrides for string splitting/joining and OS normalization.' }
       },
       _config: {
         'joinChar': { Type: 'String', Default: '"+"', Description: 'Character used to split the incoming machine string.' },
-        'displayJoinChar': { Type: 'String', Default: '" + "', Description: 'Character used to join the output UI display string.' }
+        'displayJoinChar': { Type: 'String', Default: '" + "', Description: 'Character used to join the output UI display string.' },
+        'normalizeOS': { Type: 'Boolean', Default: 'false', Description: 'If true, safely reverses the cross-platform normalizeOS mapping, displaying "ctrl" as "Cmd" for macOS users.' }
       },
       _returns: 'String',
-      _example: "const uiText = FluxKit.utils.formatShortcutForDisplay('meta+alt+s');\n// Returns 'Cmd + Opt + S' on macOS\n// Returns 'Win + Alt + S' on Windows"
+      _example: "const uiText = FluxKit.utils.formatShortcutForDisplay('ctrl+s', { normalizeOS: true });\n// Returns 'Cmd + S' on macOS\n// Returns 'Ctrl + S' on Windows"
     },
 
     createLogger: {
@@ -4378,8 +4768,8 @@
 
     createHTMLElement: {
       _command: 'FluxKit.utils.createHTMLElement(tagName, attributes?)',
-      _summary: 'Versatile DOM element creator with deep attribute, style, and event binding support.',
-      _description: 'Provides a clean, declarative way to build complex DOM trees. Automatically handles style objects, dataset objects, safe innerHTML injection, event listeners, and custom FluxKit properties.',
+      _summary: 'Versatile DOM element creator with deep attribute, style, event binding, and deterministic layout support.',
+      _description: 'Provides a purely declarative way to build complex DOM trees. Automatically handles safe innerHTML injection and custom FluxKit properties. Ensures a mathematically safe mounting order: [Left Icon] -> [innerHTML text] -> [Children] -> [Right Icon].',
       _arguments: {
         tagName: { Type: 'String', Required: 'Yes', Notes: 'e.g., "div", "button", "span"' },
         attributes: { Type: 'Object', Required: 'No', Notes: 'Configuration dictionary for the element.' }
@@ -4387,12 +4777,13 @@
       _config: {
         _description: 'Special properties supported inside the attributes object.',
         style: { Type: 'String | Object', Description: 'CSS string or object (e.g., { display: "flex" }).' },
-        class: { Type: 'String', Description: 'Shorthand for className. Applies CSS classes to the element.' },
+        class: { Type: 'String | Array', Description: 'Shorthand for className. Applies CSS classes to the element.' },
         dataset: { Type: 'Object', Description: 'Object of data attributes (keys are auto camel-cased).' },
         eventListener: { Type: 'Function | Array | Object', Description: 'Bind single click, array of events, or dictionary map.' },
-        children: { Type: 'Array | HTMLElement | String', Description: 'Elements or strings to append as children.' },
-        icon: { Type: 'String', Description: 'Injects an SVG from FluxKit.ui.icons.[icon].' },
-        innerHTML: { Type: 'String', Description: 'HTML string, automatically sanitized via FluxKit.utils.safeHTML.' },
+        children: { Type: 'Array | HTMLElement | String', Description: 'Elements or strings to safely append as children (renders sequentially after innerHTML text).' },
+        icon: { Type: 'String | Node', Description: 'Injects an SVG from FluxKit.ui.icons, a raw HTML/SVG string, or a live DOM Node.' },
+        iconProps: { Type: 'Object', Description: 'Configuration object passed to FluxKit.ui.getIcon. Accepts a special `iconPosition: "left" | "right"` property (defaults to "left") to dictate layout.' },
+        innerHTML: { Type: 'String', Description: 'HTML string, automatically sanitized via safeHTML and mounted before children.' },
         title: { Type: 'String', Description: 'Standard HTML title attribute (Native browser tooltip behavior).' },
         '*Title': { 
           Type: 'String | Object', 
@@ -4404,10 +4795,10 @@
         },
         '*Popover': { 
           Type: 'String | Object', 
-          Description: 'Any property ending in "Popover" (e.g., flxNotesPopover) maps to a custom popover (data-flx-notes-tooltip and data-tooltip-interactive="true").' 
+          Description: 'Any property ending in "Popover" (e.g., flxNotesPopover) maps to a custom interactive popover.' 
         }
       },
-      _example: `const btn = FluxKit.utils.createHTMLElement('button', {\n  class: 'primary-btn',\n  id: 'delete-btn',\n  icon: 'trash',\n  myCustomPopover: 'Clicking this deletes your current <b>draft</b>.',\n  children: 'Delete Data',\n  eventListener: () => delete()\n});`,
+      _example: `const btn = FluxKit.utils.createHTMLElement('button', {\n  class: 'primary-btn',\n  icon: 'chevron',\n  iconProps: { color: '#ffffff', size: 18, iconPosition: 'right' },\n  innerHTML: 'Proceed to Checkout',\n  eventListener: () => nextStep()\n});`,
       _returns: 'HTMLElement'
     },
 
@@ -4669,6 +5060,24 @@
       }
     },
 
+    getIcon: {
+      _summary: 'Universally transforms an icon identifier into a perfectly aligned DOM element.',
+      _description: 'Takes a library icon name, a custom SVG string, or a live DOM node and wraps it in a layout-safe `<span>`. Natively prevents vertical text shifting. Features a polymorphic `toString` override, meaning it returns a live DOM element when appended, but magically transforms into an HTML string when used inside template literals.',
+      _command: 'FluxKit.ui.getIcon(iconSource, options?)',
+      _arguments: {
+        'iconSource': { Type: 'String | Node', Required: 'Yes', Description: 'The name of a FluxKit icon (e.g., "camera"), a raw SVG string, or a live DOM element.' },
+        'options': { Type: 'Object', Required: 'No', Description: 'Configuration object to style the wrapper span.' }
+      },
+      _config: {
+        'size': { Type: 'Number | String', Default: 'None', Description: 'Sets the font-size of the wrapper, natively scaling the internal SVG.' },
+        'color': { Type: 'String', Default: 'None', Description: 'Sets the CSS color property to naturally fill the stroke via currentColor.' },
+        'class': { Type: 'String | Array', Default: 'None', Description: 'CSS classes to append to the wrapper.' },
+        'style': { Type: 'Object', Default: 'None', Description: 'Additional inline CSS properties to apply.' }
+      },
+      _returns: 'HTMLSpanElement (Polymorphic: evaluates to outerHTML when used in a string context)',
+      _example: "// 1. Appending as a DOM Node\nconst btn = document.createElement('button');\nbtn.appendChild(FluxKit.ui.getIcon('trash', { size: 16, color: 'red' }));\n\n// 2. Injecting directly into a template string\nconst html = `<div class=\"card\">${FluxKit.ui.getIcon('loader', { class: 'spin' })}</div>`;"
+    },
+
     confirm: {
       _summary: 'An asynchronous, theme-aware alternative to window.confirm().',
       _description: 'Generates a beautifully styled confirmation modal that resolves to a boolean without blocking the main JavaScript thread. Supports Shadow DOM injection and custom themes.',
@@ -4773,81 +5182,151 @@
       _example: `FluxKit.ui.createContextMenu(e.clientX, e.clientY, [\n  { label: 'Copy', action: () => copyData(), icon: '📋' },\n  { separator: true },\n  { label: 'Delete', action: () => deleteData(), disabled: true }\n]);`,
     },
 
-    initTooltips: { _command: 'FluxKit.ui.initTooltips(config?)', _summary: 'Initializes an auto-anchoring tooltip system for [data-tooltip] elements.',
+    initTooltips: { _command: 'FluxKit.ui.initTooltips(config?)', _summary: 'Initializes an auto-anchoring tooltip system for [data-flx-tooltip] elements.',
       _config: { _description: 'Configures the attribute to watch and global tooltip delay.',
-        attribute: { Type: 'String', Default: '"data-tooltip"', Description: 'Flexible DOM attribute to watch. Automatically formats to ensure the "data-" prefix and "-tooltip" suffix (e.g., passing "flx" safely resolves to watch for "data-flx-tooltip").' },
+        attribute: { Type: 'String', Default: '"data-flx-tooltip"', Description: 'Flexible DOM attribute to watch. Automatically formats to ensure the "data-" prefix and "-tooltip" suffix (e.g., passing "flx" safely resolves to watch for "data-flx-tooltip").' },
         delay: { Type: 'Number', Default: '400', Description: 'Hover delay in ms before showing.' },
         autoDark: { Type: 'Boolean', Default: 'true', Description: 'Match system/site theme.' },
       },
-      _example: `FluxKit.ui.initTooltips(); \n// Now any <button data-tooltip="Click Me"> will have a custom tooltip.`,
+      _example: `FluxKit.ui.initTooltips(); \n// Now any <button data-flx-tooltip="Click Me"> will have a custom tooltip.`,
     },
 
-    viewer: { _description: 'Robust, theme-aware file and data previewer (Images, PDFs, Text, Code).',
+    viewer: {
+      _description: 'Robust, theme-aware file and data previewer (Images, PDFs, Text, Code) with namespaced tooltips and extensible actions.',
 
-      init: { _command: 'FluxKit.ui.viewer.init(config?)', _summary: 'Configure the viewer system.',
-        _config: { _description: 'Configures global viewer settings and custom SVG icons.',
-          namespace: { Type: 'String', Default: '"default"' },
-          icons: { Type: 'Object', Default: 'Internal SVGs', Description: 'Override close/download icons.' },
-        },
+      init: {
+        _command: 'FluxKit.ui.viewer.init(config?)',
+        _summary: 'Configures global viewer settings, namespaces, and icon defaults.',
+        _config: {
+          _description: 'Base settings applied to viewer instances.',
+          namespace: { Type: 'String', Default: '"default"', Description: 'Isolates viewer configs and tooltip bindings (e.g., data-flxkvw-namespace-tooltip).' },
+          icons: { Type: 'Object', Default: 'Internal SVGs', Description: 'Overrides for { close, download, file, code } icons.' },
+          rootElement: { Type: 'HTMLElement', Default: 'document.body', Description: 'DOM node to attach the viewer modal to.' },
+          autoDark: { Type: 'Boolean', Default: 'true', Description: 'Automatically syncs with OS/Browser theme preferences.' },
+          fontFamily: { Type: 'String', Default: '"system-ui, sans-serif"' }
+        }
       },
 
-      open: { _command: 'FluxKit.ui.viewer.open(filename, fileData, overrides?)', _summary: 'Spawns a fullscreen modal to preview the file contents.',
+      open: {
+        _command: 'FluxKit.ui.viewer.open(filename, fileData, overrides?)',
+        _summary: 'Spawns a fullscreen, animated modal to preview the file contents.',
         _arguments: {
           filename: { Type: 'String', Required: 'Yes', Notes: 'e.g., "script.js" or "photo.png"' },
           fileData: { Type: 'String | Blob', Required: 'Yes', Notes: 'Raw string, data URL, or Blob/File object.' },
-          overrides: { Type: 'Object', Required: 'No', Notes: 'Theme/Namespace overrides.' },
+          overrides: { Type: 'Object', Required: 'No', Notes: 'Theme, namespace, or custom action overrides.' }
         },
+        _config: {
+          _description: 'Special properties supported inside the overrides object.',
+          customActions: { 
+            Type: 'Array', 
+            Description: 'Injects custom header buttons. Array of objects: { icon, iconColor?, tooltip, onClick: (closeViewerFn, renderUrl) => void }.' 
+          },
+          hideDefaultActions: { Type: 'Boolean', Description: 'If true, removes the native Download and Close buttons.' },
+          namespace: { Type: 'String', Description: 'Assigns this specific instance to a namespace.' },
+          '[Theme Options]': { Type: 'String', Description: 'Accepts standard theme keys (bg, text, headerBg, accentText, etc.) to override styling for this open instance.' }
+        },
+        _example: `FluxKit.ui.viewer.open('styles.css', cssText, {\n  namespace: 'editor',\n  hideDefaultActions: false,\n  customActions: [{\n    icon: 'trash',\n    iconColor: '#ff4757',\n    tooltip: 'Delete File',\n    onClick: (closeViewer) => { deleteFile(); closeViewer(); }\n  }]\n});`
       },
 
-      registerExtension: { _command: 'FluxKit.ui.viewer.registerExtension(category, extensions)', _summary: 'Map custom file extensions to internal preview categories.',
+      registerExtension: {
+        _command: 'FluxKit.ui.viewer.registerExtension(category, extensions)',
+        _summary: 'Map custom file extensions to internal preview categories.',
         _arguments: {
           category: { Type: 'String', Required: 'Yes', Notes: '"image", "text", "audio", "video", "pdf"' },
-          extensions: { Type: 'String | Array', Required: 'Yes', Notes: 'e.g., ["ts", "jsx", "tsx"]' },
+          extensions: { Type: 'String | Array', Required: 'Yes', Notes: 'e.g., ["ts", "jsx", "tsx"]' }
         },
-        _example: "FluxKit.ui.viewer.registerExtension('text', ['py', 'java']);",
+        _example: `FluxKit.ui.viewer.registerExtension('text', ['py', 'java']);`
       },
 
-      registerRenderer: { _command: 'FluxKit.ui.viewer.registerRenderer(extension, renderFn)', _summary: 'Inject a custom DOM builder for specific file types.',
+      registerRenderer: {
+        _command: 'FluxKit.ui.viewer.registerRenderer(extension, renderFn)',
+        _summary: 'Inject a custom asynchronous DOM builder for specific file types.',
         _arguments: {
-          extension: { Type: 'String', Required: 'Yes', Notes: 'e.g., "html"' },
-          renderFn: { Type: 'Function', Required: 'Yes', Notes: 'Async callback returning HTML string or DOM element.' },
+          extension: { Type: 'String', Required: 'Yes', Notes: 'e.g., "html" or "md"' },
+          renderFn: { Type: 'Function', Required: 'Yes', Notes: 'Async callback returning an HTML string or a live DOM element.' }
         },
+        _example: `FluxKit.ui.viewer.registerRenderer('html', async (rawData) => {\n  const iframe = document.createElement('iframe');\n  iframe.srcdoc = rawData;\n  return iframe;\n});`
       },
 
       updateTheme: {
         _command: 'FluxKit.ui.viewer.updateTheme(themeOptions, namespace?)',
-        _summary: 'Hot-swaps the viewer and tooltip themes dynamically while the viewer is open.',
+        _summary: 'Hot-swaps the viewer theme dynamically while open, recalculating contrasts and re-binding tooltips.',
         _arguments: {
-          'themeOptions': { Type: 'Object', Required: 'Yes', Notes: 'Theme configuration overrides.' },
-          'namespace': { Type: 'String', Required: 'No', Notes: 'Defaults to "default".' }
+          themeOptions: { Type: 'Object', Required: 'Yes', Notes: 'Theme configuration overrides (darkMode, autoDark, bg, headerBg, etc.).' },
+          namespace: { Type: 'String', Required: 'No', Default: '"default"', Notes: 'Targets a specific viewer namespace.' }
         },
         _returns: 'Void'
-      },
+      }
     },
   }, { isNative: true });
 
   FluxKit.help.register('api', {
-    _description: 'Cloud storage and communication layer. Standardized wrappers for external APIs.',
+    _description: 'Cloud storage and communication layer. Standardized wrappers for external APIs, storage providers, and data fetching.',
+
+    translate: {
+      _description: 'Google Translate API wrapper (GTX client).',
+      fetch: {
+        _command: 'FluxKit.api.translate.fetch(text, targetLang?, sourceLang?)',
+        _summary: 'Translates text automatically without requiring API keys.',
+        _arguments: {
+          'text': { Type: 'String', Required: 'Yes' },
+          'targetLang': { Type: 'String', Required: 'No', Default: '"en"' },
+          'sourceLang': { Type: 'String', Required: 'No', Default: '"auto"' }
+        },
+        _returns: 'Promise<{ original, translated, detectedLanguage, raw }>'
+      }
+    },
+
+    dictionary: {
+      _description: 'Free Dictionary API wrapper.',
+      fetch: {
+        _command: 'FluxKit.api.dictionary.fetch(word, lang?)',
+        _summary: 'Fetches definitions, phonetics, and audio links for a word.',
+        _arguments: {
+          'word': { Type: 'String', Required: 'Yes' },
+          'lang': { Type: 'String', Required: 'No', Default: '"en"' }
+        },
+        _returns: 'Promise<Object | null> (Parsed dictionary entry or null if not found)'
+      }
+    },
+
+    thesaurus: {
+      _description: 'Datamuse API wrapper for finding synonyms, antonyms, etc.',
+      fetch: {
+        _command: 'FluxKit.api.thesaurus.fetch(word, mode?, max?)',
+        _summary: 'Fetches related words based on the specified mode.',
+        _arguments: {
+          'word': { Type: 'String', Required: 'Yes' },
+          'mode': { Type: 'String', Required: 'No', Default: '"syn"', Notes: '"syn" for synonyms, "ant" for antonyms.' },
+          'max': { Type: 'Number', Required: 'No', Default: '10', Notes: 'Maximum number of results to return.' }
+        },
+        _returns: 'Promise<Array<String>>'
+      }
+    },
 
     githubGist: {
       _description: 'Interact with GitHub Gists for lightweight JSON/Text storage.',
 
       verifyCredentials: {
-        _command: 'FluxKit.api.githubGist.verifyCredentials(token)', _summary: 'Test if a GitHub Personal Access Token (PAT) is valid.',
-        _arguments: { 'token': { Type: 'String', Required: 'Yes' } }, _returns: 'Promise<Boolean>'
+        _command: 'FluxKit.api.githubGist.verifyCredentials(token)', 
+        _summary: 'Test if a GitHub Personal Access Token (PAT) is valid. (Used for both Gist and Repo tokens).',
+        _arguments: { 'token': { Type: 'String', Required: 'Yes' } }, 
+        _returns: 'Promise<Boolean>'
       },
 
       createNewGist: {
-        _command: 'FluxKit.api.githubGist.createNewGist(token, description?)', _summary: 'Creates a new private Gist.',
+        _command: 'FluxKit.api.githubGist.createNewGist(token, description?)', 
+        _summary: 'Creates a new private Gist.',
         _arguments: {
           'token': { Type: 'String', Required: 'Yes' },
-          'description': { Type: 'String', Required: 'No', Notes: 'Defaults to "Universal Notes Storage"' }
+          'description': { Type: 'String', Required: 'No', Default: '"Universal Notes Storage"' }
         },
         _returns: 'Promise<String> (The new Gist ID)'
       },
 
       verifyGistAccess: {
-        _command: 'FluxKit.api.githubGist.verifyGistAccess(token, gistId)', _summary: 'Test if the token has access to a specific Gist ID.',
+        _command: 'FluxKit.api.githubGist.verifyGistAccess(token, gistId)', 
+        _summary: 'Test if the token has access to a specific Gist ID.',
         _arguments: {
           'token': { Type: 'String', Required: 'Yes' },
           'gistId': { Type: 'String', Required: 'Yes' }
@@ -4856,8 +5335,9 @@
       },
 
       uploadDataToGistFile: {
-        _command: 'FluxKit.api.githubGist.uploadDataToGistFile(gistFileName, gistId, token, data, isBulk?)', _summary: 'Updates a specific file in a Gist, or performs a bulk update.',
-        _description: 'Uses PATCH to update Gist files. Pass null as data to delete a file.',
+        _command: 'FluxKit.api.githubGist.uploadDataToGistFile(gistFileName, gistId, token, data, isBulk?)', 
+        _summary: 'Updates a specific file in a Gist, or performs a bulk update.',
+        _description: 'Uses PATCH to update Gist files. Pass null as data to delete a single file.',
         _arguments: {
           'gistFileName': { Type: 'String', Required: 'Yes', Notes: 'Target file (ignored if isBulk is true).' },
           'gistId': { Type: 'String', Required: 'Yes' },
@@ -4892,15 +5372,11 @@
     },
 
     githubRepo: {
-      _description: 'Interact directly with GitHub Repositories for advanced file tracking.',
-
-      verifyCredentials: {
-        _command: 'FluxKit.api.githubGist.verifyCredentials(token)', _summary: 'Test if a GitHub Personal Access Token (PAT) is valid, resuses the method from githubGist.',
-        _arguments: { 'token': { Type: 'String', Required: 'Yes' } }, _returns: 'Promise<Boolean>'
-      },
+      _description: 'Interact directly with GitHub Repositories for advanced file tracking and versioning.',
 
       ensureRepo: {
-        _command: 'FluxKit.api.githubRepo.ensureRepo(token, repoName)', _summary: 'Checks if a repo exists; creates it privately if it does not.',
+        _command: 'FluxKit.api.githubRepo.ensureRepo(token, repoName)', 
+        _summary: 'Checks if a repo exists; creates it privately if it does not.',
         _arguments: {
           'token': { Type: 'String', Required: 'Yes' },
           'repoName': { Type: 'String', Required: 'Yes', Notes: 'Spaces will be replaced with dashes.' }
@@ -4909,7 +5385,8 @@
       },
 
       fetchAllFiles: {
-        _command: 'FluxKit.api.githubRepo.fetchAllFiles(token, owner, repo, folderPath?)', _summary: 'Downloads all files from a specific repository folder.',
+        _command: 'FluxKit.api.githubRepo.fetchAllFiles(token, owner, repo, folderPath?)', 
+        _summary: 'Downloads all files from a specific repository folder.',
         _arguments: {
           'token': { Type: 'String', Required: 'Yes' },
           'owner': { Type: 'String', Required: 'Yes' },
@@ -4920,7 +5397,9 @@
       },
 
       uploadFile: {
-        _command: 'FluxKit.api.githubRepo.uploadFile(token, owner, repo, folderPath, filename, content)', _summary: 'Pushes a file directly to a repository.', _description: 'Automatically handles fetching the previous SHA file hash required by GitHub for updates.',
+        _command: 'FluxKit.api.githubRepo.uploadFile(token, owner, repo, folderPath, filename, content)', 
+        _summary: 'Pushes a file directly to a repository.', 
+        _description: 'Automatically handles fetching the previous SHA file hash required by GitHub for updates.',
         _arguments: {
           'token': { Type: 'String', Required: 'Yes' },
           'owner': { Type: 'String', Required: 'Yes' },
@@ -4951,7 +5430,8 @@
       _description: 'Generic WebDAV protocol wrappers (Nextcloud, ownCloud, NAS).',
 
       verifyCredentials: {
-        _command: 'FluxKit.api.webdav.verifyCredentials(url, username, password)', _summary: 'Verify connection and credentials via PROPFIND.',
+        _command: 'FluxKit.api.webdav.verifyCredentials(url, username, password)', 
+        _summary: 'Verify connection and credentials via PROPFIND.',
         _arguments: {
           'url': { Type: 'String', Required: 'Yes', Notes: 'Must start with http:// or https://' },
           'username': { Type: 'String', Required: 'Yes' },
@@ -4961,7 +5441,8 @@
       },
 
       ensureDirectory: {
-        _command: 'FluxKit.api.webdav.ensureDirectory(baseUrl, folderPath, username, password)', _summary: 'Recursively creates nested folders using MKCOL.',
+        _command: 'FluxKit.api.webdav.ensureDirectory(baseUrl, folderPath, username, password)', 
+        _summary: 'Recursively creates nested folders using MKCOL.',
         _arguments: {
           'baseUrl': { Type: 'String', Required: 'Yes' },
           'folderPath': { Type: 'String', Required: 'No', Notes: 'e.g., "Backups/Notes"' },
@@ -4971,13 +5452,29 @@
         _returns: 'Promise<String> (The final resolved URL)'
       },
 
+      fetchFile: {
+        _command: 'FluxKit.api.webdav.fetchFile(targetUrl, username, password, filename, responseType?)', 
+        _summary: 'Downloads a single file from a WebDAV server.',
+        _arguments: {
+          'targetUrl': { Type: 'String', Required: 'Yes', Notes: 'Base WebDAV directory URL.' },
+          'username': { Type: 'String', Required: 'Yes' },
+          'password': { Type: 'String', Required: 'Yes' },
+          'filename': { Type: 'String', Required: 'Yes' },
+          'responseType': { Type: 'String', Required: 'No', Default: '"text"', Notes: 'Accepts "text" or "blob".' }
+        },
+        _returns: 'Promise<String | Blob | null>'
+      },
+
       fetchAllFiles: {
-        _command: 'FluxKit.api.webdav.fetchAllFiles(targetUrl, username, password)', _summary: 'List contents and download all files in a directory.',
-        _description: 'Scans directory using PROPFIND depth:1, then concurrently fetches files as Text or Blob based on extension.', _returns: 'Promise<{ files: Object }>'
+        _command: 'FluxKit.api.webdav.fetchAllFiles(targetUrl, username, password)', 
+        _summary: 'List contents and download all files in a directory.',
+        _description: 'Scans directory using PROPFIND depth:1, then concurrently fetches files as Text or Blob based on extension.', 
+        _returns: 'Promise<{ files: Object }>'
       },
 
       uploadFile: {
-        _command: 'FluxKit.api.webdav.uploadFile(targetUrl, username, password, filename, content)', _summary: 'Upload or overwrite a file using PUT.',
+        _command: 'FluxKit.api.webdav.uploadFile(targetUrl, username, password, filename, content)', 
+        _summary: 'Upload or overwrite a file using PUT.',
         _arguments: {
           'targetUrl': { Type: 'String', Required: 'Yes', Notes: 'Base WebDAV directory URL.' },
           'username': { Type: 'String', Required: 'Yes' },
@@ -5004,12 +5501,32 @@
     dropbox: {
       _description: 'Dropbox REST API wrappers.',
 
-      exchangeAuthCode: { _command: 'FluxKit.api.dropbox.exchangeAuthCode(appKey, appSecret, authCode)', _summary: 'Exchange a temporary OAuth code for persistent tokens.', _returns: 'Promise<Object> (Contains access_token and refresh_token)' },
+      exchangeAuthCode: { 
+        _command: 'FluxKit.api.dropbox.exchangeAuthCode(appKey, appSecret, authCode)', 
+        _summary: 'Exchange a temporary OAuth code for persistent tokens.', 
+        _returns: 'Promise<Object> (Contains access_token and refresh_token)' 
+      },
 
-      refreshAccessToken: { _command: 'FluxKit.api.dropbox.refreshAccessToken(appKey, appSecret, refreshToken)', _summary: 'Generates a fresh short-lived access token.', _returns: 'Promise<Object>' },
+      refreshAccessToken: { 
+        _command: 'FluxKit.api.dropbox.refreshAccessToken(appKey, appSecret, refreshToken)', 
+        _summary: 'Generates a fresh short-lived access token.', 
+        _returns: 'Promise<Object>' 
+      },
+
+      fetchFile: {
+        _command: 'FluxKit.api.dropbox.fetchFile(token, filePath, responseType?)', 
+        _summary: 'Downloads a single file from a Dropbox path.',
+        _arguments: {
+          'token': { Type: 'String', Required: 'Yes' },
+          'filePath': { Type: 'String', Required: 'Yes' },
+          'responseType': { Type: 'String', Required: 'No', Default: '"text"', Notes: 'Accepts "text" or "blob".' }
+        },
+        _returns: 'Promise<String | Blob | null>'
+      },
 
       fetchAllFiles: {
-        _command: 'FluxKit.api.dropbox.fetchAllFiles(token, basePath)', _summary: 'Recursively lists and downloads all files from a Dropbox folder.',
+        _command: 'FluxKit.api.dropbox.fetchAllFiles(token, basePath)', 
+        _summary: 'Recursively lists and downloads all files from a Dropbox folder.',
         _arguments: {
           'token': { Type: 'String', Required: 'Yes' },
           'basePath': { Type: 'String', Required: 'Yes', Notes: 'e.g., "/FluxKit/Notes"' }
@@ -5018,7 +5535,8 @@
       },
 
       uploadFile: {
-        _command: 'FluxKit.api.dropbox.uploadFile(token, filePath, content)', _summary: 'Uploads a file to a specific Dropbox path (Overwrites automatically).',
+        _command: 'FluxKit.api.dropbox.uploadFile(token, filePath, content)', 
+        _summary: 'Uploads a file to a specific Dropbox path (Overwrites automatically).',
         _arguments: {
           'token': { Type: 'String', Required: 'Yes', Notes: 'OAuth2 Access Token.' },
           'filePath': { Type: 'String', Required: 'Yes', Notes: 'Absolute path (e.g., "/Apps/FluxKit/data.json").' },
@@ -5041,12 +5559,32 @@
     onedrive: {
       _description: 'Microsoft Graph API wrappers for OneDrive (AppFolder Scoped).',
 
-      exchangeAuthCode: { _command: 'FluxKit.api.onedriv e.exchangeAuthCode(clientId, clientSecret?, authCode)', _summary: 'Exchange OAuth code for MS Graph tokens.', _returns: 'Promise<Object>'},
+      exchangeAuthCode: { 
+        _command: 'FluxKit.api.onedrive.exchangeAuthCode(clientId, clientSecret?, authCode)', 
+        _summary: 'Exchange OAuth code for MS Graph tokens.', 
+        _returns: 'Promise<Object>'
+      },
 
-      refreshAccessToken:  { _command: 'FluxKit.api.onedrive.refreshAcce ssToken(clientId, cli entSecret?, refreshToken)', _summary: 'Refresh MS Graph access token for offline_access scope.', _returns: 'Promise<Object>'},
+      refreshAccessToken: { 
+        _command: 'FluxKit.api.onedrive.refreshAccessToken(clientId, clientSecret?, refreshToken)', 
+        _summary: 'Refresh MS Graph access token for offline_access scope.', 
+        _returns: 'Promise<Object>'
+      },
+
+      fetchFile: {
+        _command: 'FluxKit.api.onedrive.fetchFile(token, filePath, responseType?)', 
+        _summary: 'Downloads a single file from OneDrive.',
+        _arguments: {
+          'token': { Type: 'String', Required: 'Yes' },
+          'filePath': { Type: 'String', Required: 'Yes', Notes: 'Path relative to the App Folder root.' },
+          'responseType': { Type: 'String', Required: 'No', Default: '"text"', Notes: 'Accepts "text" or "blob".' }
+        },
+        _returns: 'Promise<String | Blob | null>'
+      },
 
       fetchAllFiles: {
-        _command: 'FluxKit.api.onedrive.fetchAllFiles(token, basePath)', _summary: 'Downloads all files from a OneDrive folder.',
+        _command: 'FluxKit.api.onedrive.fetchAllFiles(token, basePath)', 
+        _summary: 'Downloads all files from a OneDrive folder.',
         _arguments: {
           'token': { Type: 'String', Required: 'Yes' },
           'basePath': { Type: 'String', Required: 'Yes', Notes: 'Path relative to the App Folder root.' }
@@ -5055,7 +5593,8 @@
       },
 
       uploadFile: {
-        _command: 'FluxKit.api.onedrive.uploadFile(token, filePath, content)', _summary: 'Uploads/overwrites a file in OneDrive.',
+        _command: 'FluxKit.api.onedrive.uploadFile(token, filePath, content)', 
+        _summary: 'Uploads/overwrites a file in OneDrive.',
         _arguments: {
           'token': { Type: 'String', Required: 'Yes' },
           'filePath': { Type: 'String', Required: 'Yes', Notes: 'Path relative to the App Folder root.' },

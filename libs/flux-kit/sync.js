@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FluxKit Sync
 // @namespace    https://github.com/JYashu
-// @version      1.1.0
+// @version      1.1.1
 // @description  Universal Cloud Storage & Sync Engine.
 // @author       JYashu
 // @license      Apache-2.0
@@ -26,7 +26,7 @@
   'use strict';
 
   if (typeof FluxKit === 'undefined' || !FluxKit.utils || !FluxKit.theme || !FluxKit.ui || !FluxKit.api) {
-    console.error('FluxKit Scratchpad Error: Core FluxKit is missing. Please @require FluxKit/core.js before FluxKit/sync.js');
+    console.error('FluxKit Scratchpad Error: Core FluxKit is missing. Please @require flux-kit/core.js before flux-kit/sync.js');
     return; 
   }
 
@@ -733,7 +733,7 @@
             value: this.data[fieldKey] || '',
             eventListener: { input: (e) => this.data[fieldKey] = e.target.value }
           });
-          if (tooltip) input.dataset.tooltip = tooltip;
+          if (tooltip) input.dataset.fxkswTooltip = tooltip;
 
           wrapper.appendChild(FluxKit.utils.createHTMLElement('div', {
             class: 'flx-wiz-form-row',
