@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FluxKit Core
 // @namespace    https://github.com/JYashu
-// @version      1.2.0
+// @version      1.3.0
 // @description  A high-performance UI toolkit.
 // @author       JYashu
 // @license      Apache-2.0
@@ -85,22 +85,29 @@
 
   FluxKit.ui.icons = {
     ban: `<svg ${ICON}><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM4.93 4.93l14.14 14.14" /></svg>`,
+    bell: `<svg ${ICON}><path d="M 12 4 A 4 4 0 0 0 8 8 C 8 13 4 14 4 16 A 1 1 0 0 0 5 17 H 19 A 1 1 0 0 0 20 16 C 20 14 16 13 16 8 M 15 5 v .01 M 10 17 A 2 2 0 0 0 14 17"/></svg>`,
     bold: `<svg ${ICON}><path d="M 9 4 H 12 A 4 4 0 0 1 12 12 H 6 V 8 M 6 12 V 20 H 14 A 4 4 0 0 0 14 12 H 12" /></svg>`,
     book: `<svg ${ICON}><path d="M 12 7 V 20.5 M 6 18.5 A 1.5 1.5 0 0 1 4.5 17 V 6.5 A 1.5 1.5 0 0 1 6 5 L 12 7 M 12 20.5 L 18 18.5 A 1.5 1.5 0 0 0 19.5 17 V 6.5 A 1.5 1.5 0 0 0 18 5 L 12 7" /></svg>`,
     bookmark: `<svg ${ICON}><path d="M 18 17 V 5 A 2 2 0 0 0 16 3 H 8 A 2 2 0 0 0 6 5 V 21 L 12 16 L 18 21" /></svg>`,
+    calculator: `<svg ${ICON}><path d="M 20 15 V 5 A 2 2 0 0 0 18 3 H 6 A 2 2 0 0 0 4 5 V 19 A 2 2 0 0 0 6 21 H 14 M 4 8 H 20 M 8 13 v .01 M 12 13 v .01 M 16 13 v .01 M 8 16.5 v .01 M 12 16.5 v .01 M 16 16.5 v .01"/></svg>`,
     camera: `<svg ${ICON}><circle cx="12" cy="11.5" r="6"/><path d="M 17 7 H 20 A 2 2 0 0 1 22 9 V 18 A 2 2 0 0 1 20 20 H 4 A 2 2 0 0 1 2 18 V 9 A 2 2 0 0 1 4 7 H 7 M 3.5 4.5 H 5.5"/></svg>`,
     checkSquare: `<svg ${ICON}><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11M9 11l3 3 10-10" /></svg>`,
+    chevronLeft: `<svg ${ICON}><path d="M9 18l6-6-6-6" /></svg>`,
     chevronRight: `<svg ${ICON}><path d="M9 18l6-6-6-6" /></svg>`,
     circle: `<svg ${ICON}><circle cx="12" cy="12" r="10" /></svg>`,
+    clock: `<svg ${ICON}><path d="M 12 3 A 9 9 0 1 0 21 12 M 12 17 V 12 L 20 4"/></svg>`,
     close: `<svg ${ICON}><path d="M18 6L6 18M6 6l12 12" /></svg>`,
+    cloud: `<svg ${ICON}><path d="M 16 17 H 7 A 4 4 0 0 1 7 9 A 5 5 0 0 1 16 7 A 3.5 3.5 0 1 1 13 12.5"/></svg>`,
     code: `<svg ${ICON}><path d="M7 18l-5-6 5-6M17 18l5-6-5-6M10 19l4-14" /></svg>`,
     columns: `<svg ${ICON}><path d="M 12 3 V 21 M 15 3 H 19 A 2 2 0 0 1 21 5 V 19 A 2 2 0 0 1 19 21 H 5 A 2 2 0 0 1 3 19 V 5 A 2 2 0 0 1 5 3 H 9" /></svg>`,
     copy: `<svg ${ICON}><rect x="5" y="7" width="10" height="14" rx="2" ry="2"/><path d="M 10 3 H 17 A 2 2 0 0 1 19 5 V 15"/></svg>`,
     crop: `<svg ${ICON}><path d="M6.13 1L6 16a2 2 0 0 0 2 2h15"></path><path d="M1 6.13L16 6a2 2 0 0 1 2 2v15"></path></svg>`,
+    currency: `<svg ${ICON}><path d="M 17 3.34 A 10 10 0 1 1 7 3.34 M 14 10 A 2 2 0 0 0 12 8 A 2 2 0 0 0 12 12 A 2 2 0 0 1 12 16 A 2 2 0 0 1 10 14 M 12 6 V 8 M 12 16 V 18"/></svg>`,
     document: `<svg ${ICON}><path d="M 14 5 V 8 H 19 L 14 3 H 7 A 2 2 0 0 0 5 5 V 19 A 2 2 0 0 0 7 21 H 17 A 2 2 0 0 0 19 19 V 11" /></svg>`,
     documentText: `<svg ${ICON}><path d="M 14 5 V 8 H 19 L 14 3 H 7 A 2 2 0 0 0 5 5 V 19 A 2 2 0 0 0 7 21 H 17 A 2 2 0 0 0 19 19 V 11 M 9 9 H 12 M 9 13 H 15 M 9 17 H 15" /></svg>`,
     dots: `<svg ${ICON}><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>`,
     edit: `<svg ${ICON}><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5" /></svg>`,
+    enter: `<svg ${ICON}><path d="M 17 6 V 12 A 4 4 0 0 1 13 16 H 7 M 10 13 L 7 16 L 10 19"/></svg>`,
     eraser: `<svg ${ICON}><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>`,
     error: `<svg ${ICON}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14M9 9l6 6M9 15 21 3" /></svg>`,
     export: `<svg ${ICON}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5v12m0-12l-5 5" /></svg>`,
@@ -108,7 +115,11 @@
     fileAdd: `<svg ${ICON}><path d="M 14 3 H 7 A 2 2 0 0 0 5 5 V 19 A 2 2 0 0 0 7 21 H 11 M 14 3 L 19 8 V 13 M 14 3 V 7 A 1 1 0 0 0 15 8 H 19 M 13 18 H 19 M 16 15 V 21" /></svg>`,
     fileDelete: `<svg ${ICON}><path d="M 14 3 H 7 A 2 2 0 0 0 5 5 V 19 A 2 2 0 0 0 7 21 H 10 M 14 3 L 19 8 V 12 M 14 3 V 7 A 1 1 0 0 0 15 8 H 19 M 13.5 15.5 L 18.5 20.5 M 18.5 15.5 L 13.5 20.5" /></svg>`,
     focus: `<svg ${ICON}><circle cx="12" cy="12" r="3"></circle><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path></svg>`,
+    google: `<svg ${ICON}><path d="M 17 6 A 8 8 0 1 0 20 12 H 12"/></svg>`,
+    hash: `<svg ${ICON}><path d="M 10 4 L 8 20 M 16 4 L 14 20 M 5 9 H 19 M 4 15 H 18"/></svg>`,
     heading: `<svg ${ICON}><path d="M6 4v16m0-8h12m0-8v16" /></svg>`,
+    headphones: `<svg ${ICON}><path d="M 5 10 A 7 7 0 0 1 19 10 M 3 15 V 19 A 2 2 0 0 0 7 19 V 15 A 2 2 0 0 0 3 15 Z M 17 15 V 19 A 2 2 0 0 0 21 19 V 15 A 2 2 0 0 0 17 15 Z"/></svg>`,
+    history: `<svg ${ICON}><path d="M 2 9 L 4 12 L 7 10 M 12 20 A 8 8 0 1 0 4 12 M 12 8 V 12 L 15 15"/></svg>`,
     hourglass: `<svg ${ICON}><path d="M5 22h14 M5 2h14 M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22 M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2" /><path d="M 12 15 L 8 17 V 21 H 16 V 17 Z" fill="currentColor" fill-opacity="0.6" stroke="none" /></svg>`,
     hourglassSpin: `
       <svg ${ICON}>
@@ -123,52 +134,79 @@
     import: `<svg ${ICON}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5V3m0 12l5-5" /></svg>`,
     info: `<svg ${ICON}><path d="M12 12v3a1 1 0 0 0 1 1M12 8v.01M17 3.34A10 10 0 1 1 7 3.34" /></svg>`,
     italic: `<svg ${ICON}><path d="M19 4h-9m5 0-6 16m5 0H5" /></svg>`,
+    json: `<svg ${ICON}><path d="M 7 4 Q 5 4 5 7 Q 5 11 2 12 Q 5 13 5 17 Q 5 20 7 20 M 17 4 Q 19 4 19 7 Q 19 11 22 12 Q 19 13 19 17 Q 19 20 17 20 M 9 8 H 15 M 9 12 H 13 M 9 16 H 16"/></svg>`,
     line: `<svg ${ICON}><path d="M5 19L19 5" /></svg>`,
     link: `<svg ${ICON}><path d="M 10 13 a 5 5 0 0 0 7.54 .54 l 3 -3 a 5 5 0 0 0 -7.07 -7.07 l -1.72 1.71 m 2.25 4.82 a 5 5 0 0 0 -7.54 -.54 l -3 3 a 5 5 0 0 0 7.07 7.07 l 1.71 -1.71" /></svg>`,
     listOl: `<svg ${ICON}><path d="M10 6h11M10 12h11M10 18h11M4 6h1v4M4 10h2M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" /></svg>`,
     listUl: `<svg ${ICON}><path d="M8 6h13M8 12h13M8 18h13M3 6v.01M3 12v.01M3 18v.01" /></svg>`,
     loader: `<svg ${ICON}><style> @keyframes flxn-loader-spin { 100% { transform: rotate(360deg); } } </style><path style="transform-origin: center; animation: flxn-loader-spin 1.5s linear infinite;" d="M12 3a9 9 0 1 1-9 9" /></svg>`,
+    location: `<svg ${ICON}><path d="M 18 9 A 6 6 0 0 0 6 9 C 6 14 9 18 12 21 C 15 18 18 14 18 9 Z M 12 11 A 2 2 0 1 0 12 7 A 2 2 0 0 0 12 11 Z"/></svg>`,
+    lock: `<svg ${ICON}><path d="M 7 11 V 7 A 5 5 0 0 1 17 7 V 11 M 5 11 H 19 A 2 2 0 0 1 21 13 V 19 A 2 2 0 0 1 19 21 H 5 A 2 2 0 0 1 3 19 V 13 A 2 2 0 0 1 5 11 Z M 12 15 v 2"/></svg>`,
+    lyrics: `<svg ${ICON}><circle cx="15" cy="17" r="2"/><path d="M 4 8 H 11 M 4 12 H 13 M 4 16 H 9 M 17 15 V 6 Q 22 6 22 11"/></svg>`,
+    next: `<svg ${ICON}><path d="M 7 7 V 17 L 15 12 Z M 18 7 V 17"/></svg>`,
+    note: `<svg ${ICON}><circle cx="7" cy="17" r="2"/><circle cx="17" cy="14" r="2"/><path d="M 9 17 V 6 L 19 3 V 14 M 9 10 L 19 7"/></svg>`,
     maximize: `<svg ${ICON}><path d="M8 3H5a2 2 0 0 0-2 2v3 M16 3h3a2 2 0 0 1 2 2v3 M8 21H5a2 2 0 0 1-2-2v-3 M16 21h3a2 2 0 0 0 2-2v-3" /></svg>`,
     merge: `<svg ${ICON} style="transform: rotate(270deg);"><path d="M 7 3 V 9 A 5 5 0 0 0 12 14 V 21 L 8 17 M 12 21 L 16 17 M 17 3 V 9 A 5 5 0 0 1 15 13" /></svg>`,
+    message: `<svg ${ICON}><path d="M 4 6 A 2 2 0 0 1 6 4 H 18 A 2 2 0 0 1 20 6 V 14 A 2 2 0 0 1 18 16 H 8 L 4 20 V 6 Z M 8 10 v .01 M 12 10 v .01 M 16 10 v .01"/></svg>`,
     minus: `<svg ${ICON}><path d="M5 12h14" /></svg>`,
+    palette: `<svg ${ICON}><path d="M 20 12 A 8 8 0 0 0 4 12 C 4 21 11 21 15 18 C 13 15 20 16 20 12 Z M 7 12 v .01 M 8.5 8.5 v .01 M 12 7 v .01 M 15.5 8.5 v .01 M 17 12 v .01"/></svg>`,
     paperclip: `<svg ${ICON}><path d="M 10 17 L 17 10 A 3.5 3.5 0 0 0 12 5 L 5 12 A 5.5 5.5 0 0 0 12.8 19.8 L 19.5 13" /></svg>`,
+    pause: `<svg ${ICON}><path d="M 9 6 V 18 M 15 6 V 18"/></svg>`,
     pin: `<svg ${ICON}><path d="M 12 21 V 17 M 10 15 H 8 V 13 A 2 2 0 0 1 10 11 L 9 7 A 3 3 0 0 1 15 7 L 14 11 A 2 2 0 0 1 16 13 V 15 H 14" /></svg>`,
     pinned: `<svg ${ICON}><path fill="currentColor" d="M 12 21 V 17 M 10 15 H 8 V 13 A 2 2 0 0 1 10 11 L 9 7 A 3 3 0 0 1 15 7 L 14 11 A 2 2 0 0 1 16 13 V 15 H 14" /></svg>`,
+    play: `<svg ${ICON}><path d="M 8 6 V 18 L 18 12 Z"/></svg>`,
+    playlist: `<svg ${ICON}><path d="M 4 7 H 20 M 4 12 H 15 M 4 17 H 11 M 16 14 V 22 L 22 18 Z"/></svg>`,
+    playlistAdd: `<svg ${ICON}><path d="M 4 7 H 20 M 4 12 H 15 M 4 17 H 11 M 16 18 H 22 M 19 15 V 21"/></svg>`,
     plus: `<svg ${ICON}><path d="M12 5v14M5 12h14" /></svg>`,
     pointer: `<svg ${ICON}><path d="M 4 4 L 10.5 20.5 L 13 13 L 20.5 10.5 Z" /></svg>`,
+    pomodoro: `<svg ${ICON}><path d="M 9.5 5.4 A 8 8 0 1 0 19 9.1 M 12 2 V 5 Q 17 2 19 6 Q 16 9 12 5 M 12 13 L 9 16"/></svg>`,
+    prev: `<svg ${ICON}><path d="M 17 7 V 17 L 9 12 Z M 6 7 V 17"/></svg>`,
     preview: `<svg ${ICON}><path d="M 4 14.3 A 12 12 0 0 1 2 12 A 12 12 0 0 1 17 7.7 M 20 9.7 A 12 12 0 0 1 22 12 A 12 12 0 0 1 7 16.3 M 14 10.5 A 2.5 2.5 0 1 1 10 10.5" /></svg>`,
     question: `<svg ${ICON}><path d="M 17 3.34 A 10 10 0 1 1 7 3.34 M 12 17 V 17.01 M 9 9 A 3 3 0 0 1 15 9 C 15 11.5 12 11.5 12 14" /></svg>`,
     quote: `<svg ${ICON}><path d="M 6 5 A 2 2 0 0 0 4 7 V 17 A 2 2 0 0 0 6 19 H 8 M 11 8 H 20 M 11 12 H 16 M 11 16 H 20" /></svg>`,
+    reddit: `<svg ${ICON}><path d="M 18 17 A 6 4.5 0 1 1 6 17 A 6 4.5 0 1 1 18 17 M 12 9.5 V 7.5 A 2 2 0 0 1 14 5.5 A 1.5 1.5 0 1 0 14 2.5 A 1.5 1.5 0 1 0 14 5.5 M 9.5 15.5 v .01 M 14.5 15.5 v .01 M 10.5 18.5 Q 12 20 13.5 18.5 M 3 15 A 2 2 0 1 0 3 19 M 21 15 A 2 2 0 1 1 21 19"/></svg>`,
     redo: `<svg ${ICON}><path d="M21 7v6h-6m6 0-2.7-2.7A9 9 0 0 0 3 17" /></svg>`,
     refresh: `<svg ${ICON}><path d="M3 3v5h5m-5 0 2.3-2.3A9 9 0 1 1 3 12" /></svg>`,
+    regex: `<svg ${ICON}><path d="M 7 6 H 5 V 18 H 7 M 17 6 H 19 V 18 H 17 M 9 14 v .01 M 14 8 V 12 M 12 9 L 16 11 M 12 11 L 16 9"/></svg>`,
+    rss: `<svg ${ICON}><path d="M 6 18 v .01 M 6 12 A 6 6 0 0 1 12 18 M 6 6 A 12 12 0 0 1 18 18"/></svg>`,
     save: `<svg ${ICON}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="7 3 7 8 15 8"/><path d="M12 11.5a3 3 0 1 1-3 3"/></svg>`,
     scribble: `<svg ${ICON}><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>`,
     search: `<svg ${ICON}><path d="M 21 21 L 18 18 C 15 15 13 17 10 17 A 7 7 0 1 1 16.5 13" /></svg>`,
     settings: `<svg ${ICON}><path stroke-width="1.5" d="M 9.87 4.04 A 2.75 2.75 0 0 1 14.13 4.04 A 2.75 2.75 0 0 0 17.83 6.17 A 2.75 2.75 0 0 1 19.96 9.87 A 2.75 2.75 0 0 0 19.96 14.13 A 2.75 2.75 0 0 1 17.83 17.83 A 2.75 2.75 0 0 0 14.13 19.96 A 2.75 2.75 0 0 1 9.87 19.96 A 2.75 2.75 0 0 0 6.17 17.83 A 2.75 2.75 0 0 1 4.04 14.13 A 2.75 2.75 0 0 0 4.04 9.87 A 2.75 2.75 0 0 1 6.17 6.17 M 12 9.25 a 2.75 2.75 0 1 0 0 5.5 a 2.75 2.75 0 1 0 0 -5.5" /></svg>`,
+    shine: `<svg ${ICON}><path d="M 9 3 Q 9 11 1 11 Q 9 11 9 19 Q 9 11 17 11 Q 9 11 9 3 Z M 19 2 Q 19 6 15 6 Q 19 6 19 10 Q 19 6 23 6 Q 19 6 19 2 Z M 17 14 Q 17 17 14 17 Q 17 17 17 20 Q 17 17 20 17 Q 17 17 17 14 Z"/></svg>`,
+    shuffle: `<svg ${ICON}><path d="M 4 17 Q 10 17 12 12 Q 14 7 20 7 M 17 4 L 20 7 L 17 10 M 4 7 Q 8 7 10.2 9.5 M 13.8 14.5 Q 16 17 20 17 M 17 14 L 20 17 L 17 20"/></svg>`,
+    snip: `<svg ${ICON}><path d="M 6 21 V 7 H 21 M 3 17 H 17 V 3"/></svg>`,
     speaker: `<svg ${ICON}><path d="M 14 6 A 1 1 0 0 0 13 5 L 8 9 H 5 A 2 2 0 0 0 3 11 V 13 A 2 2 0 0 0 5 15 H 8 L 13 19 A 1 1 0 0 0 14 18 M 17 9 A 5 5 0 0 1 17 15 M 20 6 A 10 10 0 0 1 20 18"/></svg>`,
     speakerLow: `<svg ${ICON}><path d="M 14 6 A 1 1 0 0 0 13 5 L 8 9 H 5 A 2 2 0 0 0 3 11 V 13 A 2 2 0 0 0 5 15 H 8 L 13 19 A 1 1 0 0 0 14 18 M 17 9 A 5 5 0 0 1 17 15"/></svg>`,
     speakerMute: `<svg ${ICON}><path d="M 14 6 A 1 1 0 0 0 13 5 L 8 9 H 5 A 2 2 0 0 0 3 11 V 13 A 2 2 0 0 0 5 15 H 8 L 13 19 A 1 1 0 0 0 14 18 M 17 10 l 4 4 m 0 -4 l -4 4"/></svg>`,
     square: `<svg ${ICON}><rect x="3" y="3" width="18" height="18" rx="2" /></svg>`,
+    stopwatch: `<svg ${ICON}><path d="M 12 5 A 9 9 0 1 1 4.5 19 M 12 5 A 9 9 0 0 0 6 7.3 M 10 2 H 14 M 20 4 L 22 6 M 21 5 L 20 6 M 12 14 L 15 18"/></svg>`,
     strikethrough: `<svg ${ICON}><path d="M16 4H9a3 3 0 0 0-2.83 4"/><path d="M14 12a4 4 0 0 1 0 8H6"/><line x1="4" y1="12" x2="20" y2="12"/></svg>`,
     success: `<svg ${ICON}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4L12 14.01 9 11.01" /></svg>`,
     swap: `<svg ${ICON}><path d="M 8 17 A 5 5 0 0 1 3 12 A 5 5 0 0 1 8 7 H 13 M 9 3 L 13 7 L 9 11 M 16 7 A 5 5 0 0 1 21 12 A 5 5 0 0 1 16 17 H 11 M 15 21 L 11 17 L 15 13"/></svg>`,
     sync: `<svg ${ICON}><path d="M21 4v6h-6m6 0-2.6-2.6a9 9 0 0 0-14.9 1.6M3 20v-6h6m-6 0 2.6 2.6a9 9 0 0 0 14.9-1.6" /></svg>`,
     table: `<svg ${ICON}><path d="M 17 21 H 5 A 2 2 0 0 1 3 19 V 5 A 2 2 0 0 1 5 3 H 19 A 2 2 0 0 1 21 5 V 17 M 9 3 V 21 M 3 9 H 21 M 3 15 H 21"/></svg>`,
     textCaret: `<svg ${ICON}><path d="M10 4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2" /><path d="M14 4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2" /></svg>`,
+    timer: `<svg ${ICON}><path d="M 12 7 V 3 A 9 9 0 1 1 3 12 M 12 12 L 7 7"/></svg>`,
+    translate: `<svg ${ICON}><path d="M 4 10 L 7 2 L 10 10 M 5 7 H 9 M 17 2 V 5 M 14 5 H 20 M 17 5 Q 15 9 13 10 M 16 7 Q 19 9 21 10 M 10 18 A 2 2 0 0 1 12 16 H 20 M 17 13 L 20 16 L 17 19 M 14 18 A 2 2 0 0 1 12 20 H 4 M 7 17 L 4 20 L 7 23"/></svg>`,
     trash: `<svg ${ICON}><path d="M 4 7 h 5 a 3 3 0 0 1 6 0 h 5 M 6 10 l 1.5 9.5 a 1.5 1.5 0 0 0 1.5 1.5 h 6 a 1.5 1.5 0 0 0 1.5 -1.5 L 18 10" /></svg>`,
+    trending: `<svg ${ICON}><path d="M 4 18 L 9 11 L 14 14 L 18.5 9.5 M 17 7 H 21 V 11"/></svg>`,
     undo: `<svg ${ICON}><path d="M3 7v6h6m-6 0 2.7-2.7A9 9 0 0 1 21 17" /></svg>`,
+    unit: `<svg ${ICON}><path d="M 4 10 V 6 A 2 2 0 0 1 6 4 H 18 A 2 2 0 0 1 20 6 V 10 M 8 4 V 7 M 12 4 V 6 M 16 4 V 7 M 4 16 H 20 M 17 13 L 20 16 L 17 19"/></svg>`,
+    user: `<svg ${ICON}><path d="M 12 11 A 4 4 0 1 0 12 3 A 4 4 0 0 0 12 11 Z M 4 21 V 17 C 4 14 8 14 12 14 C 16 14 20 14 20 17 V 21"/></svg>`,
+    video: `<svg ${ICON}><path d="M 5 6 H 19 A 2 2 0 0 1 21 8 V 16 A 2 2 0 0 1 19 18 H 5 A 2 2 0 0 1 3 16 V 8 A 2 2 0 0 1 5 6 Z M 10.5 9.5 V 14.5 L 14.5 12 Z"/></svg>`,
     warning: `<svg ${ICON}><path d="M12 9v4m0 4v.01M10.27 3.51a2 2 0 0 1 3.46 0l8 14A2 2 0 0 1 20 21H4a2 2 0 0 1-1.73-3Z" /></svg>`,
+    wikipedia: `<svg ${ICON}><path d="M 2 6 L 8 18 L 14 6 M 10 6 L 16 18 L 22 6"/></svg>`,
     windowMinimize: `<svg ${ICON}><line x1="4" y1="12" x2="20" y2="12"></line></svg>`,
     windowRestore: `<svg ${ICON}><rect x="3" y="9" width="12" height="12" rx="2" ry="2"></rect><path d="M9 3h10a2 2 0 0 1 2 2v10"></path></svg>`,
+    worldClock: `<svg ${ICON}><path d="M 21 12 A 9 9 0 1 1 12 3 M 12 3 A 4 9 0 0 0 12 21 M 3 12 H 6 M 12 16 V 12 L 18 6"/></svg>`,
     zap: `<svg ${ICON}><polygon points="10 3 18 3 14 12 19 12 8 21 11 12 6 12" /></svg>`,
-  }
+  };
 
   FluxKit.ui.getIcon ??= (iconSource, options = {}) => {
     const span = document.createElement("span");
 
     span.style.display = "inline-flex";
-    span.style.alignItems = "center";
-    span.style.justifyContent = "center";
     
     if (options.size) span.style.fontSize = typeof options.size === "number" ? `${options.size}px` : options.size;
     if (options.color) span.style.color = options.color;
@@ -698,7 +736,7 @@
       let verbose = 0;
 
       if (data.length && typeof data[data.length - 1] === 'object' && data[data.length - 1] !== null && '__v' in data[data.length - 1]) {
-          verbose = data.pop().__v;
+        verbose = data.pop().__v;
       }
 
       const isDebug = level === 'debug';
@@ -1002,7 +1040,7 @@
     return icons[Math.floor(Math.random() * icons.length)];
   };
 
-  FluxKit.utils.makeElementDragAndResize ??= (element, header = null, options = {}) => {
+  FluxKit.utils.attachWindowControls ??= (element, header = null, options = {}) => {
     const opt = {
       resizable: true, keepInViewport: true, dragThreshold: 3,
       minWidth: 160, minHeight: 90, initWidth: null, initHeight: null, maxWidth: Infinity, maxHeight: Infinity, lockAspectRatio: false, aspectRatio: null,
@@ -1552,39 +1590,43 @@
     return destroy;
   };
 
-  FluxKit.utils.trapTabFocus ??= (element, initialFocus = null) => {
-    const focusable = element.querySelectorAll(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    );
-    const focusableArray = Array.from(focusable).filter(
-      el => !el.disabled && el.offsetParent !== null
-    );
-
-    if (!focusableArray.length) return;
-
-    if (initialFocus) initialFocus.focus();
-    else focusableArray[0].focus();
-
-    element.addEventListener('keydown', e => {
+  FluxKit.utils.trapTabFocus ??= (container, fallbackFocusElement = null) => {
+    container.addEventListener('keydown', (e) => {
       if (e.key !== 'Tab') return;
 
-      const currentIndex = focusableArray.indexOf(document.activeElement);
-      const first = focusableArray[0];
-      const last = focusableArray[focusableArray.length - 1];
+      const focusable = Array.from(
+        container.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')
+      ).filter(el => !el.disabled && el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0);
+
+      if (focusable.length === 0) {
+        e.preventDefault();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      const active = e.composedPath()[0];
 
       if (e.shiftKey) {
-        if (document.activeElement === first) {
+        if (active === first || !focusable.includes(active)) {
           e.preventDefault();
+          e.stopPropagation();
           last.focus();
         }
       } else {
-        if (document.activeElement === last) {
+        if (active === last || !focusable.includes(active)) {
           e.preventDefault();
+          e.stopPropagation();
           first.focus();
         }
       }
     });
-  }
+
+    if (fallbackFocusElement) {
+      requestAnimationFrame(() => fallbackFocusElement.focus());
+    }
+  };
 
   FluxKit.utils.compressImage ??= (dataUrl, maxWidth = 1600, quality = 0.85, minQuality = 0.3) => {
     return new Promise((resolve) => {
@@ -1638,7 +1680,7 @@
 
       img.src = dataUrl;
     });
-  }
+  };
 
   FluxKit.utils.shouldIgnoreKeystroke ??= (e, options = {}) => {
     const config = {
@@ -1648,6 +1690,7 @@
       allowModifiers: false,
       allowedKeys: [],
       ignoreSelectors: [],
+      ignoreTags: [],
       ...options
     };
 
@@ -1661,7 +1704,7 @@
 
     if (config.ignoreInputs) {
       const tag = target.tagName?.toUpperCase();
-      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return true;
+      if (['INPUT', 'TEXTAREA', 'SELECT', ...config.ignoreTags.map(t => t.toUpperCase())].includes(tag)) return true;
     }
 
     if (config.ignoreContentEditable && target.isContentEditable) {
@@ -1673,7 +1716,7 @@
     }
 
     return false;
-  }
+  };
 
   FluxKit.utils.getShortcutFromEvent ??= function(e, options = {}) {
     const config = {
@@ -1715,7 +1758,7 @@
     }
 
     if (!isModifierOnly) {
-      let normalizedKey = key === ' ' ? 'space' : key;
+      let normalizedKey = (e.code === 'Space' || key === ' ' || key === 'Spacebar' || key === '\xa0') ? 'space' : key;
       if (e.altKey && (key.length === 1 || key === 'Dead')) {
         if (e.keyCode >= 65 && e.keyCode <= 90) {
           normalizedKey = String.fromCharCode(e.keyCode).toLowerCase();
@@ -1724,30 +1767,53 @@
           normalizedKey = String.fromCharCode(e.keyCode);
         } 
         else if (e.code) {
-            const codeMap = {
-              Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Backslash: '\\', 
-              Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/', Backquote: '`'
-            };
-            
-            if (codeMap[e.code]) {
-              normalizedKey = codeMap[e.code];
-            } 
-            else if (e.code.startsWith('Key')) {
-              normalizedKey = e.code.replace('Key', '').toLowerCase();
-            } 
-            else if (e.code.startsWith('Digit')) {
-              normalizedKey = e.code.replace('Digit', '');
-            }
+          const codeMap = {
+            Space: 'space',
+            Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Backslash: '\\', 
+            Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/', Backquote: '`'
+          };
+          
+          if (codeMap[e.code]) {
+            normalizedKey = codeMap[e.code];
+          } 
+          else if (e.code.startsWith('Key')) {
+            normalizedKey = e.code.replace('Key', '').toLowerCase();
+          } 
+          else if (e.code.startsWith('Digit')) {
+            normalizedKey = e.code.replace('Digit', '');
+          }
         }
       }
       if (normalizedKey === 'Dead') normalizedKey = '';
 
       if (normalizedKey) {
         normalizedKey = normalizedKey.toLowerCase();
-        parts.push(normalizedKey);
-        
-        const displayKey = normalizedKey.charAt(0).toUpperCase() + normalizedKey.slice(1);
-        displayParts.push(displayKey);
+        const specialKeys = {
+          'escape': { s: 'esc', d: 'Esc' },
+          'arrowup': { s: 'up', d: 'Up' },
+          'arrowdown': { s: 'down', d: 'Down' },
+          'arrowleft': { s: 'left', d: 'Left' },
+          'arrowright': { s: 'right', d: 'Right' },
+          'delete': { s: 'del', d: 'Del' },
+          'insert': { s: 'ins', d: 'Ins' },
+          'pageup': { s: 'pageup', d: 'Page Up' },
+          'pagedown': { s: 'pagedown', d: 'Page Down' },
+          'capslock': { s: 'capslock', d: 'Caps Lock' },
+          'numlock': { s: 'numlock', d: 'Num Lock' },
+          'space': { s: 'space', d: 'Space' },
+          'enter': { s: 'enter', d: 'Enter' },
+          'tab': { s: 'tab', d: 'Tab' },
+          'home': { s: 'home', d: 'Home' },
+          'end': { s: 'end', d: 'End' },
+          'backspace': { s: 'backspace', d: 'Backspace' }
+        };
+        if (specialKeys[normalizedKey]) {
+          parts.push(specialKeys[normalizedKey].s);
+          displayParts.push(specialKeys[normalizedKey].d);
+        } else {
+          parts.push(normalizedKey);
+          displayParts.push(normalizedKey.charAt(0).toUpperCase() + normalizedKey.slice(1));
+        }
       }
     }
 
@@ -1803,70 +1869,81 @@
   FluxKit.theme ??= {
     presets: {
       light: {
-        name: 'Clean Light', dark: false, bg: '#ffffff', text: '#111827', inputBg: '#f3f4f6', accentBg: '#3D5A80', accentText: '#293241', btnTextColor: '#ffffff',
+        key: 'light', name: 'Clean Light', dark: false, bg: '#ffffff', text: '#111827', inputBg: '#f3f4f6', accentBg: '#3D5A80', accentText: '#293241', btnTextColor: '#ffffff',
         border: '1px solid rgba(0, 0, 0, 0.08)', hoverBg: 'rgba(0, 0, 0, 0.04)', hoverText: '#111827', separator: 'rgba(0, 0, 0, 0.08)',
         boxShadow: '0 8px 24px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.02) inset', btnHoverBg: 'rgba(0, 0, 0, 0.06)',
-        progressGradient: 'linear-gradient(90deg, #5C7CFA, #3D5A80)'
+        progressGradient: 'linear-gradient(90deg, #5C7CFA, #3D5A80)',
+        success: '#16a34a', danger: '#dc2626', warning: '#d97706', info: '#2563eb'
       },
       dark: {
-        name: 'Dark', dark: true, bg: '#000000', text: '#e5e7eb', inputBg: '#121212', accentBg: '#333333', accentText: '#9ca3af', btnTextColor: '#ffffff',
+        key: 'dark', name: 'Dark', dark: true, bg: '#000000', text: '#e5e7eb', inputBg: '#121212', accentBg: '#333333', accentText: '#9ca3af', btnTextColor: '#ffffff',
         border: '1px solid rgba(255, 255, 255, 0.1)', hoverBg: 'rgba(255, 255, 255, 0.05)', hoverText: '#ffffff', separator: 'rgba(255, 255, 255, 0.1)',
         boxShadow: '0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05) inset', btnHoverBg: 'rgba(255, 255, 255, 0.1)',
-        progressGradient: 'linear-gradient(90deg, #555555, #9ca3af)'
+        progressGradient: 'linear-gradient(90deg, #555555, #9ca3af)',
+        success: '#22c55e', danger: '#ef4444', warning: '#f59e0b', info: '#60a5fa'
       },
       newsprint: {
-        name: 'Newsprint', dark: false, bg: '#f7f4ed', text: '#191919', inputBg: '#ebe7de', accentBg: '#191919', accentText: '#111111', btnTextColor: '#f7f4ed',
+        key: 'newsprint', name: 'Newsprint', dark: false, bg: '#f7f4ed', text: '#191919', inputBg: '#ebe7de', accentBg: '#191919', accentText: '#111111', btnTextColor: '#f7f4ed',
         border: '1px solid rgba(25, 25, 25, 0.15)', hoverBg: 'rgba(25, 25, 25, 0.05)', hoverText: '#000000', separator: 'rgba(25, 25, 25, 0.15)',
         boxShadow: '0 4px 16px rgba(0, 0, 0, 0.06)', btnHoverBg: 'rgba(25, 25, 25, 0.1)',
-        progressGradient: 'linear-gradient(90deg, #555555, #191919)'
+        progressGradient: 'linear-gradient(90deg, #555555, #191919)',
+        success: '#2f6f4e', danger: '#a13d2f', warning: '#8a6212', info: '#2f4f6f'
       },
       blossom: {
-        name: 'Blossom', dark: false, bg: '#fff0f5', text: '#831843', inputBg: '#fce7f3', accentBg: '#db2777', accentText: '#9d174d', btnTextColor: '#ffffff',
+        key: 'blossom', name: 'Blossom', dark: false, bg: '#fff0f5', text: '#831843', inputBg: '#fce7f3', accentBg: '#db2777', accentText: '#9d174d', btnTextColor: '#ffffff',
         border: '1px solid rgba(219, 39, 119, 0.15)', hoverBg: 'rgba(219, 39, 119, 0.08)', hoverText: '#9d174d', separator: 'rgba(219, 39, 119, 0.15)',
         boxShadow: '0 8px 24px rgba(219, 39, 119, 0.12)', btnHoverBg: 'rgba(219, 39, 119, 0.12)',
-        progressGradient: 'linear-gradient(90deg, #f472b6, #db2777)'
+        progressGradient: 'linear-gradient(90deg, #f472b6, #db2777)',
+        success: '#15803d', danger: '#e11d48', warning: '#c2410c', info: '#6d28d9'
       },
       material: {
-        name: 'Material Light', dark: false, bg: '#ffffff', text: '#202124', inputBg: '#f1f3f4', accentBg: '#1a73e8', accentText: '#1558d6', btnTextColor: '#ffffff',
+        key: 'material', name: 'Material Light', dark: false, bg: '#ffffff', text: '#202124', inputBg: '#f1f3f4', accentBg: '#1a73e8', accentText: '#1558d6', btnTextColor: '#ffffff',
         border: '1px solid #dadce0', hoverBg: '#f1f3f4', hoverText: '#202124', separator: '#dadce0',
         boxShadow: '0 4px 6px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.08)', btnHoverBg: 'rgba(26, 115, 232, 0.08)',
-        progressGradient: 'linear-gradient(90deg, #669df6, #1a73e8)'
+        progressGradient: 'linear-gradient(90deg, #669df6, #1a73e8)',
+        success: '#188038', danger: '#d93025', warning: '#f9ab00', info: '#1a73e8'
       },
       sunset: {
-        name: 'Sunset (Warm)', dark: true, bg: '#2d1b1b', text: '#ffdab9', inputBg: '#3d2b2b', accentBg: '#ff7e5f', accentText: '#ff9c85', btnTextColor: '#ffffff',
+        key: 'sunset', name: 'Sunset (Warm)', dark: true, bg: '#2d1b1b', text: '#ffdab9', inputBg: '#3d2b2b', accentBg: '#ff7e5f', accentText: '#ff9c85', btnTextColor: '#ffffff',
         border: '1px solid rgba(255, 126, 95, 0.2)', hoverBg: 'rgba(255, 126, 95, 0.1)', hoverText: '#ffffff', separator: 'rgba(255, 126, 95, 0.2)',
         boxShadow: '0 12px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 126, 95, 0.1) inset', btnHoverBg: 'rgba(255, 126, 95, 0.15)',
-        progressGradient: 'linear-gradient(90deg, #ff9c85, #ff7e5f)'
+        progressGradient: 'linear-gradient(90deg, #ff9c85, #ff7e5f)',
+        success: '#8fd694', danger: '#ff6b6b', warning: '#ffb454', info: '#5fd4d0'
       },
       terminal: {
-        name: 'Terminal', dark: true, bg: '#09090b', text: '#4ade80', inputBg: '#18181b', accentBg: '#16a34a', accentText: '#4ade80', btnTextColor: '#000000',
+        key: 'terminal', name: 'Terminal', dark: true, bg: '#09090b', text: '#4ade80', inputBg: '#18181b', accentBg: '#16a34a', accentText: '#4ade80', btnTextColor: '#000000',
         border: '1px solid #16a34a', hoverBg: 'rgba(22, 163, 74, 0.15)', hoverText: '#86efac', separator: '#16a34a',
         boxShadow: '0 0 15px rgba(22, 163, 74, 0.2)', btnHoverBg: 'rgba(22, 163, 74, 0.25)',
-        progressGradient: 'linear-gradient(90deg, #22c55e, #16a34a)'
+        progressGradient: 'linear-gradient(90deg, #22c55e, #16a34a)',
+        success: '#4ade80', danger: '#ff5555', warning: '#ffb454', info: '#22d3ee'
       },
       darkSleek: {
-        name: 'Sleek Dark', dark: true, bg: '#1f2937', text: '#f9fafb', inputBg: '#374151', accentBg: '#E63946', accentText: '#ff7a84', btnTextColor: '#ffffff',
+        key: 'darkSleek', name: 'Sleek Dark', dark: true, bg: '#1f2937', text: '#f9fafb', inputBg: '#374151', accentBg: '#E63946', accentText: '#ff7a84', btnTextColor: '#ffffff',
         border: '1px solid rgba(255, 255, 255, 0.1)', hoverBg: 'rgba(255, 255, 255, 0.05)', hoverText: '#ffffff', separator: 'rgba(255, 255, 255, 0.1)',
         boxShadow: '0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05) inset', btnHoverBg: 'rgba(255, 255, 255, 0.1)',
-        progressGradient: 'linear-gradient(90deg, #ff7a84, #E63946)'
+        progressGradient: 'linear-gradient(90deg, #ff7a84, #E63946)',
+        success: '#22c55e', danger: '#E63946', warning: '#f59e0b', info: '#60a5fa'
       },
       dracula: {
-        name: 'Dracula', dark: true, bg: '#282a36', text: '#f8f8f2', inputBg: '#44475a', accentBg: '#ff79c6', accentText: '#ff92d0', btnTextColor: '#282a36',
+        key: 'dracula', name: 'Dracula', dark: true, bg: '#282a36', text: '#f8f8f2', inputBg: '#44475a', accentBg: '#ff79c6', accentText: '#ff92d0', btnTextColor: '#282a36',
         border: '1px solid #44475a', hoverBg: '#44475a', hoverText: '#ffffff', separator: '#44475a',
         boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)', btnHoverBg: 'rgba(255, 121, 198, 0.15)',
-        progressGradient: 'linear-gradient(90deg, #bd93f9, #ff79c6)'
+        progressGradient: 'linear-gradient(90deg, #bd93f9, #ff79c6)',
+        success: '#50fa7b', danger: '#ff5555', warning: '#f1fa8c', info: '#8be9fd'
       },
       nord: {
-        name: 'Nord (Cool)', dark: true, bg: '#2e3440', text: '#d8dee9', inputBg: '#3b4252', accentBg: '#81a1c1', accentText: '#88c0d0', btnTextColor: '#2e3440',
+        key: 'nord', name: 'Nord (Cool)', dark: true, bg: '#2e3440', text: '#d8dee9', inputBg: '#3b4252', accentBg: '#81a1c1', accentText: '#88c0d0', btnTextColor: '#2e3440',
         border: '1px solid #4c566a', hoverBg: '#434c5e', hoverText: '#eceff4', separator: '#4c566a',
         boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)', btnHoverBg: 'rgba(129, 161, 193, 0.15)',
-        progressGradient: 'linear-gradient(90deg, #88c0d0, #81a1c1)'
+        progressGradient: 'linear-gradient(90deg, #88c0d0, #81a1c1)',
+        success: '#a3be8c', danger: '#bf616a', warning: '#ebcb8b', info: '#88c0d0'
       },
       solarized: {
-        name: 'Solarized Light', dark: false, bg: '#fdf6e3', text: '#657b83', inputBg: '#eee8d5', accentBg: '#2aa198', accentText: '#217d76', btnTextColor: '#ffffff',
+        key: 'solarized', name: 'Solarized Light', dark: false, bg: '#fdf6e3', text: '#657b83', inputBg: '#eee8d5', accentBg: '#2aa198', accentText: '#217d76', btnTextColor: '#ffffff',
         border: '1px solid #eee8d5', hoverBg: '#eee8d5', hoverText: '#586e75', separator: '#eee8d5',
         boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)', btnHoverBg: 'rgba(42, 161, 152, 0.1)',
-        progressGradient: 'linear-gradient(90deg, #268bd2, #2aa198)'
+        progressGradient: 'linear-gradient(90deg, #268bd2, #2aa198)',
+        success: '#859900', danger: '#dc322f', warning: '#b58900', info: '#268bd2'
       }
     },
 
@@ -1925,6 +2002,76 @@
         isDark: resolvedIsDark,
         target: target || document.body || document.documentElement
       });
+    },
+
+    parseColor: (colorStr, targetElement = null) => {
+      let r = 0, g = 0, b = 0, a = 1;
+      const cleanStr = FluxKit.theme._probeForVarColor(colorStr.trim().toLowerCase(), targetElement);
+
+      if (cleanStr.startsWith('rgb')) {
+        const values = cleanStr.match(/\d+(\.\d+)?/g);
+        if (values && values.length >= 3) {
+          [r, g, b] = values.map(Number);
+          if (values.length > 3) a = Number(values[3]);
+        }
+      } else if (cleanStr.startsWith('#')) {
+        let hex = cleanStr.replace('#', '');
+        if (hex.length === 3 || hex.length === 4) {
+          hex = hex.split('').map(x => x + x).join('');
+        }
+        if (hex.length >= 6) {
+          r = parseInt(hex.substring(0, 2), 16);
+          g = parseInt(hex.substring(2, 4), 16);
+          b = parseInt(hex.substring(4, 6), 16);
+          if (hex.length === 8) a = parseInt(hex.substring(6, 8), 16) / 255;
+        }
+      } else {
+         return null; // Invalid color
+      }
+      return { r, g, b, a };
+    },
+
+    toHsl: ({ r, g, b, a = 1 }) => {
+      r /= 255; g /= 255; b /= 255;
+      const max = Math.max(r, g, b), min = Math.min(r, g, b);
+      let h, s, l = (max + min) / 2;
+
+      if (max === min) {
+        h = s = 0; 
+      } else {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+          case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+          case g: h = (b - r) / d + 2; break;
+          case b: h = (r - g) / d + 4; break;
+        }
+        h /= 6;
+      }
+      const hslStr = `${Math.round(h * 360)}, ${Math.round(s * 100)}%, ${Math.round(l * 100)}%`;
+      return a < 1 ? `hsla(${hslStr}, ${a})` : `hsl(${hslStr})`;
+    },
+
+    getLuminance: ({ r, g, b }) => {
+      const aArr = [r, g, b].map((v) => {
+        v /= 255;
+        return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+      });
+      return aArr[0] * 0.2126 + aArr[1] * 0.7152 + aArr[2] * 0.0722;
+    },
+
+    getContrastRatio: (color1, color2, targetElement = null) => {
+      const c1 = typeof color1 === 'string' ? FluxKit.theme.parseColor(color1, targetElement) : color1;
+      const c2 = typeof color2 === 'string' ? FluxKit.theme.parseColor(color2, targetElement) : color2;
+      if (!c1 || !c2) return 1;
+      
+      const lum1 = FluxKit.theme.getLuminance(c1);
+      const lum2 = FluxKit.theme.getLuminance(c2);
+      
+      const brightest = Math.max(lum1, lum2);
+      const darkest = Math.min(lum1, lum2);
+      
+      return (brightest + 0.05) / (darkest + 0.05);
     },
 
     /**
@@ -2284,7 +2431,36 @@
         separator: dynamicSeparator, btnHoverBg: dynamicBtnHoverBg,
         progressGradient: dynamicProgressGradient
       };
-    }
+    },
+
+    getPalette: (rgbaObj) => {
+      let r = rgbaObj.r / 255, g = rgbaObj.g / 255, b = rgbaObj.b / 255;
+      const max = Math.max(r, g, b), min = Math.min(r, g, b);
+      let h, s, l = (max + min) / 2;
+
+      if (max === min) h = s = 0;
+      else {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+          case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+          case g: h = (b - r) / d + 2; break;
+          case b: h = (r - g) / d + 4; break;
+        }
+        h = Math.round(h * 60);
+      }
+      
+      const sStr = Math.round(s * 100) + '%';
+      const lStr = Math.round(l * 100) + '%';
+      
+      return {
+        complementary: `hsl(${(h + 180) % 360}, ${sStr}, ${lStr})`,
+        analogous1: `hsl(${(h + 30) % 360}, ${sStr}, ${lStr})`,
+        analogous2: `hsl(${(h + 330) % 360}, ${sStr}, ${lStr})`,
+        triadic1: `hsl(${(h + 120) % 360}, ${sStr}, ${lStr})`,
+        triadic2: `hsl(${(h + 240) % 360}, ${sStr}, ${lStr})`
+      };
+    },
   };
 
   function createCustomDialog(type, message, options = {}, resolve) {
@@ -2304,6 +2480,10 @@
     const overlay = FluxKit.utils.createHTMLElement('div', {
       className: 'flxkit-dialog-overlay',
       style: 'position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 2147483647; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); opacity: 0; transition: opacity 0.2s ease;'
+    });
+    
+    ['mousedown', 'mouseup', 'click', 'touchstart', 'touchend'].forEach(evt => {
+      overlay.addEventListener(evt, e => e.stopPropagation());
     });
 
     const modal = FluxKit.utils.createHTMLElement('div', {
@@ -2590,7 +2770,7 @@
         container.appendChild(FluxKit.utils.createHTMLElement('style', { textContent: `@keyframes ${animNameIn} { ${activeConfig.customKeyframes} }` }));
       }
       if (activeConfig.animationType === 'custom' && activeConfig.customKeyframes) {
-        animNameIn = `notify-custom-in-${id || FluxKit.utils.generateId()}`;
+        animNameIn = `notify-custom-in-${id || FluxKit.utils.getUniqueId()}`;
         animNameOut = activeConfig.customExitKeyframes ? `notify-custom-out-${id || Math.random().toString(36).substr(2, 5)}` : `flxkit-notify-fade-out`;
         
         const customStyle = `@keyframes ${animNameIn} { ${activeConfig.customKeyframes} }` +
@@ -2820,7 +3000,7 @@
         });
 
         if (opt.icon) {
-          item.prepend(FluxKit.utils.createHTMLElement('span', { style: 'display:flex;align-items:center;gap:8px;', innerHTML: opt.icon }));
+          item.prepend(FluxKit.utils.createHTMLElement('span', { style: 'display:flex;align-items:center;gap:8px;', icon: opt.icon }));
         }
 
         item.addEventListener('click', (e) => {
@@ -3068,13 +3248,14 @@
       tooltipEl.addEventListener('mouseenter', () => clearTimeout(tooltipEl._hideTimer));
 
       currentRoot.addEventListener('mouseover', (e) => {
-        const target = e.target.closest(`[${instanceConfig.attribute}]`);
+        const path = e.composedPath();
+        const target = path.find(node => node.nodeType === Node.ELEMENT_NODE && node.hasAttribute && node.hasAttribute(instanceConfig.attribute));
         if (!target) return;
 
         const hostParent = topLayerHost.parentElement;
         if (hostParent && hostParent.lastElementChild !== topLayerHost) {
-          hostParent.appendChild(topLayerHost); 
-          
+          hostParent.appendChild(topLayerHost);
+
           if (topLayerHost.hidePopover && topLayerHost.showPopover) {
             topLayerHost.hidePopover();
             topLayerHost.showPopover();
@@ -3101,7 +3282,7 @@
         }
 
         tooltipTimer = setTimeout(() => {
-          if (!target.isConnected || !currentRoot.contains(target)) return;
+          if (!target.isConnected) return;
 
           const isDark = instanceConfig.autoDark ? FluxKit.theme.isSystemDark() : !!instanceConfig.darkMode;
           const theme = FluxKit.theme.get(isDark);
@@ -3186,7 +3367,8 @@
       });
 
       currentRoot.addEventListener('mouseout', (e) => {
-        const target = e.target.closest(`[${instanceConfig.attribute}]`);
+        const path = e.composedPath();
+        const target = path.find(node => node.nodeType === Node.ELEMENT_NODE && node.hasAttribute && node.hasAttribute(instanceConfig.attribute));
         if (!target) return;
 
         clearTimeout(tooltipTimer);
@@ -3671,24 +3853,22 @@
 
   FluxKit.api ??= {
     translate: {
-      fetch: function (text, targetLang = 'en', sourceLang = 'auto') {
+      fetch: function (text, targetLang = 'en', sourceLang = 'auto', signal = null) {
         return new Promise((resolve, reject) => {
+          if (signal && signal.aborted) return reject({ name: 'AbortError' });
+
           const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sourceLang}&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
 
-          GM_xmlhttpRequest({
+          const req = GM_xmlhttpRequest({
             method: 'GET', url: url,
             onload: res => {
               if (res.status === 200) {
                 try {
                   const data = JSON.parse(res.responseText);
-
-                  // data[0] is an array of translated segments.
-                  // data[2] is the detected source language (e.g., "es", "hi").
                   let translatedText = '';
                   if (data[0] && Array.isArray(data[0])) {
                     data[0].forEach(segment => { if (segment[0]) translatedText += segment[0]; });
                   }
-
                   resolve({
                     original: text, translated: translatedText,
                     detectedLanguage: data[2] || sourceLang, raw: data,
@@ -3701,46 +3881,54 @@
               }
             },
             onerror: () => reject(new Error('Network error during translation')),
+            onabort: () => reject({ name: 'AbortError' })
           });
+
+          if (signal) signal.addEventListener('abort', () => { if (req && typeof req.abort === 'function') req.abort(); });
         });
       },
     },
 
     dictionary: {
-      fetch: function (word, lang = 'en') {
+      fetch: function (word, lang = 'en', signal = null) {
         return new Promise((resolve, reject) => {
+          if (signal && signal.aborted) return reject({ name: 'AbortError' });
+
           const url = `https://api.dictionaryapi.dev/api/v2/entries/${lang}/${encodeURIComponent(word)}`;
 
-          GM_xmlhttpRequest({
+          const req = GM_xmlhttpRequest({
             method: 'GET', url: url,
             onload: res => {
               if (res.status === 200) {
                 try {
                   const data = JSON.parse(res.responseText);
-                  resolve(data[0]); // API returns an array of entries, grab the best match from that
+                  resolve(data[0]); 
                 } catch (e) {
                   reject(new Error('Failed to parse dictionary response'));
                 }
               } else if (res.status === 404) {
-                // 404 is a valid state here (it just means the word isn't in the dictionary)
                 resolve(null);
               } else {
                 reject(new Error(`Dictionary API error: ${res.status}`));
               }
             },
-            onerror: () =>
-              reject(new Error('Network error during dictionary lookup')),
+            onerror: () => reject(new Error('Network error during dictionary lookup')),
+            onabort: () => reject({ name: 'AbortError' })
           });
+
+          if (signal) signal.addEventListener('abort', () => { if (req && typeof req.abort === 'function') req.abort(); });
         });
       },
     },
 
     thesaurus: {
-      fetch: function (word, mode = 'syn', max = 10) {
+      fetch: function (word, mode = 'syn', max = 10, signal = null) {
         return new Promise(resolve => {
+          if (signal && signal.aborted) return resolve([]); // Resolve gracefully on abort
+
           const url = `https://api.datamuse.com/words?rel_${mode}=${encodeURIComponent(word)}&max=${max}`;
 
-          GM_xmlhttpRequest({
+          const req = GM_xmlhttpRequest({
             method: 'GET', url: url,
             onload: res => {
               if (res.status === 200) {
@@ -3748,14 +3936,17 @@
                   const data = JSON.parse(res.responseText);
                   resolve(data.map(item => item.word));
                 } catch (e) {
-                  resolve([]); // Non-critical failure
+                  resolve([]); 
                 }
               } else {
                 resolve([]);
               }
             },
-            onerror: () => resolve([]), // Fail gracefully so it doesn't crash the main UI
+            onerror: () => resolve([]), 
+            onabort: () => resolve([])
           });
+
+          if (signal) signal.addEventListener('abort', () => { if (req && typeof req.abort === 'function') req.abort(); });
         });
       },
     },
@@ -4417,8 +4608,8 @@
         }
       }
     }
-  }
-
+  };
+  
   /******** Loader (ESM) ********/
   FluxKit.loader ??= (function () {
     const _moduleCache = new Map();
@@ -4480,9 +4671,9 @@
       loadESModule,
       clearCache: () => _moduleCache.clear() 
     };
-  })()
+  })();
 
-  FluxKit.cache = (function () {
+  FluxKit.cache ??= (function () {
     const subscribers = new Map();
 
     const StorageEngines = {
@@ -4496,6 +4687,21 @@
           async keys() { return Array.from(store.keys()); },
           async size() { return store.size; },
           async entries() { return Array.from(store.entries()); },
+        };
+      },
+      gm: ns => {
+        const storeKey = `flux_cache_${ns}`;
+        const read = () => GM_getValue(storeKey, {});
+        const write = (obj) => GM_setValue(storeKey, obj);
+
+        return {
+            async get(k) { return read()[k]; },
+            async set(k, v) { const data = read(); data[k] = v; write(data); },
+            async del(k) { const data = read(); delete data[k]; write(data); },
+            async clear() { write({}); },
+            async keys() { return Object.keys(read()); },
+            async size() { return Object.keys(read()).length; },
+            async entries() { return Object.entries(read()); }
         };
       },
       localstorage: ns => {
@@ -4553,9 +4759,21 @@
         this.ns = namespace;
         this.engineType = (config.storage || 'memory').toLowerCase();
         this.engine = (StorageEngines[this.engineType] || StorageEngines.memory)(namespace);
-        this.policy = (config.policy || 'lru').toLowerCase(); // 'lru', 'lfu', 'ttl', 'none'
+        this.policy = (config.policy || 'lru').toLowerCase(); // 'lru', 'lfu', 'ttl', 'byte', 'none'
         this.maxSize = config.maxSize || Infinity;
         this.defaultTTL = config.ttl || null; // in ms
+
+        this.maxBytes = config.maxBytes || Infinity;
+        this.maxEntryBytes = config.maxEntryBytes || Infinity;
+        this.sizeFn = config.sizeFn || (payload => { try { return JSON.stringify(payload).length; } catch(e) { return 0; } });
+        this.onSet = config.onSet || null;
+        this.onEvict = config.onEvict || null; // (key, payload) => void — fires on every removal (evict/delete/clear); use for cleanup like URL.revokeObjectURL
+        this.currentBytes = 0; // only meaningful under 'byte' policy
+
+        if (this.policy === 'byte' && this.engineType !== 'memory') {
+          console.warn(`[FluxKit Cache] '${namespace}': 'byte' policy is intended for the 'memory' engine — non-JSON-serializable payloads (AudioBuffer, Blob, etc.) will fail on '${this.engineType}'.`);
+        }
+
         this.bc = config.broadcast ? new BroadcastChannel(`flx_c_${namespace}`) : null;
 
         if (this.bc) {
@@ -4568,6 +4786,19 @@
 
       async _evict() {
         if (this.policy === 'none' || this.policy === 'ttl') return; // TTL handles itself on 'get'
+
+        if (this.policy === 'byte') {
+          if (this.currentBytes <= this.maxBytes) return;
+          const entries = await this.engine.entries();
+          entries.sort((a, b) => a[1].meta.lastUsed - b[1].meta.lastUsed); // oldest first
+          for (const [k, v] of entries) {
+            if (this.currentBytes <= this.maxBytes) break;
+            if (v.meta.pinned) continue;
+            await this.delete(k, false); // updates currentBytes + fires onEvict
+          }
+          return;
+        }
+
         const size = await this.engine.size();
         if (size <= this.maxSize) return;
 
@@ -4608,36 +4839,438 @@
         const ttl = customTTL !== undefined && customTTL !== null ? customTTL : this.defaultTTL;
         const expiry = ttl ? Date.now() + ttl : null;
 
-        const wrapper = { payload, meta: { count: 1, lastUsed: Date.now(), expiry, pinned } };
+        let byteSize = 0;
+        if (this.policy === 'byte') {
+          byteSize = this.sizeFn(payload);
+          
+          if (byteSize > this.maxEntryBytes) {
+            if (this.onSet) {
+              this.onSet({ success: false, key, reason: 'exceeds_maxEntryBytes', entrySize: byteSize, totalSize: this.currentBytes, count: await this.engine.size() });
+            }
+            return false;
+          }
+
+          const existing = await this.engine.get(key);
+          if (existing) this.currentBytes -= (existing.meta.byteSize || 0); // back out old contribution if replacing
+        }
+
+        const wrapper = { payload, meta: { count: 1, lastUsed: Date.now(), expiry, pinned, byteSize } };
 
         await this.engine.set(key, wrapper);
+        if (this.policy === 'byte') this.currentBytes += byteSize;
+
         await this._evict();
+
+        if (this.onSet) {
+          this.onSet({ 
+            success: true, 
+            key, 
+            entrySize: byteSize, 
+            totalSize: this.currentBytes, 
+            count: await this.engine.size() 
+          });
+        }
+
+        return true;
+      }
+
+      async set(key, payload, options = {}) {
+        const customTTL = typeof options === 'number' ? options : options.ttl;
+        const pinned = typeof options === 'object' && options.pinned ? true : false;
+        const ttl = customTTL !== undefined && customTTL !== null ? customTTL : this.defaultTTL;
+        const expiry = ttl ? Date.now() + ttl : null;
+
+        let byteSize = this.policy === 'byte' ? this.sizeFn(payload) : null;
+        const count = this.onSet ? await this.engine.size() : null;
+        if (this.policy === 'byte') {
+          const existing = await this.engine.get(key);
+          if (byteSize > this.maxEntryBytes) { // too big to ever cache — caller should just use the payload directly, uncached
+            if (this.onSet) this.onSet({ success: false, count, entrySize: byteSize, size: this.currentBytes });
+            return false;
+          }
+
+          if (existing) this.currentBytes -= (existing.meta.byteSize || 0); // back out old contribution if replacing
+        }
+
+        const wrapper = { payload, meta: { count: 1, lastUsed: Date.now(), expiry, pinned, byteSize } };
+
+        await this.engine.set(key, wrapper);
+        if (this.policy === 'byte') this.currentBytes += byteSize;
+        if (this.onSet) this.onSet({ success: true, count, entrySize: byteSize, size: this.currentBytes });
+
+        await this._evict();
+        return true;
       }
 
       async delete(key, broadcast = true) {
+        if (this.policy === 'byte' || this.onEvict) {
+          const existing = await this.engine.get(key);
+          if (existing) {
+            if (this.policy === 'byte') this.currentBytes -= (existing.meta.byteSize || 0);
+            if (this.onEvict) { try { this.onEvict(key, existing.payload); } catch(e) {} }
+          }
+        }
         await this.engine.del(key);
         if (this.bc && broadcast) this.bc.postMessage({ action: 'del', key });
       }
 
       async clear(keepPinned = false, broadcast = true) {
-        if (keepPinned) {
-          const entries = await this.engine.entries();
-          for (const [k, v] of entries) { if (!v.meta.pinned) await this.engine.del(k); }
-        } else {
-          await this.engine.clear();
+        const entries = await this.engine.entries();
+        for (const [k, v] of entries) {
+          if (keepPinned && v.meta.pinned) continue;
+          if (this.onEvict) { try { this.onEvict(k, v.payload); } catch(e) {} }
+          if (this.policy === 'byte') this.currentBytes -= (v.meta.byteSize || 0);
+          await this.engine.del(k);
         }
         if (this.bc && broadcast) this.bc.postMessage({ action: 'clear', keepPinned });
       }
     }
     return {
       register: function(namespace, config = {}) {
-          if (subscribers.has(namespace)) return subscribers.get(namespace);
-          const subscriber = new CacheSubscribers(namespace, config);
-          subscribers.set(namespace, subscriber);
-          return subscriber;
+        if (subscribers.has(namespace)) return subscribers.get(namespace);
+        const subscriber = new CacheSubscribers(namespace, config);
+        subscribers.set(namespace, subscriber);
+        return subscriber;
       },
       get: (namespace) => subscribers.get(namespace),
       registerEngine: (name, factoryFn) => { StorageEngines[name.toLowerCase()] = factoryFn; }
+    };
+  })();
+
+  FluxKit.state ??= (function () {
+    const instances = new Map();
+
+    const StorageEngines = {
+      memory: () => {
+        const store = new Map();
+        return {
+          get(k, fallback) { return store.has(k) ? store.get(k) : fallback; },
+          set(k, v) { store.set(k, v); },
+          del(k) { store.delete(k); },
+          deleteAll() { store.clear(); }
+        };
+      },
+      gm: ns => {
+        const prefix = `flux_state_${ns}_`;
+        return {
+          get(k, fallback) { return GM_getValue(prefix + k, fallback); },
+          set(k, v) { GM_setValue(prefix + k, v); },
+          del(k) { GM_deleteValue(prefix + k); },
+          deleteAll() {
+            if (typeof GM_listValues !== 'undefined') {
+              GM_listValues().forEach(key => {
+                if (key.startsWith(prefix)) GM_deleteValue(key);
+              });
+            }
+          }
+        };
+      },
+      localstorage: ns => {
+        const prefix = `flx_s_${ns}_`;
+        return {
+          get(k, fallback) {
+            const v = localStorage.getItem(prefix + k);
+            return v !== null ? JSON.parse(v) : fallback;
+          },
+          set(k, v) { localStorage.setItem(prefix + k, JSON.stringify(v)); },
+          del(k) { localStorage.removeItem(prefix + k); },
+          deleteAll() {
+            Object.keys(localStorage).forEach(key => {
+              if (key.startsWith(prefix)) localStorage.removeItem(key);
+            });
+          }
+        };
+      }
+    };
+
+    class StateInstance {
+      constructor(namespace, config = {}) {
+        this.ns = namespace;
+        this.engineType = (config.storage || 'gm').toLowerCase();
+        this.engine = (StorageEngines[this.engineType] || StorageEngines.gm)(namespace);
+        
+        this.bc = config.broadcast ? new BroadcastChannel(`flx_s_${namespace}`) : null;
+
+        if (this.bc) {
+          this.bc.onmessage = (e) => {
+            if (e.data.action === 'set' && this.engineType === 'memory') {
+              this.engine.set(e.data.key, e.data.value);
+            }
+            if (e.data.action === 'del') this.engine.del(e.data.key);
+            if (e.data.action === 'deleteAll') this.engine.deleteAll();
+          };
+        }
+      }
+
+      get(key, fallback) { return this.engine.get(key, fallback); }
+      
+      set(key, value, broadcast = true) {
+        this.engine.set(key, value);
+        if (this.bc && broadcast) this.bc.postMessage({ action: 'set', key, value });
+        return true;
+      }
+      
+      delete(key, broadcast = true) {
+        this.engine.del(key);
+        if (this.bc && broadcast) this.bc.postMessage({ action: 'del', key });
+      }
+      
+      deleteAll(broadcast = true) {
+        this.engine.deleteAll();
+        if (this.bc && broadcast) this.bc.postMessage({ action: 'deleteAll' });
+      }
+    }
+
+    return {
+      register: function(namespace, config = {}) {
+        if (instances.has(namespace)) return instances.get(namespace);
+        const instance = new StateInstance(namespace, config);
+        instances.set(namespace, instance);
+        return instance;
+      },
+      get: (namespace) => instances.get(namespace),
+      registerEngine: (name, factoryFn) => { StorageEngines[name.toLowerCase()] = factoryFn; }
+    };
+  })();
+
+  FluxKit.ipc ??= (function () {
+    const EVENT_PREFIX = 'flux-ipc-';
+    const TAB_ID = (() => {
+      try {
+        let id = sessionStorage.getItem('flux_ipc_tab_id');
+        if (!id) {
+          id = FluxKit.utils.getUniqueId();
+          sessionStorage.setItem('flux_ipc_tab_id', id);
+        }
+        return id;
+      } catch (e) {
+        return FluxKit.utils.getUniqueId();
+      }
+    })();
+    const globalListeners = {};
+    const activeClaims = new Map(); // claimId -> tickCallback
+    let heartbeatTimerId = null;
+
+    const ensureHeartbeatRunning = () => {
+      if (heartbeatTimerId) return;
+      heartbeatTimerId = setInterval(() => {
+        const now = Date.now();
+        activeClaims.forEach(tick => {
+          try { tick(now); } catch (err) { console.error('[FluxKit IPC] Heartbeat claim callback failed:', err); }
+        });
+      }, 3000);
+    };
+
+    const stopHeartbeatIfIdle = () => {
+      if (activeClaims.size === 0 && heartbeatTimerId) {
+        clearInterval(heartbeatTimerId);
+        heartbeatTimerId = null;
+      }
+    };
+
+    // Initialize the Cross-Tab Global Listener (The OS-Level Bridge)
+    if (typeof GM_addValueChangeListener !== 'undefined') {
+      GM_addValueChangeListener('flux_global_bus', (name, oldVal, newVal, remote) => {
+        // We ONLY care if the change came from a different tab (remote = true)
+        if (!remote || !newVal) return;
+
+        if (globalListeners[newVal.intent]) {
+          globalListeners[newVal.intent].forEach(callback => {
+            try { callback(newVal.payload, newVal.senderTab); }
+            catch(err) { console.error(`[FluxKit IPC] Global handler error for '${newVal.intent}':`, err); }
+          });
+        }
+      });
+    }
+
+    return {
+      // Expose the unique Tab UUID so scripts can establish "Leader Election"
+      getTabId: () => TAB_ID,
+
+      broadcast(intent, payload = {}, global = false) {
+        // Local DOM Broadcast (Always fires for same-tab listeners)
+        try {
+          const event = new CustomEvent(`${EVENT_PREFIX}${intent}`, { detail: JSON.stringify(payload) });
+          document.dispatchEvent(event);
+        } catch (err) {
+          console.error(`[FluxKit IPC] Failed to broadcast local '${intent}':`, err);
+        }
+
+        // Global Cross-Tab Broadcast (Only if requested)
+        if (global) {
+          try {
+            GM_setValue('flux_global_bus', { 
+              intent, 
+              payload, 
+              senderTab: TAB_ID, 
+              _ts: Date.now() // Timestamp guarantees the value changes, forcing the event to fire
+            });
+          } catch(err) {
+            console.error(`[FluxKit IPC] Failed to broadcast global '${intent}'. Ensure GM_setValue is granted.`, err);
+          }
+        }
+      },
+
+      listen(intent, callback, global = false) {
+        // Local Listener
+        const localHandler = e => {
+          try {
+            const payload = e.detail ? JSON.parse(e.detail) : {};
+            callback(payload, TAB_ID); // Pass local TAB_ID as sender
+          } catch (err) {
+            console.error(`[FluxKit IPC] Failed to parse local payload for '${intent}':`, err);
+          }
+        };
+
+        const eventName = `${EVENT_PREFIX}${intent}`;
+        document.addEventListener(eventName, localHandler);
+
+        // Setup Global Listener
+        if (global) {
+          if (!globalListeners[intent]) globalListeners[intent] = [];
+          globalListeners[intent].push(callback);
+        }
+
+        // Return a unified teardown function
+        return () => {
+          document.removeEventListener(eventName, localHandler);
+          if (global && globalListeners[intent]) {
+            globalListeners[intent] = globalListeners[intent].filter(cb => cb !== callback);
+          }
+        };
+      },
+
+      ownership: {
+        /**
+         * Generic liveness check for single-owner-tab resources. Domain
+         * modules keep their own state shape (active_media.hostTab, or
+         * whatever a plugin uses) — this only answers "is the recorded
+         * owner still alive," using a heartbeat timestamp the owner itself
+         * is responsible for refreshing (see claim() below).
+         */
+        isMineOrStale(hostTab, lastHeartbeat, staleMs = 8000) {
+          if (!hostTab || hostTab === TAB_ID) return true; // unowned, or already ours
+          if (!lastHeartbeat) return true; // no heartbeat recorded — treat as orphaned
+          return (Date.now() - lastHeartbeat) > staleMs;
+        },
+
+        /**
+         * Registers this tab as the live owner of some resource, and hooks
+         * into the shared heartbeat ticker so `onTick(now)` fires periodically
+         * for as long as the claim is held — completely independent of any
+         * other module's activity state (music's isPlaying, a plugin's
+         * connection status, etc). The caller decides what to do each tick
+         * (typically: write `now` into its own persisted state and/or
+         * broadcast it) — this only guarantees the tick happens.
+         *
+         * @param {function(number): void} onTick - called with Date.now() each interval
+         * @returns {function(): void} release() - stop ticking and unregister this claim
+         */
+        claim(onTick) {
+          const claimId = FluxKit.utils.getUniqueId();
+          activeClaims.set(claimId, onTick);
+          ensureHeartbeatRunning();
+          onTick(Date.now()); // fire immediately so the owner isn't stale for the first interval
+
+          return () => {
+            activeClaims.delete(claimId);
+            stopHeartbeatIfIdle();
+          };
+        }
+      },
+    };
+  })();
+
+  FluxKit.ui.omni ??= (function () {
+    const { createHTMLElement } = FluxKit.utils;
+
+    return {
+      ListRow: (title, iconStr = 'search', subtitle = '', actionHint = '', actionIcon = 'enter') => {
+        const contentChildren = [
+          createHTMLElement('div', { class: 'flx-omni-title', textContent: title })
+        ];
+
+        if (subtitle) {
+          contentChildren.push(createHTMLElement('div', { class: 'flx-omni-subtitle', textContent: subtitle }));
+        }
+
+        return createHTMLElement('div', {
+          class: 'flx-omni-row',
+          children: [
+            createHTMLElement('div', { class: 'flx-omni-icon', icon: iconStr }),
+            createHTMLElement('div', { class: 'flx-omni-content', children: contentChildren }),
+            createHTMLElement('div', { class: 'flx-omni-hint', icon: actionIcon, textContent: actionHint, style: { display: 'flex', gap: '4px' } }),
+          ],
+        });
+      },
+
+      DetailCard: (contentNode, actions = []) => {
+        const cardChildren = [
+          createHTMLElement('div', { class: 'flx-omni-card-body', children: contentNode }),
+        ];
+
+        if (actions && actions.length > 0) {
+          cardChildren.push(createHTMLElement('div', { class: 'flx-omni-card-footer', children: actions }));
+        }
+
+        return createHTMLElement('div', { class: 'flx-omni-card', children: cardChildren });
+      },
+
+      DataGrid: dataPairs => {
+        const rows = Object.entries(dataPairs).map(([label, value]) =>
+          createHTMLElement('div', {
+            class: 'flx-omni-grid-row',
+            children: [
+              createHTMLElement('div', { class: 'flx-omni-grid-label', innerHTML: label }),
+              createHTMLElement('div', { class: 'flx-omni-grid-value', innerHTML: value }),
+            ],
+          }),
+        );
+
+        return createHTMLElement('div', { class: 'flx-omni-grid', children: rows });
+      },
+
+      Button: (iconStr, label, onClick) => {
+        return createHTMLElement('button', { 
+          class: 'flx-omni-btn', icon: iconStr || undefined, eventListener: onClick, 
+          children: createHTMLElement('span', { class: 'flx-omni-btn-label', textContent: label })
+        });
+      },
+
+      Widget: (contentNode, options = {}) => {
+        const { onClick, style = {}, headerHTML } = options;
+
+        const children = [];
+
+        if (headerHTML) {
+          children.push(createHTMLElement('div', {
+            style: { 
+              fontSize: '11px', fontWeight: 'bold', color: 'var(--omni-text)', 
+              borderBottom: '1px solid var(--omni-separator)', paddingBottom: '6px', 
+              marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px', 
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+            },
+            innerHTML: headerHTML
+          }));
+        }
+
+        const body = createHTMLElement('div', { 
+          style: { display: 'flex', flexDirection: 'column', flexGrow: '1', gap: '4px' },
+          children: contentNode
+        });
+
+        const attributes = {
+          class: 'flx-omni-widget',
+          style: { ...style },
+          children: body
+        };
+
+        if (onClick) {
+          attributes.eventListener = { click: onClick };
+        }
+
+        return createHTMLElement('div', attributes);
+      },
     };
   })();
 
@@ -4893,8 +5526,8 @@
       _returns: 'String (Emoji)'
     },
 
-    makeElementDragAndResize: {
-      _command: 'FluxKit.utils.makeElementDragAndResize(element, header?, options?)',
+    attachWindowControls: {
+      _command: 'FluxKit.utils.attachWindowControls(element, header?, options?)',
       _summary: 'Transforms a DOM element into a native OS-level window with drag, resize, maximize, minimize, and close capabilities.',
       _arguments: {
         'element': { Type: 'HTMLElement', Required: 'Yes', Notes: 'The root modal/container to make draggable.' },
@@ -4939,7 +5572,7 @@
         'onResizeStart / onResizing / onResizeEnd': { Type: 'Function', Default: 'null', Description: 'Real-time scaling hooks.' }
       },
       _returns: 'A `destroy` function that tears down all event listeners. It also exposes `.toggleMinimize()`, `.toggleMaximize()`, `.toggleClose()`, and `.bringToFront()` so window controls can be driven externally (e.g. from a taskbar).',
-      _example: `const cleanup = FluxKit.utils.makeElementDragAndResize(modalEl, headerEl, {\n  minimize: true,\n  maximize: true,\n  close: { onClick: null }, // or simply \`close: true\`\n  onClose: () => confirm('Discard changes?'),\n});\n\n// later, e.g. from a taskbar button:\ncleanup.toggleMinimize();\n\n// full teardown:\ncleanup();`
+      _example: `const cleanup = FluxKit.utils.attachWindowControls(modalEl, headerEl, {\n  minimize: true,\n  maximize: true,\n  close: { onClick: null }, // or simply \`close: true\`\n  onClose: () => confirm('Discard changes?'),\n});\n\n// later, e.g. from a taskbar button:\ncleanup.toggleMinimize();\n\n// full teardown:\ncleanup();`
     },
 
     trapTabFocus: {
@@ -4999,6 +5632,39 @@
         target: { Type: 'HTMLElement', Required: 'No', Notes: 'If auto-generating a native theme, samples colors from this specific element instead of document.body.' }
       },
       _returns: 'Full Theme Object (bg, text, accentBg, dynamic borders, hover states, etc.)'
+    },
+
+    parseColor: {
+      _command: 'FluxKit.theme.parseColor(colorStr, targetElement?)',
+      _summary: 'Parses a hex, RGB(A), or CSS variable string into an RGBA object.',
+      _arguments: {
+        colorStr: { Type: 'String', Required: 'Yes', Notes: 'Hex, RGB(A), or CSS variable.' },
+        targetElement: { Type: 'HTMLElement', Required: 'No', Notes: 'Used to safely compute CSS variables.' }
+      },
+      _returns: 'Object { r, g, b, a } | null'
+    },
+
+    toHsl: {
+      _command: 'FluxKit.theme.toHsl({ r, g, b, a })',
+      _summary: 'Converts an RGBA object into an HSL or HSLA CSS string.',
+      _returns: 'String (e.g., "hsl(210, 50%, 50%)")'
+    },
+
+    getLuminance: {
+      _command: 'FluxKit.theme.getLuminance({ r, g, b })',
+      _summary: 'Calculates the relative luminance of a color for WCAG contrast checking.',
+      _returns: 'Number (0 to 1)'
+    },
+
+    getContrastRatio: {
+      _command: 'FluxKit.theme.getContrastRatio(color1, color2, targetElement?)',
+      _summary: 'Calculates the exact WCAG contrast ratio between two colors.',
+      _arguments: {
+        color1: { Type: 'String | Object', Required: 'Yes', Notes: 'First color string or RGBA object.' },
+        color2: { Type: 'String | Object', Required: 'Yes', Notes: 'Second color string or RGBA object.' },
+        targetElement: { Type: 'HTMLElement', Required: 'No', Notes: 'Used to resolve CSS variables.' }
+      },
+      _returns: 'Number (1 to 21)'
     },
 
     darken: { _command: 'FluxKit.theme.darken(color, percent)', _summary: 'Darkens a Hex or RGB color by a specific percentage.',
@@ -5078,6 +5744,16 @@
         isDark: { Type: 'Boolean', Default: 'Auto', Description: 'Force dark/light mode context.' }
       },
       _returns: 'Full Theme Object (Combines host properties with alpha-blended UI variables)'
+    },
+
+    getPalette: {
+      _command: 'FluxKit.theme.getPalette(rgbaObj)',
+      _summary: 'Generates a harmonious color palette based on a source RGB object.',
+      _description: 'Calculates the complementary, analogous, and triadic colors directly in the HSL space to ensure perfect visual harmony.',
+      _arguments: {
+        rgbaObj: { Type: 'Object', Required: 'Yes', Notes: 'Object containing { r, g, b } (e.g., from parseColor).' }
+      },
+      _returns: 'Object containing HSL string values { complementary, analogous1, analogous2, triadic1, triadic2 }'
     }
   }, { isNative: true });
 
@@ -5296,6 +5972,53 @@
         _returns: 'Void'
       }
     },
+
+    omni: {
+      _summary: 'Standardized DOM element factories for the OmniStage universal search UI.',
+      _description: 'Provides pre-styled, structurally consistent DOM nodes. Used exclusively inside the renderListRow and renderExpandedCard methods of FluxSearch views to ensure visual consistency across all plugins.',
+      
+      ListRow: {
+        _summary: 'Builds a standardized search result row for the OmniStage dropdown list.',
+        _command: 'FluxKit.ui.omni.ListRow(title, iconStr?, subtitle?, actionHint?)',
+        _arguments: {
+          'title': { Type: 'String', Required: 'Yes', Notes: 'Primary text of the search result.' },
+          'iconStr': { Type: 'String', Required: 'No', Default: '"search"', Notes: 'Key mapping to FluxKit.ui.icons (e.g., "music", "settings").' },
+          'subtitle': { Type: 'String', Required: 'No', Default: '""', Notes: 'Secondary descriptive text rendered below the title.' },
+          'actionHint': { Type: 'String', Required: 'No', Default: '"↵"', Notes: 'The right-aligned hint (e.g., "↵ to Play", "Alt+C to Copy").' }
+        },
+        _returns: 'HTMLElement (A fully constructed DOM node ready for the results list)'
+      },
+
+      DetailCard: {
+        _summary: 'Wraps content in a standardized glassmorphic card for expanded OmniStage views.',
+        _command: 'FluxKit.ui.omni.DetailCard(contentNode, actions?)',
+        _arguments: {
+          'contentNode': { Type: 'HTMLElement | Array', Required: 'Yes', Notes: 'The primary custom DOM content to display in the card body.' },
+          'actions': { Type: 'Array<HTMLElement>', Required: 'No', Default: '[]', Notes: 'An array of Button elements to render in the card footer.' }
+        },
+        _returns: 'HTMLElement (The completed Card DOM wrapper)'
+      },
+
+      DataGrid: {
+        _summary: 'Generates a clean, two-column key-value layout commonly used in dictionaries or weather data.',
+        _command: 'FluxKit.ui.omni.DataGrid(dataPairs)',
+        _arguments: {
+          'dataPairs': { Type: 'Object', Required: 'Yes', Notes: 'A key-value object (e.g., { "Wind Speed": "12mph", "Humidity": "85%" }). Values can include HTML.' }
+        },
+        _returns: 'HTMLElement (A CSS grid layout containing the pairs)'
+      },
+
+      Button: {
+        _summary: 'Creates a standard OmniStage footer button.',
+        _command: 'FluxKit.ui.omni.Button(iconStr, label, onClick)',
+        _arguments: {
+          'iconStr': { Type: 'String', Required: 'Yes', Notes: 'Key mapping to FluxKit.ui.icons (pass null for text-only).' },
+          'label': { Type: 'String', Required: 'Yes', Notes: 'Button text.' },
+          'onClick': { Type: 'Function', Required: 'Yes', Notes: 'Event listener attached to the click event.' }
+        },
+        _returns: 'HTMLElement (A button element)'
+      }
+    }
   }, { isNative: true });
 
   FluxKit.help.register('api', {
@@ -5304,12 +6027,13 @@
     translate: {
       _description: 'Google Translate API wrapper (GTX client).',
       fetch: {
-        _command: 'FluxKit.api.translate.fetch(text, targetLang?, sourceLang?)',
+        _command: 'FluxKit.api.translate.fetch(text, targetLang?, sourceLang?, signal?)',
         _summary: 'Translates text automatically without requiring API keys.',
         _arguments: {
           'text': { Type: 'String', Required: 'Yes' },
           'targetLang': { Type: 'String', Required: 'No', Default: '"en"' },
-          'sourceLang': { Type: 'String', Required: 'No', Default: '"auto"' }
+          'sourceLang': { Type: 'String', Required: 'No', Default: '"auto"' },
+          'signal': { Type: 'AbortSignal', Required: 'No', Notes: 'Used for cancelling the request (debouncing).' }
         },
         _returns: 'Promise<{ original, translated, detectedLanguage, raw }>'
       }
@@ -5318,11 +6042,12 @@
     dictionary: {
       _description: 'Free Dictionary API wrapper.',
       fetch: {
-        _command: 'FluxKit.api.dictionary.fetch(word, lang?)',
+        _command: 'FluxKit.api.dictionary.fetch(word, lang?, signal?)',
         _summary: 'Fetches definitions, phonetics, and audio links for a word.',
         _arguments: {
           'word': { Type: 'String', Required: 'Yes' },
-          'lang': { Type: 'String', Required: 'No', Default: '"en"' }
+          'lang': { Type: 'String', Required: 'No', Default: '"en"' },
+          'signal': { Type: 'AbortSignal', Required: 'No', Notes: 'Used for cancelling the request (debouncing).' }
         },
         _returns: 'Promise<Object | null> (Parsed dictionary entry or null if not found)'
       }
@@ -5331,12 +6056,13 @@
     thesaurus: {
       _description: 'Datamuse API wrapper for finding synonyms, antonyms, etc.',
       fetch: {
-        _command: 'FluxKit.api.thesaurus.fetch(word, mode?, max?)',
+        _command: 'FluxKit.api.thesaurus.fetch(word, mode?, max?, signal?)',
         _summary: 'Fetches related words based on the specified mode.',
         _arguments: {
           'word': { Type: 'String', Required: 'Yes' },
           'mode': { Type: 'String', Required: 'No', Default: '"syn"', Notes: '"syn" for synonyms, "ant" for antonyms.' },
-          'max': { Type: 'Number', Required: 'No', Default: '10', Notes: 'Maximum number of results to return.' }
+          'max': { Type: 'Number', Required: 'No', Default: '10', Notes: 'Maximum number of results to return.' },
+          'signal': { Type: 'AbortSignal', Required: 'No', Notes: 'Used for cancelling the request (debouncing).' }
         },
         _returns: 'Promise<Array<String>>'
       }
@@ -5412,6 +6138,19 @@
     githubRepo: {
       _description: 'Interact directly with GitHub Repositories for advanced file tracking and versioning.',
 
+      request: {
+        _command: 'FluxKit.api.githubRepo.request(method, endpoint, token, data?, responseType?)',
+        _summary: 'Base HTTP request handler for the GitHub API.',
+        _arguments: {
+          'method': { Type: 'String', Required: 'Yes', Notes: '"GET", "POST", "PUT", "DELETE", etc.' },
+          'endpoint': { Type: 'String', Required: 'Yes', Notes: 'API path (e.g. "/user") or full URL.' },
+          'token': { Type: 'String', Required: 'Yes' },
+          'data': { Type: 'Object', Required: 'No', Notes: 'JSON payload to stringify.' },
+          'responseType': { Type: 'String', Required: 'No', Default: '"json"', Notes: '"json", "text", or "blob".' }
+        },
+        _returns: 'Promise<Any>'
+      },
+
       ensureRepo: {
         _command: 'FluxKit.api.githubRepo.ensureRepo(token, repoName)', 
         _summary: 'Checks if a repo exists; creates it privately if it does not.',
@@ -5432,6 +6171,15 @@
           'folderPath': { Type: 'String', Required: 'No', Notes: 'Leave empty for root.' }
         },
         _returns: 'Promise<{ files: Object }>'
+      },
+
+      toBase64: {
+        _command: 'FluxKit.api.githubRepo.toBase64(content)',
+        _summary: 'Converts a string, Object, or Blob into a Base64 string for the GitHub API.',
+        _arguments: {
+          'content': { Type: 'String | Blob | Object', Required: 'Yes' }
+        },
+        _returns: 'Promise<String>'
       },
 
       uploadFile: {
@@ -5551,6 +6299,12 @@
         _returns: 'Promise<Object>' 
       },
 
+      request: {
+        _command: 'FluxKit.api.dropbox.request(token, endpoint, isContent?, arg?, body?, returnType?)',
+        _summary: 'Base HTTP request handler for the Dropbox API.',
+        _returns: 'Promise<Any>'
+      },
+
       fetchFile: {
         _command: 'FluxKit.api.dropbox.fetchFile(token, filePath, responseType?)', 
         _summary: 'Downloads a single file from a Dropbox path.',
@@ -5609,6 +6363,12 @@
         _returns: 'Promise<Object>'
       },
 
+      request: {
+        _command: 'FluxKit.api.onedrive.request(token, path, method?, body?, isContent?)',
+        _summary: 'Base HTTP request handler for the Microsoft Graph API.',
+        _returns: 'Promise<Any>'
+      },
+
       fetchFile: {
         _command: 'FluxKit.api.onedrive.fetchFile(token, filePath, responseType?)', 
         _summary: 'Downloads a single file from OneDrive.',
@@ -5653,6 +6413,90 @@
     }
   }, { isNative: true });
 
+  FluxKit.help.register('state', {
+    _summary: 'Modular, synchronous state management with cross-tab synchronization.',
+    _description: 'Provides isolated, namespaced synchronous state storage across memory, GM storage, and localStorage. Perfect for UI settings and lightweight preferences.',
+    _command: 'FluxKit.state',
+    _example: `// 1. Register a namespaced state manager\nconst settings = FluxKit.state.register('ui_settings', { \n  storage: 'gm', \n  broadcast: true \n});\n\n// 2. Perform synchronous operations\nsettings.set('theme', 'dark');\nconst theme = settings.get('theme', 'light');\n\n// 3. Clean up\nsettings.deleteAll();`,
+    
+    register: {
+      _summary: 'Initializes and returns a namespaced StateInstance.',
+      _command: 'FluxKit.state.register(namespace, config)',
+      _arguments: {
+        'namespace': { Type: 'String', Required: 'Yes', Description: 'Unique prefix for this state instance to prevent key collisions.' }
+      },
+      _config: {
+        _description: 'Configuration options for the state instance.',
+        'storage': { Type: 'String', Default: '"gm"', Description: 'Storage engine to use: "memory", "gm", or "localstorage".' },
+        'broadcast': { Type: 'Boolean', Default: 'false', Description: 'Enable cross-tab synchronization via BroadcastChannel.' }
+      },
+      _returns: 'StateInstance object'
+    },
+
+    get: {
+      _summary: 'Retrieves a previously registered StateInstance by its namespace.',
+      _command: 'FluxKit.state.get(namespace)',
+      _arguments: {
+        'namespace': { Type: 'String', Required: 'Yes', Description: 'The namespace of the instance you want to retrieve.' }
+      },
+      _returns: 'StateInstance object, or undefined if not found'
+    },
+
+    registerEngine: {
+      _summary: 'Registers a custom storage engine for StateInstances to use.',
+      _command: 'FluxKit.state.registerEngine(name, factoryFn)',
+      _arguments: {
+        'name': { Type: 'String', Required: 'Yes', Description: 'Name of the new engine.' },
+        'factoryFn': { Type: 'Function', Required: 'Yes', Description: 'Factory function that receives a namespace and returns a synchronous engine interface.' }
+      }
+    },
+
+    InstanceMethods: {
+      _summary: 'Methods available on the StateInstance returned by FluxKit.state.register().',
+      _description: 'These methods are called on your instantiated object (e.g., `myState.set()`). All methods are fully synchronous.',
+      
+      get: {
+        _summary: 'Retrieves a value from the state.',
+        _command: 'instance.get(key, fallback)',
+        _arguments: {
+          'key': { Type: 'String', Required: 'Yes', Description: 'The key to retrieve.' },
+          'fallback': { Type: 'Any', Required: 'No', Description: 'Value to return if the key does not exist.' }
+        },
+        _returns: 'Any (The stored value or fallback)'
+      },
+      
+      set: {
+        _summary: 'Saves a value to the state.',
+        _command: 'instance.set(key, value, broadcast)',
+        _arguments: {
+          'key': { Type: 'String', Required: 'Yes', Description: 'The key to save data under.' },
+          'value': { Type: 'Any', Required: 'Yes', Description: 'The data to save.' },
+          'broadcast': { Type: 'Boolean', Required: 'No', Description: 'Defaults to true. If false, prevents this specific update from broadcasting to other tabs.' }
+        },
+        _returns: 'Boolean (Always true)'
+      },
+      
+      delete: {
+        _summary: 'Deletes a specific key from the state.',
+        _command: 'instance.delete(key, broadcast)',
+        _arguments: {
+          'key': { Type: 'String', Required: 'Yes', Description: 'The key to delete.' },
+          'broadcast': { Type: 'Boolean', Required: 'No', Description: 'Defaults to true. Set to false to bypass cross-tab syncing.' }
+        },
+        _returns: 'void'
+      },
+      
+      deleteAll: {
+        _summary: 'Clears all keys associated with this specific namespace.',
+        _command: 'instance.deleteAll(broadcast)',
+        _arguments: {
+          'broadcast': { Type: 'Boolean', Required: 'No', Description: 'Defaults to true. Set to false to bypass cross-tab syncing.' }
+        },
+        _returns: 'void'
+      }
+    }
+  }, { isNative: true });
+
   FluxKit.help.register('loader', {
     _description: 'ES Module loader and integrity verification via GM_xmlhttpRequest.',
 
@@ -5681,6 +6525,127 @@
       _command: 'FluxKit.loader.clearCache()', 
       _summary: 'Clears the internal ES Module cache, forcing a fresh fetch on the next load.', 
       _returns: 'Void' 
+    }
+  }, { isNative: true });
+
+  FluxKit.help.register('cache', {
+    _summary: 'Advanced multi-engine caching system with eviction policies and cross-tab synchronization.',
+    _description: 'Provides a unified caching API across Memory, GM_setValue, LocalStorage, and IndexedDB. Features automatic eviction (LRU, LFU, TTL), item pinning, and BroadcastChannel support to keep caches instantly synced across multiple open browser tabs.',
+
+    register: {
+      _summary: 'Initializes or retrieves a caching namespace with specific storage rules.',
+      _command: 'FluxKit.cache.register(namespace, config?)',
+      _arguments: {
+        'namespace': { Type: 'String', Required: 'Yes', Notes: 'Unique identifier for this cache instance.' },
+        'config': { Type: 'Object', Required: 'No', Notes: 'Configuration for storage backend and eviction rules.' }
+      },
+      _config: {
+        'storage': { Type: 'String', Default: "'memory'", Description: "Storage backend: 'memory', 'gm' (GM_setValue), 'localstorage', or 'indexeddb'." },
+        'policy': { Type: 'String', Default: "'lru'", Description: "Eviction strategy: 'lru' (Least Recently Used), 'lfu' (Least Frequently Used), 'ttl' (Time To Live), 'byte' (Total Payload Size), or 'none'." },
+        'maxSize': { Type: 'Number', Default: 'Infinity', Description: 'Maximum number of items before eviction policy triggers (Used for lru/lfu).' },
+        'maxBytes': { Type: 'Number', Default: 'Infinity', Description: "Maximum total payload size before 'byte' eviction triggers." },
+        'maxEntryBytes': { Type: 'Number', Default: 'Infinity', Description: "Hard ceiling for a single payload. Larger entries are rejected and never cached." },
+        'sizeFn': { Type: 'Function', Default: 'JSON.stringify(payload).length', Description: 'Custom function to calculate payload size when using the byte policy.' },
+        'onSet': { Type: 'Function', Default: 'null', Description: '(status) => void — Fired when an item is cached or rejected due to size limits.' },
+        'onEvict': { Type: 'Function', Default: 'null', Description: '(key, payload) => void — Fired on every removal. Perfect for URL.revokeObjectURL cleanup.' },
+        'ttl': { Type: 'Number', Default: 'null', Description: 'Default Time-To-Live in milliseconds for all entries in this namespace.' },
+        'broadcast': { Type: 'Boolean', Default: 'false', Description: 'If true, synchronizes delete/clear events across other open tabs using BroadcastChannel.' }
+      },
+      _returns: 'CacheSubscriber Instance'
+    },
+
+    get: {
+      _summary: 'Retrieves a previously registered cache instance.',
+      _command: 'FluxKit.cache.get(namespace)',
+      _arguments: {
+        'namespace': { Type: 'String', Required: 'Yes', Notes: 'The namespace of the requested cache.' }
+      },
+      _returns: 'CacheSubscriber Instance | undefined'
+    },
+
+    registerEngine: {
+      _summary: 'Registers a custom storage engine backend for the cache manager.',
+      _command: 'FluxKit.cache.registerEngine(name, factoryFn)',
+      _arguments: {
+        'name': { Type: 'String', Required: 'Yes', Notes: 'The custom name for the storage engine (e.g., "websql").' },
+        'factoryFn': { Type: 'Function', Required: 'Yes', Notes: 'A factory function receiving the namespace and returning an object with get, set, del, clear, keys, size, and entries methods.' }
+      }
+    },
+
+    CacheInstance: {
+      _summary: 'Methods available on the returned CacheSubscriber instance.',
+      _description: 'These are the methods you call on the object returned by FluxKit.cache.register().',
+      
+      get: {
+        _summary: 'Retrieves a value, automatically updating its LRU/LFU tracking and checking TTL expiry.',
+        _command: 'await cache.get(key)',
+        _returns: 'Promise<Any | undefined>'
+      },
+      
+      set: {
+        _summary: 'Stores a value, applies cache limits, and triggers eviction if necessary.',
+        _command: 'await cache.set(key, payload, options?)',
+        _arguments: {
+          'key': { Type: 'String', Required: 'Yes' },
+          'payload': { Type: 'Any', Required: 'Yes', Notes: 'The data to store.' },
+          'options': { Type: 'Object | Number', Required: 'No', Notes: 'Pass a number for quick TTL override, or an object { ttl: Number, pinned: Boolean }.' }
+        },
+        _config: {
+          'ttl': { Type: 'Number', Default: 'Inherits namespace TTL', Description: 'Custom Time-To-Live in milliseconds for this specific item.' },
+          'pinned': { Type: 'Boolean', Default: 'false', Description: 'If true, this item is immune to LRU/LFU eviction and TTL expiration.' }
+        }
+      },
+      
+      delete: {
+        _summary: 'Deletes a specific key from the cache.',
+        _command: 'await cache.delete(key, broadcast?)',
+        _arguments: {
+          'key': { Type: 'String', Required: 'Yes' },
+          'broadcast': { Type: 'Boolean', Required: 'No', Default: 'true', Notes: 'If false, prevents this deletion from syncing to other tabs.' }
+        }
+      },
+      
+      clear: {
+        _summary: 'Wipes the entire cache namespace.',
+        _command: 'await cache.clear(keepPinned?, broadcast?)',
+        _arguments: {
+          'keepPinned': { Type: 'Boolean', Required: 'No', Default: 'false', Notes: 'If true, pinned items will survive the purge.' },
+          'broadcast': { Type: 'Boolean', Required: 'No', Default: 'true', Notes: 'If false, prevents this clear event from syncing to other tabs.' }
+        }
+      }
+    }
+  }, { isNative: true });
+
+  FluxKit.help.register('ipc', {
+    _summary: 'Inter-Process Communication (IPC) and Event Bus.',
+    _description: 'Provides a unified event bus for both local DOM communication and global cross-tab messaging using Tampermonkey storage listeners. Essential for leader election, state synchronization, and simulating background workers without actual service workers.',
+
+    getTabId: {
+      _summary: 'Retrieves the unique identifier generated for the current browser tab.',
+      _description: 'Used internally to prevent tabs from responding to their own global broadcasts, and externally for "Leader Election" (deciding which tab handles background tasks).',
+      _command: 'FluxKit.ipc.getTabId()',
+      _returns: 'String (UUID)'
+    },
+
+    broadcast: {
+      _summary: 'Dispatches a custom event with a payload to all active listeners.',
+      _command: 'FluxKit.ipc.broadcast(intent, payload?, global?)',
+      _arguments: {
+        'intent': { Type: 'String', Required: 'Yes', Notes: 'The unique event name or channel (e.g., "media-control").' },
+        'payload': { Type: 'Object', Required: 'No', Notes: 'The data to transmit. Defaults to {}.' },
+        'global': { Type: 'Boolean', Required: 'No', Notes: 'If true, uses GM_setValue to broadcast to all other open tabs. Defaults to false.' }
+      }
+    },
+
+    listen: {
+      _summary: 'Subscribes to an event channel and triggers a callback when a broadcast is received.',
+      _command: 'const unsubscribe = FluxKit.ipc.listen(intent, callback, global?)',
+      _arguments: {
+        'intent': { Type: 'String', Required: 'Yes', Notes: 'The event name or channel to listen to.' },
+        'callback': { Type: 'Function', Required: 'Yes', Notes: 'Fired on event. Receives (payload, senderTabId). If senderTabId matches your getTabId(), the event originated locally.' },
+        'global': { Type: 'Boolean', Required: 'No', Notes: 'If true, also binds to GM_addValueChangeListener to receive cross-tab broadcasts. Defaults to false.' }
+      },
+      _returns: 'Function (Call this function to safely remove the listener and prevent memory leaks)'
     }
   }, { isNative: true });
 })();

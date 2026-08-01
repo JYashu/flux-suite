@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         Flux Glance
 // @namespace    https://github.com/JYashu/flux-suite
-// @version      1.0.0
+// @version      1.0.1
 // @description  Instant dictionary & translation lookup for any text. Select text or snip an image anywhere to get a dictionary or translation card with editable source/target languages, TTS playback, and one-click copy or in-place replace.
-// @icon         https://logo-bits.s3.us-east-2.amazonaws.com/flux-galnce.svg
+// @icon         https://logo-bits.s3.us-east-2.amazonaws.com/flux-glance.svg
 // @author       JYashu
 // @license      Apache-2.0
 // @match        *://*/*
@@ -143,8 +143,8 @@
       shadowRoot = popupHost.attachShadow({ mode: 'open' }); // Must be open for drag util!
       initTooltips({ ...activeTheme, rootElement: shadowRoot, attribute: 'flxTrnslt', delay: 500 });
 
-      if (FluxKit.utils.makeElementDragAndResize) {
-        FluxKit.utils.makeElementDragAndResize(popupHost, null, {
+      if (FluxKit.utils.attachWindowControls) {
+        FluxKit.utils.attachWindowControls(popupHost, null, {
           resizable: false,
           close: false,
           dblClickMaximize: false,
@@ -773,8 +773,8 @@
 
         const dragHandle = shadowRoot.querySelector('.drag-handle');
 
-        if (FluxKit.utils.makeElementDragAndResize) {
-          const dragCleanup = FluxKit.utils.makeElementDragAndResize(
+        if (FluxKit.utils.attachWindowControls) {
+          const dragCleanup = FluxKit.utils.attachWindowControls(
             modalHost,
             dragHandle,
             {

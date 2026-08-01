@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FluxKit Capture
 // @namespace    https://github.com/JYashu
-// @version      1.0.0
+// @version      1.1.0
 // @description  Advanced screen snipping, Shadow DOM text replacement, and speech synthesis engine.
 // @author       JYashu
 // @license      Apache-2.0
@@ -48,101 +48,101 @@
   FluxKit.capture.text ??= (function () {
     'use strict';
 
-    function insertTextAtContext(text, context) {
+    function insertAtContext(text, context) {
       if (!context) return false;
-      const { element, range } = context;
+      const { element, range, selectionStart, selectionEnd } = context;
 
       if (element && !element.isConnected) {
         console.warn('[FluxKit] Target element was destroyed. Falling back to clipboard.');
-        try { navigator.clipboard.writeText(text); } catch(e) {}
+        try { navigator.clipboard.writeText(text); } catch (e) {}
         return 'orphaned';
       }
 
       if (element && typeof element.focus === 'function') element.focus();
 
-      let success = false;
-      try { success = document.execCommand('insertText', false, text); } catch(e) {}
+        const isInput = element && (element.tagName === 'TEXTAREA' || (element.tagName === 'INPUT' && /text|search|password|tel|url/i.test(element.type)));
 
-      if (!success) {
-        if (element && (element.tagName === 'TEXTAREA' || (element.tagName === 'INPUT' && /text|search|password|tel|url/i.test(element.type)))) {
-          const start = element.selectionStart || 0;
-          const end = element.selectionEnd || 0;
-          element.setRangeText(text, start, end, 'end');
-          element.dispatchEvent(new Event('input', { bubbles: true }));
-          success = true;
-        } else if (range) {
+      if (isInput && typeof selectionStart === 'number' && typeof selectionEnd === 'number') {
+        try { element.setSelectionRange(selectionStart, selectionEnd); } catch (e) {}
+      }
+      else if (range) {
+        try {
           const sel = window.getSelection();
           sel.removeAllRanges();
           sel.addRange(range);
-          if (!document.execCommand('insertText', false, text)) {
+        } catch (e) {}
+      }
+
+      let success = false;
+      try { success = document.execCommand('insertText', false, text); } catch (e) {}
+
+      if (!success) {
+        if (isInput) {
+          try {
+            const start = typeof selectionStart === 'number' ? selectionStart : (element.selectionStart || 0);
+            const end = typeof selectionEnd === 'number' ? selectionEnd : (element.selectionEnd || 0);
+            element.setRangeText(text, start, end, 'end');
+            element.dispatchEvent(new Event('input', { bubbles: true }));
+            element.dispatchEvent(new Event('change', { bubbles: true }));
+            success = true;
+          } catch (e) {}
+        } else if (range) {
+          try {
             range.deleteContents();
             range.insertNode(document.createTextNode(text));
             if (element) element.dispatchEvent(new Event('input', { bubbles: true }));
-          }
-          success = true;
+            success = true;
+          } catch (e) {}
         }
       }
       return success;
     }
 
     function getDeepSelectionContext() {
-      let activeEl = document.activeElement;
-      let selRoot = document;
+      let activeEl = document.activeElement, selRoot = document, text = '';
+      let selectionStart = null, selectionEnd = null;
 
-      while (activeEl && activeEl.shadowRoot && activeEl.shadowRoot.activeElement) {
+      while (activeEl && activeEl.shadowRoot) {
         selRoot = activeEl.shadowRoot;
-        activeEl = selRoot.activeElement;
+        activeEl = selRoot.activeElement || activeEl;
       }
 
       let savedRange = null;
-      let sel = null;
+      let sel = typeof selRoot.getSelection === 'function' ? selRoot.getSelection() : null;
 
-      if (typeof selRoot.getSelection === 'function') sel = selRoot.getSelection();
+      // Fallback to window selection if shadow root selection is empty/unsupported
       if (!sel || sel.rangeCount === 0) sel = window.getSelection();
-      if (sel && sel.rangeCount > 0 && !sel.isCollapsed) savedRange = sel.getRangeAt(0).cloneRange();
 
-      return { element: activeEl, range: savedRange };
-    }
-
-    function getDeepestActiveElement(root = document) {
-      let active = root.activeElement;
-      while (active && active.shadowRoot) active = active.shadowRoot.activeElement;
-      return active;
-    }
-
-    function getSelectedText() {
-      let text = window.getSelection().toString().trim();
-      if (text) return text;
-
-      let active = document.activeElement;
-      while (active && active.shadowRoot) {
-        const shadowRoot = active.shadowRoot;
-        if (typeof shadowRoot.getSelection === 'function') {
-          text = shadowRoot.getSelection().toString().trim();
-          if (text) return text;
-        }
-        active = shadowRoot.activeElement;
+      if (sel && sel.rangeCount > 0) {
+        if (!sel.isCollapsed) savedRange = sel.getRangeAt(0).cloneRange();
+        text = sel.toString().trim();
       }
 
-      const deepestActive = getDeepestActiveElement();
-      if (deepestActive) {
-        const tag = deepestActive.tagName;
-        const isTextInput = tag === 'INPUT' && ['text', 'search', 'url'].includes(deepestActive.type);
+        if (activeEl) {
+        const tag = activeEl.tagName;
+        const isTextInput = tag === 'TEXTAREA' || (tag === 'INPUT' && /text|search|url|password|tel/i.test(activeEl.type));
 
-        if (tag === 'TEXTAREA' || isTextInput) {
-          text = deepestActive.value.substring(deepestActive.selectionStart, deepestActive.selectionEnd).trim();
+        if (isTextInput) {
+          try {
+            selectionStart = activeEl.selectionStart;
+            selectionEnd = activeEl.selectionEnd;
+            if (!text && selectionStart !== null && selectionEnd !== null) {
+              text = activeEl.value.substring(selectionStart, selectionEnd).trim();
+            }
+          } catch (e) {}
         }
       }
 
-      return text;
+      return { element: activeEl, range: savedRange, text, selectionStart, selectionEnd };
     }
+
+    function getSelectedText() { return getDeepSelectionContext().text; }
 
     let lastMousePos = { x: 0, y: 0 };
     window.addEventListener('mousemove', e => {
-        lastMousePos.x = e.clientX;
-        lastMousePos.y = e.clientY;
-      }, { passive: true },
-    );
+      lastMousePos.x = e.clientX;
+      lastMousePos.y = e.clientY;
+    }, { passive: true });
 
     const subscribers = new Set();
     let isInitialized = false;
@@ -182,8 +182,8 @@
 
     function init(onLookupCallback, config = {}) {
       const options = { keyboardTrigger: 'ctrl+shift+e', mouseModifier: 'alt', normalizeOS: true, mouseButton: 0, ...config };
-
       const subscriber = { callback: onLookupCallback, config: options };
+      
       subscribers.add(subscriber);
 
       if (!isInitialized) {
@@ -192,10 +192,10 @@
         isInitialized = true;
       }
 
-      return () => subscribers.delete(subscriber); // cleanup function
+      return () => subscribers.delete(subscriber);
     }
 
-    return { insertTextAtContext, getDeepSelectionContext, getSelectedText, init };
+    return { insertAtContext, getDeepSelectionContext, getSelectedText, init };
   })();
 
   FluxKit.capture.screen ??= (function () {
@@ -1077,13 +1077,31 @@
     },
 
     text: {
-      _summary: 'Captures selected text from the DOM, seamlessly piercing Shadow DOM boundaries.',
+      _summary: 'Captures selected text and safely injects replacements across standard and Shadow DOM boundaries.',
       
       getSelectedText: {
         _summary: 'Synchronously retrieves the currently selected text across the entire page.',
         _description: 'Intelligently traverses through standard DOM selections, open Shadow DOM boundaries, and active input/textarea fields to reliably extract user-highlighted text.',
         _command: 'FluxKit.capture.text.getSelectedText()',
         _returns: 'String (The trimmed selected text, or an empty string)'
+      },
+
+      getDeepSelectionContext: {
+        _summary: 'Retrieves the complete selection state and active element context.',
+        _description: 'Pierces through deeply nested Shadow DOMs to find the exact active element, its selection offsets, and standard DOM Ranges. Essential for replacing text in-place later.',
+        _command: 'FluxKit.capture.text.getDeepSelectionContext()',
+        _returns: 'Object { element: HTMLElement, range: Range, text: String, selectionStart: Number, selectionEnd: Number }'
+      },
+
+      insertAtContext: {
+        _summary: 'Safely injects text back into the DOM using a previously captured context.',
+        _description: 'Intelligently handles TEXTAREA, INPUT, and contenteditable elements. Uses execCommand for undo-stack preservation when possible, falls back to direct value manipulation, and copies to clipboard if the target element was destroyed (orphaned).',
+        _command: 'FluxKit.capture.text.insertAtContext(text, context)',
+        _arguments: {
+          'text': { Type: 'String', Required: 'Yes', Description: 'The text string to inject.' },
+          'context': { Type: 'Object', Required: 'Yes', Description: 'The context object generated by getDeepSelectionContext().' }
+        },
+        _returns: "Boolean | 'orphaned' (True on success, 'orphaned' if fallback to clipboard was triggered)"
       },
       
       init: {

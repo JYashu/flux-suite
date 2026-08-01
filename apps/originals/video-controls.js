@@ -41,7 +41,7 @@
 
   'use strict';
 
-  const { showNotification, createLogger, createHTMLElement, makeElementDragAndResize } = FluxKit.utils;
+  const { showNotification, createLogger, createHTMLElement, attachWindowControls } = FluxKit.utils;
 
   const { logMessage, logError, logWarning, logDebug } = createLogger('VideoControls');
 
@@ -2502,7 +2502,7 @@
       const makeOverlay = video => {
         overlay = createHTMLElement('div', { id: 'vc-transcript', innerHTML: `<div class="vc-transcript-header">Transcript <button class="vc-transcript-close">✕</button></div><div class="vc-transcript-body"></div>`});
         document.body.appendChild(overlay);
-        makeElementDragAndResize(overlay, overlay.firstElementChild);
+        attachWindowControls(overlay, overlay.firstElementChild);
 
         document.head.appendChild(createHTMLElement('style', { id: 'vc-transcript-style', textContent: `
           #vc-transcript{position:fixed;right:20px;bottom:20px;width:300px;height:400px;background:rgba(0,0,0,.85);color:#fff;border-radius:8px;overflow:hidden;display:flex;flex-direction:column;z-index:999999;box-shadow:0 0 10px rgba(0,0,0,.5);}
@@ -2915,7 +2915,7 @@
         sticky.appendChild(header);
         document.body.appendChild(sticky);
 
-        resizer = makeElementDragAndResize(sticky, header, {
+        resizer = attachWindowControls(sticky, header, {
           minWidth: 200, minHeight: 112, initWidth: 320, initHeight: 180, lockAspectRatio: true,
           aspectRatio: (videoEl.videoWidth && videoEl.videoHeight) ? (videoEl.videoWidth / videoEl.videoHeight) : (16 / 9),
           onClick: () => {

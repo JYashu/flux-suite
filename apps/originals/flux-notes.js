@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Flux Notes
 // @namespace    https://github.com/JYashu/flux-suite
-// @version      8.3.0
+// @version      8.4.0
 // @description  A ubiquitous, theme-aware note-taking overlay. Features Markdown formatting, an HTML5 scratchpad, and cross-browser syncing via WebDAV/Github/Dropbox/OneDrive.
 // @author       JYashu
 // @license      Apache-2.0
@@ -69,14 +69,14 @@
 
   const { logMessage, logError, logWarning, logDebug } = createLogger('FluxNotes');
 
-  const makeElementDragAndResize = (element, header, opts = {}) => {
+  const attachWindowControls = (element, header, opts = {}) => {
     const options = { 
       onClose: (el) => { modalCloseAction(el); return false; }, 
       minWidth: 360, minHeight: 460, ...opts, autoFocus: false,
       minimize: { iconTop: 0, iconRight: 20, iconSize: 16, color: 'var(--flxn-text)', hoverTransform: 'rotate(180deg) scale(1.1)', ...(opts.minimize || {}) }, 
       close: { iconTop: 0, iconRight: -4, iconSize: 16, color: 'var(--flxn-text)', hoverTransform: 'rotate(90deg) scale(1.1)' } 
     };
-    element.destroy = FluxKit.utils.makeElementDragAndResize(element, header, options);
+    element.destroy = FluxKit.utils.attachWindowControls(element, header, options);
   }
 
   const mdRenderer = (() => {
@@ -1895,7 +1895,7 @@
       modal.classList.add('show');
       renderList();
       bringToFront(modal);
-      makeElementDragAndResize(modal, modal.querySelector('div.flxn-modal-header-wrapper'));
+      attachWindowControls(modal, modal.querySelector('div.flxn-modal-header-wrapper'));
     });
     trapTabFocus(modal);
     applyTheme();
@@ -1978,7 +1978,7 @@
     requestAnimationFrame(() => {
       modal.classList.add('show');
       bringToFront(modal);
-      makeElementDragAndResize(modal, modal.querySelector('div.flxn-modal-header-wrapper'), { minWidth: 250, minHeight: 150 });
+      attachWindowControls(modal, modal.querySelector('div.flxn-modal-header-wrapper'), { minWidth: 250, minHeight: 150 });
     });
     modal.addEventListener('modal-closed', () => {
       saveQuickNote();
@@ -2475,7 +2475,7 @@
     requestAnimationFrame(() => { 
       modal.classList.add('show');
       bringToFront(modal);
-      makeElementDragAndResize(modal, modal.querySelector('div.flxn-modal-header-wrapper'), {
+      attachWindowControls(modal, modal.querySelector('div.flxn-modal-header-wrapper'), {
         onAnyResize: () => applyMasonryLayout(modal.querySelector('#flxn-notes-list')),
         onResizing: () => applyMasonryLayout(modal.querySelector('#flxn-notes-list')),
       });
@@ -3138,7 +3138,7 @@
     requestAnimationFrame(() => {
       modal.classList.add('show');
       bringToFront(modal);
-      makeElementDragAndResize(modal, modal.querySelector('div.flxn-header-wrapper'), { minWidth: 298, minHeight: 326 });
+      attachWindowControls(modal, modal.querySelector('div.flxn-header-wrapper'), { minWidth: 298, minHeight: 326 });
     });
     
     modal.addEventListener('modal-closed', () => {
@@ -3608,7 +3608,7 @@
       modal.classList.add('show');
       updateStorageUsageDisplay();
       bringToFront(modal);
-      makeElementDragAndResize(modal, modal.querySelector('div.flxn-modal-header-wrapper'), {
+      attachWindowControls(modal, modal.querySelector('div.flxn-modal-header-wrapper'), {
         onAnyResize: checkSettingsWidth
       });
     });
@@ -4753,6 +4753,61 @@
     }
   }
   
+  // ------------------------
+  // IPC Leader Election (Auto-Sync Orchestration)
+  // ------------------------
+  let isSyncLeader = false;
+  let syncLeaderTabId = null;
+  let lastLeaderPing = 0;
+  let pendingAutoSync = false;
+  const myTabId = FluxKit.ipc.getTabId();
+
+  function initLeaderElection() {
+    FluxKit.ipc.listen('flxn-leader-ping', (payload) => {
+      syncLeaderTabId = payload.tabId;
+      lastLeaderPing = Date.now();
+      isSyncLeader = (syncLeaderTabId === myTabId);
+    }, true);
+
+    FluxKit.ipc.listen('flxn-delegate-sync', () => {
+      if (isSyncLeader) {
+        logDebug('📡 Received delegated sync request from follower tab.');
+        attemptAutoSync();
+      }
+    }, true);
+
+    FluxKit.ipc.listen('flxn-leader-yield', () => {
+      lastLeaderPing = 0; 
+    }, true);
+
+    setInterval(() => {
+      const now = Date.now();
+      
+      // If leader is dead (no ping for 5 seconds), try to claim leadership
+      if (now - lastLeaderPing > 5000) {
+        setTimeout(() => {
+          if (Date.now() - lastLeaderPing > 5000) {
+            isSyncLeader = true;
+            syncLeaderTabId = myTabId;
+            lastLeaderPing = Date.now();
+            logMessage('Claimed Sync Leadership (IPC)');
+            FluxKit.ipc.broadcast('flxn-leader-ping', { tabId: myTabId }, true);
+            
+            if (pendingAutoSync) attemptAutoSync();
+          }
+        }, Math.random() * 1500);
+      } else if (isSyncLeader) {
+        FluxKit.ipc.broadcast('flxn-leader-ping', { tabId: myTabId }, true);
+      }
+    }, 2000);
+
+    window.addEventListener('beforeunload', () => {
+      if (isSyncLeader) {
+        isSyncLeader = false;
+        FluxKit.ipc.broadcast('flxn-leader-yield', {}, true);
+      }
+    });
+  }
 
   // ------------------------
   // Data Sync
@@ -5244,6 +5299,12 @@
   }
 
   async function attemptAutoSync() {
+    if (!isSyncLeader) {
+      if (lastLeaderPing === 0) pendingAutoSync = true;
+      else FluxKit.ipc.broadcast('flxn-delegate-sync', {}, true);
+      return;
+    }
+    pendingAutoSync = false;
     const profile = getCurrentProfile();
     if (!isProfileConfigured(profile)) return;
 
@@ -5641,6 +5702,158 @@
     }
   });
 
+  // ------------------------
+  // IPC Listeners for Omnibar Integration (flux-notes.js)
+  // ------------------------
+  function registerOmniCommands() {
+    FluxKit.ipc.broadcast('register-command', {
+      id: 'notes-search',
+      prefix: '> note',
+      title: 'Search Notes Vault',
+      icon: 'document',
+      type: 'view',
+      acceptsArgs: true
+    });
+  }
+
+  registerOmniCommands();
+
+  FluxKit.ipc.listen('search-bar-ready', () => {
+    registerOmniCommands();
+  });
+
+  FluxKit.ipc.listen('execute-command', (payload) => {
+    if (payload.id === 'notes-new') {
+      openNoteModal({ title: payload.payload || '', description: '', url: window.location.href, tags: [] });
+    }
+  });
+
+  FluxKit.ipc.listen('omnibar-execute-view', (payload) => {
+    if (payload.pluginId === 'notes-search') {
+      openViewModal();
+    }
+  });
+
+  FluxKit.ipc.listen('omnibar-mount-view', (payload) => {
+    if (payload.pluginId !== 'notes-search') return;
+
+    const host = document.getElementById('flx-search-host');
+    if (!host) return;
+    const slot = host.shadowRoot.getElementById(payload.targetId);
+    if (!slot) return;
+
+    const { createHTMLElement } = FluxKit.utils;
+    const searchTerm = (payload.query || '').toLowerCase();
+    
+    let matched = getNotes();
+    if (searchTerm) {
+      matched = matched.filter(n => {
+        const title = (n.title || '').toLowerCase();
+        const desc = (n.description || '').toLowerCase();
+        return title.includes(searchTerm) || desc.includes(searchTerm);
+      });
+    }
+    matched.sort((a, b) => (b.updatedAt || b.createdAt).localeCompare(a.updatedAt || a.createdAt));
+    const results = matched.slice(0, 15);
+
+    const container = createHTMLElement('div', { 
+      style: { display: 'flex', flexDirection: 'column', gap: '8px', padding: '8px 0', maxHeight: '350px', overflowY: 'auto' } 
+    });
+
+    let subIndex = -1;
+    const noteNodes = [];
+
+    if (results.length === 0) {
+      container.appendChild(createHTMLElement('div', {
+        style: { padding: '16px', textAlign: 'center', color: 'var(--omni-muted)', fontSize: '13px' },
+        textContent: 'No notes found.'
+      }));
+    } else {
+      results.forEach(note => {
+        const row = createHTMLElement('div', {
+          style: { 
+            padding: '12px', background: 'var(--omni-bg)', border: '1px solid var(--omni-border)', 
+            borderRadius: '8px', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '4px'
+          },
+          eventListener: {
+            mouseenter: (e) => e.currentTarget.style.background = 'var(--omni-hover)',
+            mouseleave: (e) => e.currentTarget.style.background = 'var(--omni-bg)',
+            click: (e) => {
+              e.stopPropagation();
+              FluxKit.ipc.broadcast('omnibar-hide');
+              openNoteModal(note);
+            }
+          }
+        });
+
+        row.appendChild(createHTMLElement('div', { style: { fontSize: '15px', fontWeight: 'bold', color: 'var(--omni-text)' }, textContent: note.title || 'Untitled' }));
+
+        const descPreview = (note.description || '').replace(/\n/g, ' ').substring(0, 80);
+        if (descPreview) {
+          row.appendChild(createHTMLElement('div', {
+            style: { fontSize: '12px', color: 'var(--omni-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+            textContent: descPreview
+          }));
+        }
+
+        noteNodes.push(row);
+        container.appendChild(row);
+      });
+    }
+
+    const updateSubSelection = () => {
+      noteNodes.forEach((node, idx) => {
+        if (idx === subIndex) {
+          node.style.borderColor = 'var(--omni-muted)';
+          node.style.background = 'var(--omni-hover)';
+          node.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        } else {
+          node.style.borderColor = 'var(--omni-border)';
+          node.style.background = 'var(--omni-bg)';
+        }
+      });
+    };
+
+    if (noteNodes.length > 0) {
+      subIndex = 0;
+      updateSubSelection();
+    }
+
+    const actions = [
+      FluxKit.ui.omni.Button('plus', 'New Note', (e) => {
+        e.stopPropagation();
+        FluxKit.ipc.broadcast('omnibar-hide');
+        openNoteModal({ title: searchTerm, description: '', url: window.location.href, tags: [] });
+      })
+    ];
+
+    const finalCard = FluxKit.ui.omni.DetailCard(container, actions);
+    slot.innerHTML = safeHTML(''); 
+    slot.appendChild(finalCard);
+
+    slot.addEventListener('flx-remote-keydown', (e) => {
+      const { key } = e.detail;
+      if (noteNodes.length === 0) return;
+
+      if (key === 'ArrowDown') {
+        e.preventDefault();
+        subIndex = Math.min(subIndex + 1, noteNodes.length - 1);
+        updateSubSelection();
+      } 
+      else if (key === 'ArrowUp') {
+        e.preventDefault();
+        subIndex = Math.max(subIndex - 1, 0);
+        updateSubSelection();
+      } 
+      else if (key === 'Enter') {
+        if (noteNodes[subIndex]) {
+          e.preventDefault();
+          noteNodes[subIndex].click();
+        }
+      }
+    });
+  });
+
   let shortcutActions = {
     [getShortcutConfig('add')]: () => {
       openNoteModal({
@@ -5764,6 +5977,7 @@
     });
 
     applyTheme();
+    initLeaderElection();
     attemptAutoSync();
     createEdgeDock();
     window.addEventListener('focus', () => attemptAutoSync());

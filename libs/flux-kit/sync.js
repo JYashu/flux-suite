@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FluxKit Sync
 // @namespace    https://github.com/JYashu
-// @version      1.1.1
+// @version      1.1.2
 // @description  Universal Cloud Storage & Sync Engine.
 // @author       JYashu
 // @license      Apache-2.0
@@ -566,52 +566,80 @@
         const isDark = this.themeConfig.autoDark ? FluxKit.theme.isSiteDark(this.target) : !!this.themeConfig.darkMode;
         const theme = FluxKit.theme.get(isDark);
 
-        const renderTheme = {
+        this.currentRenderTheme = {
           bg: this.themeConfig.bg || theme.bg,
           text: this.themeConfig.text || theme.text,
           inputBg: this.themeConfig.inputBg || theme.accentBg,
           font: this.themeConfig.fontFamily || 'system-ui, sans-serif',
           accentBg: this.themeConfig.accentBg || (isDark ? '#4F46E5' : '#5C7CFA'),
+          accentText: this.themeConfig.accentText || (isDark ? '#818CF8' : '#4F46E5'),
           btnText: this.themeConfig.btnTextColor || '#ffffff',
           radius: this.themeConfig.borderRadius || '6px',
           border: this.themeConfig.border || theme.border,
+          borderSubtle: this.themeConfig.borderSubtle || theme.separator,
           gap: this.themeConfig.gap || '12px',
           inputPad: this.themeConfig.inputPad || '8px',
           labelWeight: this.themeConfig.labelWeight || '600',
           fontSize: this.themeConfig.fontSize || '13px'
         };
 
+        const rt = this.currentRenderTheme;
+        if (FluxKit.ui && typeof FluxKit.ui.initTooltips === 'function') {
+          FluxKit.ui.initTooltips({ ...theme, ...rt, rootElement: this.target.getRootNode(), attribute: 'data-fxksw-tooltip' });
+        }
+
         const styleContent = `
           .flx-wiz-root {
-            --wiz-bg: ${renderTheme.bg};
-            --wiz-text: ${renderTheme.text};
-            --wiz-input-bg: ${renderTheme.inputBg};
-            --wiz-font: ${renderTheme.font};
-            --wiz-accent: ${renderTheme.accentBg};
-            --wiz-btn-text: ${renderTheme.btnText};
-            --wiz-radius: ${renderTheme.radius};
-            --wiz-border: ${renderTheme.border};
-            --wiz-gap: ${renderTheme.gap};
-            --wiz-input-pad: ${renderTheme.inputPad};
-            --wiz-label-weight: ${renderTheme.labelWeight};
-            --wiz-font-size: ${renderTheme.fontSize};
+            --wiz-bg: ${rt.bg};
+            --wiz-text: ${rt.text};
+            --wiz-input-bg: ${rt.inputBg};
+            --wiz-font: ${rt.font};
+            --wiz-accent: ${rt.accentBg};
+            --wiz-accent-bg: ${rt.accentBg};
+            --wiz-accent-text: ${rt.accentText};
+            --wiz-btn-text: ${rt.btnText};
+            --wiz-radius: ${rt.radius};
+            --wiz-border: ${rt.border};
+            --wiz-border-subtle: ${rt.borderSubtle};
+            --wiz-gap: ${rt.gap};
+            --wiz-input-pad: ${rt.inputPad};
+            --wiz-label-weight: ${rt.labelWeight};
+            --wiz-font-size: ${rt.fontSize};
+
+            background: var(--wiz-bg);
+            color: var(--wiz-text);
+            font-family: var(--wiz-font);
+            border-radius: var(--wiz-radius);
           }
-          .flx-wiz-wrapper { padding: 0; width: 100%; font-family: var(--wiz-font); color: var(--wiz-text); font-size: var(--wiz-font-size); }
+          .flx-wiz-wrapper { 
+            padding: 10px; 
+            width: 100%; 
+            font-family: var(--wiz-font); 
+            color: var(--wiz-text); 
+            font-size: var(--wiz-font-size); 
+            box-sizing: border-box;
+          }
           .flx-wiz-btn {
-            display: block; margin-bottom: var(--wiz-input-pad); padding: 10px;
+            display: block; padding: 10px; margin-bottom: var(--wiz-input-pad);
             background: var(--wiz-accent); color: var(--wiz-btn-text);
             border: none; border-radius: var(--wiz-radius); cursor: pointer;
             transition: opacity 0.2s, transform 0.1s;
           }
+          .flx-wiz-btn:hover { opacity: 0.9; }
+          .flx-wiz-btn:active { transform: scale(0.98); }
           .flx-wiz-input {
             margin-bottom: var(--wiz-input-pad); border-radius: 4px; box-sizing: border-box;
             background: var(--wiz-input-bg); border: 1px solid var(--wiz-border);
-            color: var(--wiz-text); font-family: inherit; width: 100%;
+            color: var(--wiz-text); font-family: inherit; width: 100%; padding: 8px;
           }
-          .flx-wiz-form-row, .flx-wiz-folder-row { var(--wiz-gap); }
-          .flx-wiz-form-label { text-align: left; font-size: inherit; font-weight: var(--wiz-label-weight); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-          .flx-wiz-folder-container { display: flex; align-items: center; gap: calc(var(--wiz-gap) / 2); }
-          .flx-wiz-folder-prefix { font-size: inherit; opacity: 0.6; white-space: nowrap; }
+          .flx-wiz-input:focus {
+            outline: 2px solid var(--wiz-accent);
+            border-color: transparent;
+          }
+          .flx-wiz-form-row, .flx-wiz-folder-row { gap: var(--wiz-gap); margin-bottom: 8px; }
+          .flx-wiz-form-label { text-align: left; font-size: inherit; font-weight: var(--wiz-label-weight); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--wiz-text); }
+          .flx-wiz-folder-container { display: flex; align-items: center; gap: calc(var(--wiz-gap) / 2); width: 100%; }
+          .flx-wiz-folder-prefix { font-size: inherit; opacity: 0.6; white-space: nowrap; color: var(--wiz-text); }
           .layout-horizontal .flx-wiz-form-row,
           .layout-horizontal .flx-wiz-folder-row {
             display: grid;
@@ -650,11 +678,17 @@
 
       render(container) {
         if (container) this.containerRef = container;
+
+        // 🛡️ CRITICAL FIX: Safe DOM clear BEFORE injecting styles to prevent CSS wipeout
+        if (this.containerRef) {
+          while (this.containerRef.firstChild) {
+            this.containerRef.removeChild(this.containerRef.firstChild);
+          }
+        }
+
         this._injectStyles();
 
-        container.innerHTML = FluxKit.utils.safeHTML ? FluxKit.utils.safeHTML('') : '';
         const wrapper = FluxKit.utils.createHTMLElement('div', { class: `flx-wiz-wrapper layout-${this.layout}` });
-
         const root = FluxKit.utils.createHTMLElement('div', { class: 'flx-wiz-root' });
         root.appendChild(wrapper);
 
@@ -662,7 +696,7 @@
 
         if (p) {
           const headerChildren = [
-            FluxKit.utils.createHTMLElement('h4', { textContent: p, style: 'margin: 0; font-size: 15px;' })
+            FluxKit.utils.createHTMLElement('h4', { textContent: p, style: 'margin: 0; font-size: 15px; color: var(--wiz-text);' })
           ];
 
           const linkContainer = FluxKit.utils.createHTMLElement('div', {
@@ -716,7 +750,6 @@
             }));
           }
 
-          // Only append the container if it actually has links (protects WebDAV)
           if (linkContainer.childNodes.length > 0) {
             headerChildren.push(linkContainer);
           }
@@ -733,7 +766,7 @@
             value: this.data[fieldKey] || '',
             eventListener: { input: (e) => this.data[fieldKey] = e.target.value }
           });
-          if (tooltip) input.dataset.fxkswTooltip = tooltip;
+          if (tooltip) input.setAttribute('data-fxksw-tooltip', tooltip);
 
           wrapper.appendChild(FluxKit.utils.createHTMLElement('div', {
             class: 'flx-wiz-form-row',
@@ -782,7 +815,7 @@
           quotaInput.addEventListener('input', (e) => { const val = parseInt(e.target.value, 10); if (!isNaN(val)) this.data.totalQuota = val * 1024 * 1024; });
 
           wrapper.appendChild(FluxKit.utils.createHTMLElement('details', {
-            style: 'margin-top: 12px; font-size: 13px; background: rgba(128,128,128,0.05); border: 1px solid var(--wiz-border-subtle); padding: 12px; border-radius: var(--wiz-radius);',
+            style: 'margin-top: 12px; font-size: 13px; background: rgba(128,128,128,0.05); border: 1px solid var(--wiz-border-subtle); padding: 12px; border-radius: var(--wiz-radius); color: var(--wiz-text);',
             children: [
               FluxKit.utils.createHTMLElement('summary', { textContent: 'Advanced Storage Limits', style: 'cursor: pointer; font-weight: 600;' }),
               FluxKit.utils.createHTMLElement('div', { style: 'margin: 8px 0; opacity: 0.8; font-size: 11px;', textContent: 'Warning: Increasing chunk size above 50MB may cause browser memory crashes.' }),
@@ -810,7 +843,7 @@
           wrapper.appendChild(this.options.customElements);
         }
 
-        container.appendChild(root);
+        if (this.containerRef) this.containerRef.appendChild(root);
         return this;
       }
     }
@@ -848,10 +881,10 @@
         const isDark = this.themeConfig.autoDark ? FluxKit.theme.isSiteDark(this.target) : !!this.themeConfig.darkMode;
         const theme = FluxKit.theme.get(isDark);
 
-        const renderTheme = {
+        this.currentRenderTheme = {
           bg: this.themeConfig.bg || theme.bg,
           text: this.themeConfig.text || theme.text,
-          inputBg: this.themeConfig.inputBg || theme.accentBg,
+          inputBg: this.themeConfig.inputBg || theme.inputBg,
           font: this.themeConfig.fontFamily,
           accentBg: this.themeConfig.accentBg || (isDark ? '#4F46E5' : '#5C7CFA'),
           accentText: this.themeConfig.accentText || (isDark ? '#818CF8' : '#4F46E5'),
@@ -863,25 +896,26 @@
           chipShadow: theme.boxShadow
         };
 
-        FluxKit.ui.initTooltips({  ...theme, ...renderTheme, rootElement: this.target.getRootNode(), attribute: 'data-fxksw-tooltip' });
+        const rt = this.currentRenderTheme;
+        FluxKit.ui.initTooltips({  ...theme, ...rt, rootElement: this.target.getRootNode(), attribute: 'data-fxksw-tooltip' });
 
-        const glassBg = renderTheme.bg.length === 7 ? renderTheme.bg + 'E6' : renderTheme.bg;
+        const glassBg = rt.bg.length === 7 ? rt.bg + 'E6' : rt.bg;
 
         const styleString = `
           .flx-wiz-root {
             --wiz-bg: ${glassBg};
-            --wiz-text: ${renderTheme.text};
-            --wiz-input-bg: ${renderTheme.inputBg};
-            --wiz-font: ${renderTheme.font};
-            --wiz-accent-bg: ${renderTheme.accentBg};
-            --wiz-accent-text: ${renderTheme.accentText};
-            --wiz-accent-text-hover: ${renderTheme.accentText}${isDark ? 'cc' : 'dd'};
-            --wiz-btn-text: ${renderTheme.btnText};
-            --wiz-radius: ${renderTheme.radius};
-            --wiz-border: ${renderTheme.border};
-            --wiz-border-subtle: ${renderTheme.borderSubtle};
-            --wiz-chip-bg: ${renderTheme.chipBg};
-            --wiz-chip-hover-shadow: ${renderTheme.chipShadow};
+            --wiz-text: ${rt.text};
+            --wiz-input-bg: ${rt.inputBg};
+            --wiz-font: ${rt.font};
+            --wiz-accent-bg: ${rt.accentBg};
+            --wiz-accent-text: ${rt.accentText};
+            --wiz-accent-text-hover: ${rt.accentText}${isDark ? 'cc' : 'dd'};
+            --wiz-btn-text: ${rt.btnText};
+            --wiz-radius: ${rt.radius};
+            --wiz-border: ${rt.border};
+            --wiz-border-subtle: ${rt.borderSubtle};
+            --wiz-chip-bg: ${rt.chipBg};
+            --wiz-chip-hover-shadow: ${rt.chipShadow};
 
             background: var(--wiz-bg);
             color: var(--wiz-text);
@@ -896,6 +930,9 @@
             font-family: var(--wiz-font);
             color: var(--wiz-text);
             padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
           }
           .flx-wiz-btn-wrapper {
             flex: 0 0 auto; display: flex; justify-content: start;
@@ -993,11 +1030,15 @@
       render(container) {
         if (container) this.containerRef = container;
 
+        if (this.containerRef) {
+          while (this.containerRef.firstChild) {
+            this.containerRef.removeChild(this.containerRef.firstChild);
+          }
+        }
+
         this._injectStyles();
 
-        container.innerHTML = FluxKit.utils.safeHTML ? FluxKit.utils.safeHTML('') : '';
         const wrapper = FluxKit.utils.createHTMLElement('div', { class: 'flx-wiz-wrapper' });
-
         const root = FluxKit.utils.createHTMLElement('div', { class: 'flx-wiz-root' });
         root.appendChild(wrapper);
 
@@ -1016,7 +1057,7 @@
         if (this.step === 1) this.renderProviderStep(wrapper);
         else if (this.step === 2) this.renderConfigStep(wrapper);
 
-        container.appendChild(root);
+        if (this.containerRef) this.containerRef.appendChild(root);
         return this;
       }
 
@@ -1093,6 +1134,8 @@
 
       renderConfigStep(wrapper) {
         wrapper.appendChild(FluxKit.utils.createHTMLElement('h4', { textContent: `Setup ${this.data.provider}` }));
+        
+        const rt = this.currentRenderTheme;
 
         const setupGuidePopover = (popoverDetails, title = '') => {
           const hintWrapper = FluxKit.utils.createHTMLElement('div', {
@@ -1104,31 +1147,33 @@
           }));
           hintWrapper.appendChild(FluxKit.utils.createHTMLElement('span', {
             innerHTML: `<span style="display: flex; margin-top: -1px;">${FluxKit.ui.icons.info}</span><span>Setup Guide</span>`,
-            style: 'cursor: help; color: var(--wiz-text); opacity: 0.7; text-decoration: none; display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; line-height: 1; transition: all 0.2s;',
+            style: `cursor: help; color: ${rt.text}; opacity: 0.7; text-decoration: none; display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; line-height: 1; transition: all 0.2s;`,
             fxkswPopover: `${popoverDetails}`,
             eventListener: {
-               mouseover: function() { this.style.opacity = '1'; this.style.color = 'var(--wiz-accent-bg)'; },
-               mouseout: function() { this.style.opacity = '0.7'; this.style.color = 'var(--wiz-text)'; }
+               mouseover: function() { this.style.opacity = '1'; this.style.color = rt.accentBg; },
+               mouseout: function() { this.style.opacity = '0.7'; this.style.color = rt.text; }
             }
           }));
           return hintWrapper;
         };
 
         const getExtLink = (url, label, title) => {
-          return `<a href="${url}" data-popup="${title || label}" style="color: var(--wiz-accent-bg); text-decoration: none; font-weight: bold; display: inline-flex; align-items: center; gap: 2px;">${label} <span style="display: flex; margin-top: -2px; transform: scale(0.8); opacity: 0.7;">${FluxKit.ui.icons.externalLink}</span></a>`;
+          return `<a href="${url}" data-popup="${title || label}" style="color: ${rt.accentBg}; text-decoration: none; font-weight: bold; display: inline-flex; align-items: center; gap: 2px;">${label} <span style="display: flex; margin-top: -2px; transform: scale(0.8); opacity: 0.7;">${FluxKit.ui.icons.externalLink}</span></a>`;
         }
 
         if (this.data.provider === 'GitHub Gist') {
           const setupDetails = `
-            <div style="font-weight: bold; margin-bottom: 8px; font-size: 13px; border-bottom: 1px solid rgba(128,128,128,0.2); padding-bottom: 6px;">GitHub Gist Setup</div>
-            <ol style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-weight: normal;">
-              <li>Go to ${getExtLink('https://github.com/settings/tokens', 'GitHub Tokens')}.</li>
-              <li>Click <b>Generate new token (classic)</b>.</li>
-              <li>Give it a name and set expiration (e.g., No expiration).</li>
-              <li>Check the <code style="background: rgba(128,128,128,0.2); padding: 2px 4px; border-radius: 3px;">gist</code> scope box.</li>
-              <li>Generate and paste the token below.</li>
-            </ol>
-            <div style="margin-top: 8px; font-size: 11px; opacity: 0.8;">Note: Fine-grained tokens do not currently support the Gist API.</div>
+            <div style="color: ${rt.text}; font-family: ${rt.font}; text-align: left;">
+              <div style="font-weight: bold; margin-bottom: 8px; font-size: 13px; border-bottom: 1px solid ${rt.borderSubtle}; padding-bottom: 6px;">GitHub Gist Setup</div>
+              <ol style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-weight: normal;">
+                <li>Go to ${getExtLink('https://github.com/settings/tokens', 'GitHub Tokens')}.</li>
+                <li>Click <b>Generate new token (classic)</b>.</li>
+                <li>Give it a name and set expiration (e.g., No expiration).</li>
+                <li>Check the <code style="background: ${rt.chipBg}; padding: 2px 4px; border-radius: 3px; border: 1px solid ${rt.borderSubtle};">gist</code> scope box.</li>
+                <li>Generate and paste the token below.</li>
+              </ol>
+              <div style="margin-top: 8px; font-size: 11px; opacity: 0.8;">Note: Fine-grained tokens do not currently support the Gist API.</div>
+            </div>
           `;
           wrapper.appendChild(setupGuidePopover(setupDetails));
 
@@ -1150,14 +1195,16 @@
           wrapper.appendChild(inputGistID);
         } else if (this.data.provider === 'GitHub Repo') {
           const setupDetails = `
-            <div style="font-weight: bold; margin-bottom: 8px; font-size: 13px; border-bottom: 1px solid rgba(128,128,128,0.2); padding-bottom: 6px;">GitHub Repo Setup</div>
-            <ol style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-weight: normal;">
-              <li>Go to ${getExtLink('https://github.com/settings/tokens?type=beta', 'Fine-grained Tokens', 'GitHub Tokens')}.</li>
-              <li>Click <b>Generate new token</b>.</li>
-              <li>Under Repository Access, select <b>All repositories</b> (or select your specific repo).</li>
-              <li>Under Permissions > Repository permissions, grant <b>Read and write</b> access to <code style="background: rgba(128,128,128,0.2); padding: 2px 4px; border-radius: 3px;">Contents</code> and <code style="background: rgba(128,128,128,0.2); padding: 2px 4px; border-radius: 3px;">Administration</code> (needed to auto-create repos).</li>
-              <li>Generate and paste the token below.</li>
-            </ol>
+            <div style="color: ${rt.text}; font-family: ${rt.font}; text-align: left;">
+              <div style="font-weight: bold; margin-bottom: 8px; font-size: 13px; border-bottom: 1px solid ${rt.borderSubtle}; padding-bottom: 6px;">GitHub Repo Setup</div>
+              <ol style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-weight: normal;">
+                <li>Go to ${getExtLink('https://github.com/settings/tokens?type=beta', 'Fine-grained Tokens', 'GitHub Tokens')}.</li>
+                <li>Click <b>Generate new token</b>.</li>
+                <li>Under Repository Access, select <b>All repositories</b> (or select your specific repo).</li>
+                <li>Under Permissions > Repository permissions, grant <b>Read and write</b> access to <code style="background: ${rt.chipBg}; padding: 2px 4px; border-radius: 3px; border: 1px solid ${rt.borderSubtle};">Contents</code> and <code style="background: ${rt.chipBg}; padding: 2px 4px; border-radius: 3px; border: 1px solid ${rt.borderSubtle};">Administration</code> (needed to auto-create repos).</li>
+                <li>Generate and paste the token below.</li>
+              </ol>
+            </div>
           `;
           wrapper.appendChild(setupGuidePopover(setupDetails));
 
@@ -1205,14 +1252,16 @@
           }
         } else if (this.data.provider === 'WebDAV') {
           const setupDetails = `
-            <div style="font-weight: bold; margin-bottom: 8px; font-size: 13px; border-bottom: 1px solid rgba(128,128,128,0.2); padding-bottom: 6px;">WebDAV Setup Guide</div>
-            <ol style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-weight: normal;">
-              <li>Locate your server's WebDAV URL (e.g., Nextcloud usually uses <code style="background: rgba(128,128,128,0.2); padding: 2px 4px; border-radius: 3px;">/remote.php/webdav/</code>).</li>
-              <li>Go to your provider's Security or Account settings.</li>
-              <li>Generate an <b>App Password</b> specifically for this script. <i>(Do not use your main account password!)</i></li>
-              <li>Enter your username and the new App Password below.</li>
-              <li>When you click Finish Setup, Tampermonkey may prompt you to <b>"Allow"</b> the cross-origin request. Click "Always Allow".</li>
-            </ol>
+            <div style="color: ${rt.text}; font-family: ${rt.font}; text-align: left;">
+              <div style="font-weight: bold; margin-bottom: 8px; font-size: 13px; border-bottom: 1px solid ${rt.borderSubtle}; padding-bottom: 6px;">WebDAV Setup Guide</div>
+              <ol style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-weight: normal;">
+                <li>Locate your server's WebDAV URL (e.g., Nextcloud usually uses <code style="background: ${rt.chipBg}; padding: 2px 4px; border-radius: 3px; border: 1px solid ${rt.borderSubtle};">/remote.php/webdav/</code>).</li>
+                <li>Go to your provider's Security or Account settings.</li>
+                <li>Generate an <b>App Password</b> specifically for this script. <i>(Do not use your main account password!)</i></li>
+                <li>Enter your username and the new App Password below.</li>
+                <li>When you click Finish Setup, Tampermonkey may prompt you to <b>"Allow"</b> the cross-origin request. Click "Always Allow".</li>
+              </ol>
+            </div>
           `;
           wrapper.appendChild(setupGuidePopover(setupDetails));
           const urlInput = FluxKit.utils.createHTMLElement('input', {
@@ -1270,15 +1319,17 @@
 
           if (!this.data.refreshToken) {
             const setupDetails = `
-              <div style="font-weight: bold; margin-bottom: 8px; font-size: 13px; border-bottom: 1px solid rgba(128,128,128,0.2); padding-bottom: 6px;">Dropbox Setup Guide</div>
-              <ol style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-weight: normal;">
-                <li>Go to the ${getExtLink('https://www.dropbox.com/developers/apps', 'Dropbox App Console')}.</li>
-                <li>Click <b>Create App</b> &rarr; <b>Scoped App</b> &rarr; <b>App folder</b>.</li>
-                <li>In <b>Permissions</b>, check <code style="background: rgba(128,128,128,0.2); padding: 2px 4px; border-radius: 3px;">files.content.read</code> and <code style="background: rgba(128,128,128,0.2); padding: 2px 4px; border-radius: 3px;">files.content.write</code>.</li>
-                <li>Paste the App Key and Secret below.</li>
-              </ol>
+              <div style="color: ${rt.text}; font-family: ${rt.font}; text-align: left;">
+                <div style="font-weight: bold; margin-bottom: 8px; font-size: 13px; border-bottom: 1px solid ${rt.borderSubtle}; padding-bottom: 6px;">Dropbox Setup Guide</div>
+                <ol style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-weight: normal;">
+                  <li>Go to the ${getExtLink('https://www.dropbox.com/developers/apps', 'Dropbox App Console')}.</li>
+                  <li>Click <b>Create App</b> &rarr; <b>Scoped App</b> &rarr; <b>App folder</b>.</li>
+                  <li>In <b>Permissions</b>, check <code style="background: ${rt.chipBg}; padding: 2px 4px; border-radius: 3px; border: 1px solid ${rt.borderSubtle};">files.content.read</code> and <code style="background: ${rt.chipBg}; padding: 2px 4px; border-radius: 3px; border: 1px solid ${rt.borderSubtle};">files.content.write</code>.</li>
+                  <li>Paste the App Key and Secret below.</li>
+                </ol>
+              </div>
             `;
-            wrapper.appendChild(setupGuidePopover(setupDetails), '<span style="font-size: 11px; opacity: 0.8;">Step 1: Enter your Dropbox App Key & Secret.</span>');
+            wrapper.appendChild(setupGuidePopover(setupDetails, '<span style="font-size: 11px; opacity: 0.8;">Step 1: Enter your Dropbox App Key & Secret.</span>'));
 
             const inputKey = FluxKit.utils.createHTMLElement('input', {
               class: 'flx-wiz-input', placeholder: 'App Key', value: this.data.appKey || '',
@@ -1354,17 +1405,19 @@
 
           if (!this.data.refreshToken) {
             const setupDetails = `
-              <div style="font-weight: bold; margin-bottom: 8px; font-size: 13px; border-bottom: 1px solid rgba(128,128,128,0.2); padding-bottom: 6px;">OneDrive Setup Guide</div>
-              <ol style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-weight: normal;">
-                <li>Go to the ${getExtLink('https://go.microsoft.com/fwlink/?linkid=2083908', 'App Registrations Portal', 'Azure Portal')}.</li>
-                <li>New Registration &rarr; <b>"Accounts in any organizational directory and personal Microsoft accounts"</b>.</li>
-                <li>Redirect URI: <b>Web</b> &rarr; <code style="background: rgba(128,128,128,0.2); padding: 2px 4px;">http://localhost</code></li>
-                <li><b>API Permissions:</b> Add <code style="background: rgba(128,128,128,0.2); padding: 2px 4px;">Files.ReadWrite</code> & <code style="background: rgba(128,128,128,0.2); padding: 2px 4px;">offline_access</code> (under <b>Delegated</b> permissions).</li>
-                <li><b>Client Secret:</b> Go to <b>Certificates & secrets</b>, create a new one, and <b>copy the VALUE</b>.</li>
-                <li>Use <b>Application (client) ID</b> as App Key and the copied Secret as App Secret.</li>
-              </ol>
+              <div style="color: ${rt.text}; font-family: ${rt.font}; text-align: left;">
+                <div style="font-weight: bold; margin-bottom: 8px; font-size: 13px; border-bottom: 1px solid ${rt.borderSubtle}; padding-bottom: 6px;">OneDrive Setup Guide</div>
+                <ol style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-weight: normal;">
+                  <li>Go to the ${getExtLink('https://go.microsoft.com/fwlink/?linkid=2083908', 'App Registrations Portal', 'Azure Portal')}.</li>
+                  <li>New Registration &rarr; <b>"Accounts in any organizational directory and personal Microsoft accounts"</b>.</li>
+                  <li>Redirect URI: <b>Web</b> &rarr; <code style="background: ${rt.chipBg}; padding: 2px 4px; border-radius: 3px; border: 1px solid ${rt.borderSubtle};">http://localhost</code></li>
+                  <li><b>API Permissions:</b> Add <code style="background: ${rt.chipBg}; padding: 2px 4px; border-radius: 3px; border: 1px solid ${rt.borderSubtle};">Files.ReadWrite</code> & <code style="background: ${rt.chipBg}; padding: 2px 4px; border-radius: 3px; border: 1px solid ${rt.borderSubtle};">offline_access</code> (under <b>Delegated</b> permissions).</li>
+                  <li><b>Client Secret:</b> Go to <b>Certificates & secrets</b>, create a new one, and <b>copy the VALUE</b>.</li>
+                  <li>Use <b>Application (client) ID</b> as App Key and the copied Secret as App Secret.</li>
+                </ol>
+              </div>
             `;
-            wrapper.appendChild(setupGuidePopover(setupDetails), '<span style="font-size: 11px; opacity: 0.8;">Step 1: Enter your Azure Client ID. <br><span style="color: #e74c3c; font-weight: bold; font-size: 10px;">(Requires Azure Directory / M365)</span></span>');
+            wrapper.appendChild(setupGuidePopover(setupDetails, '<span style="font-size: 11px; opacity: 0.8;">Step 1: Enter your Azure Client ID. <br><span style="color: #e74c3c; font-weight: bold; font-size: 10px;">(Requires Azure Directory / M365)</span></span>'));
 
             const inputKey = FluxKit.utils.createHTMLElement('input', {
               class: 'flx-wiz-input', placeholder: 'Client ID (App Key)', value: this.data.appKey || '',
@@ -1402,7 +1455,7 @@
               value: this.data.authCode || '',
               eventListener: { input: (e) => {
                   let val = e.target.value.trim();
-                  if (val.includes('code=')) val = new URL(val).searchParams.get('code');
+                  if (val.includes('code=')) val = new URL(val).searchParams.get('code') || val;
                   this.data.authCode = val;
               }}
             });

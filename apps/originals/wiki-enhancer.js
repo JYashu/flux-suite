@@ -46,7 +46,7 @@
     getUniqueId,
     getRandomIcon,
     showNotification,
-    makeElementDragAndResize,
+    attachWindowControls,
     safeHTML,
   } = FluxKit.utils;
 
@@ -948,7 +948,7 @@
       sizeScroller();
     }
 
-    makeElementDragAndResize(
+    attachWindowControls(
       container,
       container.querySelector('.inline-header'),
       {
