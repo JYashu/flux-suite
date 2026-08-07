@@ -2464,8 +2464,7 @@
   };
 
   function createCustomDialog(type, message, options = {}, resolve) {
-    const baseIsDark = FluxKit.theme.isSystemDark();
-    const baseTheme = FluxKit.theme.get(baseIsDark);
+    const baseTheme = FluxKit.theme.get(options.themeKey);
     const theme = { ...baseTheme, ...(options.theme || {}) };
     
     const { 
@@ -2638,8 +2637,8 @@
       const namespace = overrides.namespace || 'default';
 
       let activeConfig = notifRegistry.get(namespace) || {
-          rootElement: document.body, duration: 3000, position: 'bottom-right',
-          borderRadius: '8px', fontFamily: 'system-ui, sans-serif', autoDark: true
+        rootElement: document.body, duration: 3000, position: 'bottom-right',
+        borderRadius: '8px', fontFamily: 'system-ui, sans-serif', autoDark: true
       };
 
       activeConfig = { ...activeConfig, ...overrides };

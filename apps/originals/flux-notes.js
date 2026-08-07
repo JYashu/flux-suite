@@ -5703,7 +5703,7 @@
   });
 
   // ------------------------
-  // IPC Listeners for Omnibar Integration (flux-notes.js)
+  // IPC Listeners for FluxHub Integration (flux-notes.js)
   // ------------------------
   function registerOmniCommands() {
     FluxKit.ipc.broadcast('register-command', {
@@ -5728,16 +5728,16 @@
     }
   });
 
-  FluxKit.ipc.listen('omnibar-execute-view', (payload) => {
+  FluxKit.ipc.listen('flxhub-execute-view', (payload) => {
     if (payload.pluginId === 'notes-search') {
       openViewModal();
     }
   });
 
-  FluxKit.ipc.listen('omnibar-mount-view', (payload) => {
+  FluxKit.ipc.listen('flxhub-mount-view', (payload) => {
     if (payload.pluginId !== 'notes-search') return;
 
-    const host = document.getElementById('flx-search-host');
+    const host = document.getElementById('flx-hub-host');
     if (!host) return;
     const slot = host.shadowRoot.getElementById(payload.targetId);
     if (!slot) return;
@@ -5780,7 +5780,7 @@
             mouseleave: (e) => e.currentTarget.style.background = 'var(--omni-bg)',
             click: (e) => {
               e.stopPropagation();
-              FluxKit.ipc.broadcast('omnibar-hide');
+              FluxKit.ipc.broadcast('flxhub-hide');
               openNoteModal(note);
             }
           }
@@ -5822,7 +5822,7 @@
     const actions = [
       FluxKit.ui.omni.Button('plus', 'New Note', (e) => {
         e.stopPropagation();
-        FluxKit.ipc.broadcast('omnibar-hide');
+        FluxKit.ipc.broadcast('flxhub-hide');
         openNoteModal({ title: searchTerm, description: '', url: window.location.href, tags: [] });
       })
     ];
