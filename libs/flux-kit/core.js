@@ -846,7 +846,7 @@
             }
 
             if (isPopover) {
-              el.dataset.tooltipInteractive = "true";
+              el.dataset.flxTooltipInteractive = "true";
             }
             break;
           }

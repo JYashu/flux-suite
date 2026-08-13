@@ -3510,7 +3510,7 @@
             type: 'color',
             class: 'flxn-color-picker',
             value: config.customTheme[prop.key],
-            dataset: { flxNotesTooltip: prop.label, tooltipDelay: 50 },
+            dataset: { flxNotesTooltip: prop.label, flxTooltipDelay: 50 },
             eventListener: {
               input: (e) => {
                 config.customTheme[prop.key] = e.target.value;
