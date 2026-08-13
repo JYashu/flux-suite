@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Flux-Video-Controls
 // @namespace    https://github.com/JYashu/flux-suite
-// @version      1.4.3
+// @version      1.4.4
 // @description  Enhance your streaming experience. Adds an advanced video toolbox, custom AudioContext equalizers, and gesture controls.
 // @icon         https://logo-bits.s3.us-east-2.amazonaws.com/video-controls.png
 // @icon         https://logo-bits.s3.us-east-2.amazonaws.com/video-controls-1.png
@@ -1483,13 +1483,10 @@
 
   function shouldKeydownBeIgnored(e, video = true) {
     if (!video || !e.isTrusted) return true;
+    if (FluxKit.utils.shouldIgnoreKeystroke(e)) return true;
 
     const el = document.activeElement;
     if (!el) return false;
-
-    const tag = el.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA') return true;
-    if (el.isContentEditable) return true;
 
     return false;
   }

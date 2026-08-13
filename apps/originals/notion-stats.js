@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Notion Stats
 // @namespace    https://github.com/JYashu/flux-suite
-// @version      1.7.0
+// @version      1.8.0
 // @description  A floating, expandable metrics panel for Notion. Tracks words, characters, sentences, paragraphs, reading time, and active selection stats.
 // @author       JYashu
 // @license      Apache-2.0
@@ -76,8 +76,22 @@
     return document.querySelector('[role="grid"], .notion-collection_view') !== null;
   }
 
+  function getActiveEditor() {
+    const editors = document.querySelectorAll(".notion-page-content");
+    return editors.length ? editors[editors.length - 1] : null;
+  }
+
   function isWordCounterRequired() {
-    return manualOverride || hasQueryOverride() || (!isDatabaseView() && isContentPage());
+    if (manualOverride || hasQueryOverride()) return true;
+    
+    const activeEditor = getActiveEditor();
+    if (!activeEditor) return false;
+
+    if (activeEditor.closest('.notion-peek-renderer, .notion-overlay-container')) {
+      return true;
+    }
+
+    return document.querySelector('.notion-collection_view') === null || activeEditor !== null;
   }
 
   function expandBox(box, text) {
@@ -223,7 +237,7 @@
   function setupObserver() {
     if (observer) observer.disconnect();
 
-    editor = document.querySelector(".notion-page-content");
+    editor = getActiveEditor();
 
     if (!editor) {
       if (statsBox) statsBox.style.display = "none";
@@ -250,7 +264,7 @@
 
   setInterval(() => {
     const newPage = location.pathname;
-    const newEditor = document.querySelector(".notion-page-content");
+    const newEditor = getActiveEditor();
 
     if (newPage !== currentPage || newEditor !== editor) {
       currentPage = newPage;

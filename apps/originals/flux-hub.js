@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Flux Hub
 // @namespace    https://github.com/JYashu/flux-suite
-// @version      1.0.0
+// @version      1.1.0
 // @description  Universal Command Palette and Search Engine. Press a hotkey to calculate, translate, convert, search the web, or control other Flux scripts instantly.
 // @icon         https://logo-bits.s3.us-east-2.amazonaws.com/flux-hub.svg
 // @author       JYashu
@@ -130,7 +130,9 @@
     LYRICS_MODE: 'hub:queue_lyrics_mode',
     LAST_QUERY: 'hub:last_query',
     MUSIC_STATS: 'hub:music_stats',
-    MUSIC_HISTORY: 'hub:music_history'
+    MUSIC_HISTORY: 'hub:music_history',
+    MUSIC_DISCOVERIES: 'hub:music_discoveries',
+    RAPIDAPI_KEY: 'hub:rapid_api_key'
   };
 
   const FluxHubState = FluxKit.state.register('flux-hub');
@@ -231,11 +233,12 @@
       FluxHubState.set(STATE_KEYS.CUSTOM_BANG_TOMBSTONES, t);
     },
   };
+      
+  const DEFAULT_SETTINGS = { theme: 'auto', ocrMode: 'live', launcherTrigger: 'alt+space', commandTrigger: 'shift+>', musicProvider: 'itunes_hub' };
 
   const SettingsState = {
     getAll() {
-      const defaults = { theme: 'auto', ocrMode: 'live', launcherTrigger: 'alt+space', musicProvider: 'itunes_hub' };
-      return { ...defaults, ...FluxHubState.get(STATE_KEYS.SEARCH_CONFIG, {}) };
+      return { ...DEFAULT_SETTINGS, ...FluxHubState.get(STATE_KEYS.SEARCH_CONFIG, {}) };
     },
     save(patch) {
       const merged = { ...this.getAll(), ...patch };
@@ -431,11 +434,9 @@
     let finalMusicStats = FluxHubState.get(STATE_KEYS.MUSIC_STATS || 'flx_music_stats', {});
     let finalMusicHistory = FluxHubState.get(STATE_KEYS.MUSIC_HISTORY || 'flx_music_history', []);
 
-    if (typeof FluxKit.musicStats !== 'undefined') {
-      FluxKit.musicStats.mergeSync(remote.musicStats || {}, remote.musicHistory || []);
-      finalMusicStats = FluxHubState.get(STATE_KEYS.MUSIC_STATS || 'flx_music_stats', {});
-      finalMusicHistory = FluxHubState.get(STATE_KEYS.MUSIC_HISTORY || 'flx_music_history', []);
-    }
+    FluxKit.musicStats.mergeSync(remote.musicStats || {}, remote.musicHistory || []);
+    finalMusicStats = FluxHubState.get(STATE_KEYS.MUSIC_STATS || 'flx_music_stats', {});
+    finalMusicHistory = FluxHubState.get(STATE_KEYS.MUSIC_HISTORY || 'flx_music_history', []);
 
     FluxHubState.set(STATE_KEYS.SAVED_PLAYLISTS, pl.merged);
     PlaylistsState.setTombstones(pl.tombstones);
@@ -555,7 +556,7 @@
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobi/i.test(navigator.userAgent);
 
       if (isMobile) {
-        const fab = FluxKit.utils.createHTMLElement('div', {
+        const fab = createHTMLElement('div', {
           id: 'flx-omni-fab', icon: 'search', fluxHubTooltip: 'Open FluxHub (Drag to move)',
           style: {
             position: 'fixed', bottom: '24px', right: '24px', width: '44px', height: '44px',
@@ -835,11 +836,7 @@
 
       if (e.key === 'Escape') {
         e.preventDefault(); e.stopPropagation();
-        if (this.input.value.length > 0) {
-          this.input.value = '';
-          this.input.dispatchEvent(new Event('input', { bubbles: true }));
-          return;
-        }
+        if (this.input.value.length > 0) { this.setInputVal(); return; }
         return this.hide();
       }
 
@@ -1027,6 +1024,11 @@
       document.removeEventListener('mousedown', this.onClickAway);
       document.removeEventListener('keydown', this.onGlobalKeydown, true);
     }
+
+    setInputVal(val = '') {
+      this.input.value = val;
+      this.input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
   }
 
   /**
@@ -1068,10 +1070,7 @@
         const host = document.getElementById('flx-hub-host');
         if (!host || !host.shadowRoot) return;
 
-        if (FluxHub.ui.input && payload && typeof payload.value === 'string') {
-          FluxHub.ui.input.value = payload.value;
-          FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true }));
-        }
+        if (payload && typeof payload.value === 'string') FluxHub.ui.setInputVal(payload.value);
       });
       this.refreshPlugins();
     }
@@ -1379,63 +1378,113 @@
     }
 
     async fetchData() {
-      const commands = [];
+      const native = [];
+      const plugins = [];
 
       FluxHub.engine.localViews.forEach(ViewClass => {
-        if (ViewClass.isAvailable && ViewClass.commandRegistry) commands.push(...ViewClass.commandRegistry);
+        if (ViewClass.isAvailable && ViewClass.commandRegistry) native.push(...ViewClass.commandRegistry);
       });
 
       FluxHub.engine.remoteCommands.forEach(cmd => {
-        commands.push({ prefix: cmd.prefix, description: cmd.title || `Plugin: ${cmd.id}`, icon: cmd.icon || 'code', isRemote: true });
+        plugins.push({ prefix: cmd.prefix, description: cmd.title || `Plugin: ${cmd.id}`, icon: cmd.icon || 'code', isRemote: true });
       });
 
-      return commands.sort((a, b) => a.prefix.localeCompare(b.prefix));
+      const sortFn = (a, b) => a.prefix.localeCompare(b.prefix);
+      
+      // Return structured data instead of a flat array
+      return {
+        native: native.sort(sortFn),
+        plugins: plugins.sort(sortFn)
+      };
     }
 
-    renderListRow() { return FluxKit.ui.omni.ListRow('Command Directory', 'info', 'Explore available actions', 'to view'); }
+    renderListRow() { 
+      return FluxKit.ui.omni.ListRow('Command Directory', 'info', 'Explore available actions', 'to view'); 
+    }
 
-    renderExpandedCard(commands) {
-      const container = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '350px', overflowY: 'auto', padding: '8px' } });
+    renderExpandedCard({ native, plugins }) {
+      const container = createHTMLElement('div', { 
+        style: { display: 'flex', flexDirection: 'column', gap: '20px', maxHeight: '350px', overflowY: 'auto', padding: '12px' } 
+      });
 
-      commands.forEach(cmd => {
-        const row = createHTMLElement('div', {
-          style: {
-            display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px',
-            background: 'var(--omni-input-bg)', border: '1px solid var(--omni-border)',
-            borderRadius: '6px', cursor: 'pointer', transition: 'background 0.15s ease'
-          },
-          eventListener: {
-            mouseenter: e => { e.currentTarget.style.background = 'var(--omni-hover)' },
-            mouseleave: e => { e.currentTarget.style.background = 'var(--omni-input-bg)' },
-            click: (e) => {
-              e.stopPropagation();
-              FluxHub.ui.input.value = `${cmd.prefix} `;
-              FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true }));
-            }
-          }
+      const buildSection = (title, commands) => {
+        if (!commands || commands.length === 0) return null;
+
+        const section = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } });
+        const heading = createHTMLElement('div', { 
+          textContent: title, 
+          style: { fontSize: '11px', fontWeight: '700', color: 'var(--omni-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', paddingLeft: '4px' } 
+        });
+        
+        const grid = createHTMLElement('div', { 
+          style: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' } 
         });
 
-        const iconWrap = createHTMLElement('div', { icon: cmd.icon, style: { color: cmd.isRemote ? 'var(--omni-success)' : 'var(--omni-accent)', fontSize: '18px', display: 'flex', justifyContent: 'center', width: '24px' }});
+        commands.forEach(cmd => {
+          const row = createHTMLElement('div', {
+            style: {
+              display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px',
+              background: 'var(--omni-input-bg)', border: '1px solid var(--omni-border)',
+              borderRadius: '6px', cursor: 'pointer', transition: 'background 0.15s ease',
+              overflow: 'hidden' // Trap floating children
+            },
+            eventListener: {
+              mouseenter: e => { e.currentTarget.style.background = 'var(--omni-hover)' },
+              mouseleave: e => { e.currentTarget.style.background = 'var(--omni-input-bg)' },
+              click: (e) => { e.stopPropagation(); FluxHub.ui.setInputVal(`${cmd.prefix} `); }
+            }
+          });
 
-        const textWrap = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', flexGrow: '1' } });
-        textWrap.appendChild(createHTMLElement('div', { textContent: cmd.prefix, style: { fontWeight: '600', fontSize: '14px', fontFamily: 'monospace', color: 'var(--omni-text)' } }));
-        textWrap.appendChild(createHTMLElement('div', { textContent: cmd.description, style: { fontSize: '12px', color: 'var(--omni-muted)', marginTop: '2px' } }));
+          const iconWrap = createHTMLElement('div', { 
+            icon: cmd.icon, 
+            style: { color: cmd.isRemote ? 'var(--omni-success)' : 'var(--omni-accent)', fontSize: '16px', display: 'flex', justifyContent: 'center', minWidth: '20px' }
+          });
 
-        row.appendChild(iconWrap);
-        row.appendChild(textWrap);
+          // minWidth: '0' is structurally critical here to prevent flex children from blowing out CSS grid cells
+          const textWrap = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', flexGrow: '1', minWidth: '0' } });
+          
+          const titleRow = createHTMLElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'space-between' } });
+          titleRow.appendChild(createHTMLElement('div', { 
+            textContent: cmd.prefix, 
+            style: { fontWeight: '600', fontSize: '13px', fontFamily: 'monospace', color: 'var(--omni-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } 
+          }));
+          
+          if (cmd.isRemote) {
+            titleRow.appendChild(createHTMLElement('div', { 
+              textContent: 'PLUGIN', 
+              style: { fontSize: '9px', fontWeight: 'bold', background: 'var(--omni-hover)', color: 'var(--omni-accent-text)', padding: '2px 4px', borderRadius: '4px', flexShrink: '0' }
+            }));
+          }
+          
+          textWrap.appendChild(titleRow);
+          textWrap.appendChild(createHTMLElement('div', { 
+            textContent: cmd.description, 
+            style: { fontSize: '11px', color: 'var(--omni-muted)', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } 
+          }));
 
-        if (cmd.isRemote) {
-          const badge = createHTMLElement('div', { textContent: 'PLUGIN', style: { fontSize: '9px', fontWeight: 'bold', background: 'var(--omni-hover)', color: 'var(--omni-accent-text)', padding: '2px 6px', borderRadius: '4px' }});
-          row.appendChild(badge);
-        }
+          row.appendChild(iconWrap);
+          row.appendChild(textWrap);
+          grid.appendChild(row);
+        });
 
-        container.appendChild(row);
-      });
+        section.appendChild(heading);
+        section.appendChild(grid);
+        return section;
+      };
+
+      const nativeSection = buildSection('Native Commands', native);
+      if (nativeSection) container.appendChild(nativeSection);
+
+      const pluginSection = buildSection('Plugins', plugins);
+      if (pluginSection) container.appendChild(pluginSection);
 
       return FluxKit.ui.omni.DetailCard(container, []);
     }
 
-    async execute() { const data = await this.fetchData(); FluxHub.ui.expandListItem(this, data); }
+    async execute() { 
+      const data = await this.fetchData(); 
+      FluxHub.ui.expandListItem(this, data); 
+    }
   }
 
   class WidgetManagerView extends BaseView {
@@ -1452,6 +1501,20 @@
     getPinnedWidgets() { return FluxHubState.get(STATE_KEYS.PINNED_WIDGETS, []); }
 
     savePinnedWidgets(widgets) { FluxHubState.set(STATE_KEYS.PINNED_WIDGETS, widgets); }
+
+    getTombstones() { return FluxHubState.get(STATE_KEYS.PINNED_WIDGET_TOMBSTONES, {}); }
+
+    setTombstones(tombs) { FluxHubState.set(STATE_KEYS.PINNED_WIDGET_TOMBSTONES, tombs); }
+
+    removeWidget(id) {
+      const widgets = this.getPinnedWidgets();
+      const updated = widgets.filter(w => w.id !== id);
+      this.savePinnedWidgets(updated);
+
+      const tombs = this.getTombstones();
+      tombs[id] = Date.now();
+      this.setTombstones(tombs);
+    }
 
     async fetchData() {
       const rawQ = this.query.trim().replace(/^>\s*(widget|widgets|wgt)\s*/i, '').trim();
@@ -1496,7 +1559,7 @@
       header.appendChild(createHTMLElement('div', { style: { fontSize: '12px', color: 'var(--omni-muted)' }, textContent: 'Use "> widget add <weather|stock|rss|clock> <value>" to add cards.' }));
       container.appendChild(header);
 
-      const listContainer = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' } });
+      const listContainer = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '160px', overflowY: 'auto' } });
 
       if (!data.widgets || data.widgets.length === 0) {
         listContainer.appendChild(createHTMLElement('div', { textContent: 'No persistent widgets pinned to dashboard.', style: { padding: '16px', textAlign: 'center', color: 'var(--omni-muted)', fontSize: '13px' } }));
@@ -1526,8 +1589,7 @@
             eventListener: {
               click: (e) => {
                 e.stopPropagation();
-                const updated = data.widgets.filter(w => w.id !== item.id);
-                this.savePinnedWidgets(updated);
+                this.removeWidget(item.id);
                 if (FluxKit.sync?.auto) AutoSync.notifyLocalChange();
                 this.execute();
               }
@@ -1556,13 +1618,7 @@
             background: 'var(--omni-hover)', color: 'var(--omni-accent-text)', cursor: 'pointer',
             border: '1px solid var(--omni-border)'
           },
-          eventListener: {
-            click: (e) => {
-              e.stopPropagation();
-              FluxHub.ui.input.value = chip.cmd;
-              FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true }));
-            }
-          }
+          eventListener: (e) => { e.stopPropagation(); FluxHub.ui.setInputVal(chip.cmd); }
         }));
         chipContainer.appendChild(chipEl);
       });
@@ -1597,8 +1653,7 @@
           widgets.push(newWidget);
           this.savePinnedWidgets(widgets);
           if (FluxKit.sync?.auto) AutoSync.notifyLocalChange();
-          FluxHub.ui.input.value = '> widget';
-          FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true }));
+          FluxHub.ui.setInputVal('> widget');
           return;
         }
       }
@@ -1932,7 +1987,7 @@
         case 'qr': return this.renderQRTool(data);
         case 'uuid': return this.renderUUIDTool();
         case 'icon': return this.renderIconView(data.payload);
-        default: return FluxKit.utils.createHTMLElement('div', { textContent: 'Unknown generation tool.' });
+        default: return createHTMLElement('div', { textContent: 'Unknown generation tool.' });
       }
     }
 
@@ -2272,7 +2327,7 @@
 
     renderUUIDTool() {
       const uuid = crypto.randomUUID();
-      const output = FluxKit.utils.createHTMLElement('div', { textContent: uuid, style: { padding: '16px', fontFamily: 'monospace', fontSize: '18px' }});
+      const output = createHTMLElement('div', { textContent: uuid, style: { padding: '16px', fontFamily: 'monospace', fontSize: '18px' }});
       const copyBtn = FluxKit.ui.omni.Button('copy', 'Copy UUID', () => { navigator.clipboard.writeText(uuid); FluxHub.ui.hide(); });
       return FluxKit.ui.omni.DetailCard(output, [copyBtn]);
     }
@@ -2294,7 +2349,7 @@
         return FluxKit.ui.omni.DetailCard(container, []);
       }
 
-      const grid = createHTMLElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(65px, 1fr))', gap: '10px', maxHeight: '320px', overflowY: 'auto', paddingRight: '4px' } });
+      const grid = createHTMLElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(65px, 1fr))', gap: '10px', maxHeight: '300px', overflowY: 'auto', paddingRight: '4px' } });
 
       grid.style.cssText += '::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: var(--omni-border); border-radius: 4px; }';
 
@@ -2442,7 +2497,7 @@
         case 'regex': return this.renderRegexTool(data.payload);
         case 'base64': return this.renderBase64Tool(data.payload);
         case 'crop': return this.renderRatioTool();
-        default: return FluxKit.utils.createHTMLElement('div', { textContent: 'Unknown developer tool.' });
+        default: return createHTMLElement('div', { textContent: 'Unknown developer tool.' });
       }
     }
 
@@ -3204,7 +3259,7 @@
         case 'pomodoro': return this.renderPomodoroTool(data.payload);
         case 'epoch': return this.renderEpochTool(data.payload);
         case 'clock': return this.renderClockTool(data.payload);
-        default: return FluxKit.utils.createHTMLElement('div', { textContent: 'Unknown tool.' });
+        default: return createHTMLElement('div', { textContent: 'Unknown tool.' });
       }
     }
 
@@ -3597,8 +3652,7 @@
       const data = await this.fetchData();
       if (data.tool === 'timer' && data.payload && data.payload.action === 'start') {
         FluxHubState.set(STATE_KEYS.ACTIVE_TIMER, { endsAt: Date.now() + data.payload.ms, label: data.payload.label, hostTab: FluxKit.ipc.getTabId() });
-        FluxHub.ui.input.value = '> timer';
-        FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true }));
+        FluxHub.ui.setInputVal('> timer');
       } else { FluxHub.ui.expandListItem(this, data); }
     }
 
@@ -3629,7 +3683,7 @@
         let node = null;
 
         if (params.tool === 'timer') {
-          node = createHTMLElement('div', { class: 'flx-omni-widget', style: { alignItems: 'center', cursor: 'pointer', flex: '1' }, eventListener: { click: () => { FluxHub.ui.input.value = '> timer'; FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true })); } }});
+          node = createHTMLElement('div', { class: 'flx-omni-widget', style: { alignItems: 'center', cursor: 'pointer', flex: '1' }, eventListener: () => FluxHub.ui.setInputVal('> timer') });
           node.appendChild(createHTMLElement('div', { style: { fontSize: '11px', textTransform: 'uppercase', color: 'var(--omni-muted)', fontWeight: 'bold' }, textContent: `⏱️ ${params.payload.label || 'Timer'}` }));
           const display = createHTMLElement('div', { style: { fontSize: '32px', fontWeight: 'bold', color: 'var(--omni-text)', fontVariantNumeric: 'tabular-nums' } });
           node.appendChild(display);
@@ -3640,7 +3694,7 @@
           }, 500);
         }
         else if (params.tool === 'stopwatch') {
-          node = createHTMLElement('div', { class: 'flx-omni-widget', style: { alignItems: 'center', cursor: 'pointer', flex: '1' }, eventListener: { click: () => { FluxHub.ui.input.value = '> sw'; FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true })); } }});
+          node = createHTMLElement('div', { class: 'flx-omni-widget', style: { alignItems: 'center', cursor: 'pointer', flex: '1' }, eventListener: () => FluxHub.ui.setInputVal('> sw') });
           node.appendChild(createHTMLElement('div', { style: { fontSize: '11px', textTransform: 'uppercase', color: 'var(--omni-muted)', fontWeight: 'bold' }, textContent: params.payload.isRunning ? '⏱️ Stopwatch (Run)' : '⏱️ Stopwatch (Pause)' }));
           const display = createHTMLElement('div', { style: { fontSize: '32px', fontWeight: 'bold', color: 'var(--omni-text)', fontVariantNumeric: 'tabular-nums' } });
           node.appendChild(display);
@@ -3650,7 +3704,7 @@
           }, 200);
         }
         else if (params.tool === 'pomodoro') {
-          node = createHTMLElement('div', { class: 'flx-omni-widget', style: { alignItems: 'center', cursor: 'pointer', flex: '1' }, eventListener: { click: () => { FluxHub.ui.input.value = '> pomo'; FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true })); } }});
+          node = createHTMLElement('div', { class: 'flx-omni-widget', style: { alignItems: 'center', cursor: 'pointer', flex: '1' }, eventListener: () => FluxHub.ui.setInputVal('> pomo') });
           const labels = { focus: '🎯 Focus', shortBreak: '☕ Short Brk', longBreak: '🌴 Long Brk' };
           node.appendChild(createHTMLElement('div', { style: { fontSize: '11px', textTransform: 'uppercase', color: 'var(--omni-muted)', fontWeight: 'bold' }, textContent: labels[params.payload.mode] || 'Pomodoro' }));
           const display = createHTMLElement('div', { style: { fontSize: '32px', fontWeight: 'bold', color: 'var(--omni-text)', fontVariantNumeric: 'tabular-nums' } });
@@ -3661,7 +3715,7 @@
           }, 500);
         }
         else if (params.tool === 'clock') {
-          node = createHTMLElement('div', { class: 'flx-omni-widget', style: { alignItems: 'center', cursor: 'pointer', flex: '1' }, eventListener: { click: () => { FluxHub.ui.input.value = `> clock ${params.payload.city}`; FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true })); } }});
+          node = createHTMLElement('div', { class: 'flx-omni-widget', style: { alignItems: 'center', cursor: 'pointer', flex: '1' }, eventListener: () => FluxHub.ui.setInputVal(`> clock ${params.payload.city}`) });
           node.appendChild(createHTMLElement('div', { style: { fontSize: '11px', textTransform: 'uppercase', color: 'var(--omni-muted)', fontWeight: 'bold' }, textContent: params.payload.city }));
 
           const display = createHTMLElement('div', { style: { fontSize: '26px', fontWeight: 'bold', color: 'var(--omni-text)', fontVariantNumeric: 'tabular-nums', marginTop: '4px' }, textContent: '...' });
@@ -3737,7 +3791,7 @@
 
       const modernFont = 'var(--omni-font)';
 
-      const bodyContainer = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '350px', overflowY: 'auto', paddingRight: '4px' } });
+      const bodyContainer = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '340px', overflowY: 'auto', paddingRight: '4px' } });
 
       if (history.length === 0) {
         const term = this.getFilterTerm();
@@ -3867,67 +3921,144 @@
     static get units() {
       return {
         // Length (base: meter)
-        m: { type: 'length', factor: 1 }, km: { type: 'length', factor: 1000 },
-        cm: { type: 'length', factor: 0.01 }, mm: { type: 'length', factor: 0.001 },
-        mi: { type: 'length', factor: 1609.34 }, yd: { type: 'length', factor: 0.9144 },
-        ft: { type: 'length', factor: 0.3048 }, in: { type: 'length', factor: 0.0254 },
+        m: { type: 'length', factor: 1, label: 'Meter (m)' }, 
+        km: { type: 'length', factor: 1000, label: 'Kilometer (km)' }, cm: { type: 'length', factor: 0.01, label: 'Centimeter (cm)' }, 
+        mm: { type: 'length', factor: 0.001, label: 'Millimeter (mm)' }, mi: { type: 'length', factor: 1609.34, label: 'Mile (mi)' }, 
+        yd: { type: 'length', factor: 0.9144, label: 'Yard (yd)' }, ft: { type: 'length', factor: 0.3048, label: 'Foot (ft)' }, 
+        in: { type: 'length', factor: 0.0254, label: 'Inch (in)' },
+        // Area (base: m^2)
+        m2: { type: 'area', factor: 1, label: 'Square Meter (m²)' },
+        km2: { type: 'area', factor: 1e6, label: 'Square Kilometer (km²)' }, cm2: { type: 'area', factor: 1e-4, label: 'Square Centimeter (cm²)' },
+        mm2: { type: 'area', factor: 1e-6, label: 'Square Millimeter (mm²)' }, ha: { type: 'area', factor: 1e4, label: 'Hectare (ha)' }, 
+        acre: { type: 'area', factor: 4046.8564224, label: 'Acre' }, sqmi: { type: 'area', factor: 2589988.110336, label: 'Square Mile (sqmi)' }, 
+        sqyd: { type: 'area', factor: 0.83612736, label: 'Square Yard (sqyd)' }, sqft: { type: 'area', factor: 0.09290304, label: 'Square Foot (sqft)' }, 
+        sqin: { type: 'area', factor: 0.00064516, label: 'Square Inch (sqin)' },
+        // Volume (base: m^3)
+        m3: { type: 'volume', factor: 1, label: 'Cubic Meter (m³)' }, 
+        cm3: { type: 'volume', factor: 1e-6, label: 'Cubic Centimeter (cm³)' }, mm3: { type: 'volume', factor: 1e-9, label: 'Cubic Millimeter (mm³)' }, 
+        km3: { type: 'volume', factor: 1e9, label: 'Cubic Kilometer (km³)' }, l: { type: 'volume', factor: 0.001, label: 'Liter (L)' }, 
+        ml: { type: 'volume', factor: 1e-6, label: 'Milliliter (ml)' }, ft3: { type: 'volume', factor: 0.028316846592, label: 'Cubic Foot (ft³)' }, 
+        in3: { type: 'volume', factor: 0.000016387064, label: 'Cubic Inch (in³)' }, gal: { type: 'volume', factor: 0.003785411784, label: 'US Gallon (gal)' },
+        qt:  { type: 'volume', factor: 0.000946352946, label: 'US Quart (qt)' }, pt:  { type: 'volume', factor: 0.000473176473, label: 'US Pint (pt)' },
+        cup: { type: 'volume', factor: 0.0002365882365, label: 'US Cup' }, tbsp: { type: 'volume', factor: 0.00001478676478125, label: 'Tablespoon (tbsp)' }, 
+        tsp: { type: 'volume', factor: 0.00000492892159375, label: 'Teaspoon (tsp)' }, imp_gal: { type: 'volume', factor: 0.00454609, label: 'Imperial Gallon' }, 
+        imp_pt: { type: 'volume', factor: 0.00056826125, label: 'Imperial Pint' }, imp_qt: { type: 'volume', factor: 0.0011365225, label: 'Imperial Quart' }, 
+        fl_oz: { type: 'volume', factor: 0.0000284130625, label: 'Fluid Ounce (fl oz)' },
         // Mass (base: gram)
-        g: { type: 'mass', factor: 1 }, kg: { type: 'mass', factor: 1000 },
-        mg: { type: 'mass', factor: 0.001 }, lb: { type: 'mass', factor: 453.592 },
-        oz: { type: 'mass', factor: 28.3495 }
+        g: { type: 'mass', factor: 1, label: 'Gram (g)' }, 
+        kg: { type: 'mass', factor: 1000, label: 'Kilogram (kg)' }, mg: { type: 'mass', factor: 0.001, label: 'Milligram (mg)' }, 
+        lb: { type: 'mass', factor: 453.592, label: 'Pound (lb)' }, oz: { type: 'mass', factor: 28.3495, label: 'Ounce (oz)' },
+        // Bytes (base: byte)
+        b:  { type: 'bytes', factor: 1, label: 'Byte (B)' },
+        kb: { type: 'bytes', factor: 1000, label: 'Kilobyte (KB)' }, mb: { type: 'bytes', factor: 1000 ** 2, label: 'Megabyte (MB)' },
+        gb: { type: 'bytes', factor: 1000 ** 3, label: 'Gigabyte (GB)' }, tb: { type: 'bytes', factor: 1000 ** 4, label: 'Terabyte (TB)' },
+        pb: { type: 'bytes', factor: 1000 ** 5, label: 'Petabyte (PB)' },
+        kib: { type: 'bytes', factor: 1024, label: 'Kibibyte (KiB)' }, mib: { type: 'bytes', factor: 1024 ** 2, label: 'Mebibyte (MiB)' },
+        gib: { type: 'bytes', factor: 1024 ** 3, label: 'Gibibyte (GiB)' }, tib: { type: 'bytes', factor: 1024 ** 4, label: 'Tebibyte (TiB)' },
+        pib: { type: 'bytes', factor: 1024 ** 5, label: 'Pebibyte (PiB)' }
       };
     }
 
+    static normalizeUnit(u) {
+      let str = u.trim().toLowerCase().replaceAll('²', '2').replaceAll('³', '3');
+      
+      if (str.endsWith('s') && !['celsius', 'fps', 'bps', 'kib', 'mib', 'gib', 'tib'].includes(str)) {
+        str = str.slice(0, -1);
+      }
+
+      const aliases = {
+        // Length
+        'meter': 'm', 'metre': 'm', 'kilometer': 'km', 'centimeter': 'cm', 'millimeter': 'mm', 
+        'mile': 'mi', 'yard': 'yd', 'foot': 'ft', 'feet': 'ft', 'inch': 'in', 'inche': 'in',
+        // Area
+        'square meter': 'm2', 'sq meter': 'm2', 'square metre': 'm2', 'sq metre': 'm2', 'sqm': 'm2',
+        'hectare': 'ha', 'yd2': 'sqyd', 'ft2': 'sqft', 'in2': 'sqin',
+        // Mass 
+        'lbs': 'lb', 'ounce': 'oz',
+        // Volume
+        'litre': 'l', 'liter': 'l', 
+        'gallon': 'gal', 'us gallon': 'gal',
+        'quart': 'qt', 'us quart': 'qt',
+        'pint': 'pt', 'us pint': 'pt',
+        'imperial gallon': 'imp_gal', 'imp gal': 'imp_gal', 'uk gallon': 'imp_gal', 'uk gal': 'imp_gal', 'imperial gal': 'imp_gal',  'imp gallon': 'imp_gal',
+        'imperial pint': 'imp_pt', 'imp pint': 'imp_pt', 'uk pint': 'imp_pt', 'uk pt': 'imp_pt', 'imp pt': 'imp_pt', 'imperial pt': 'imp_pt',
+        'imperial quart': 'imp_qt', 'imp quart': 'imp_qt', 'uk quart': 'imp_qt', 'uk qt': 'imp_qt', 'imp qa': 'imp_qt', 'imperial qt': 'imp_qt',
+        'fluid ounce': 'fl_oz', 'fl oz': 'fl_oz',
+        // Temperature
+        'celsius': 'c', 'kelvin': 'k', 'fahrenheit': 'f'
+      };
+      
+      return aliases[str] || str;
+    }
+
+    static resolveContext(from, to) {
+      let f = from, t = to;
+      const u = this.units;
+      
+      if (f === 'oz' && u[t]?.type === 'volume') f = 'fl_oz';
+      if (t === 'oz' && u[f]?.type === 'volume') t = 'fl_oz';
+      
+      return { from: f, to: t };
+    }
+
     static parseQuery(query) {
-      const match = query.trim().toLowerCase().match(/^([\d\.]+)\s*([a-z]{1,5})\s+(?:to|in)\s+([a-z]{1,5})$/);
+      const q = query.trim().toLowerCase();
+      const match = q.match(/^([\d\.]+)\s+([a-z0-9_\-\s]+?)\s+(?:to|in)\s+([a-z0-9_\-\s]+)$/);
       if (!match) return null;
-      return { amount: parseFloat(match[1]), from: match[2], to: match[3] };
+      return { amount: parseFloat(match[1]), from: this.normalizeUnit(match[2]), to: this.normalizeUnit(match[3]) };
     }
 
     static matchConfidence(query) {
       const parsed = this.parseQuery(query);
       if (!parsed) return 0;
 
-      // Temperature
-      if (['c', 'f', 'k'].includes(parsed.from) && ['c', 'f', 'k'].includes(parsed.to)) return 100;
+      const ctx = this.resolveContext(parsed.from, parsed.to);
 
-      // Physical Units
-      const fromUnit = this.units[parsed.from];
-      const toUnit = this.units[parsed.to];
+      if (['c', 'f', 'k'].includes(ctx.from) && ['c', 'f', 'k'].includes(ctx.to)) return 100;
+
+      const fromUnit = this.units[ctx.from];
+      const toUnit = this.units[ctx.to];
       if (fromUnit && toUnit && fromUnit.type === toUnit.type) return 100;
 
-      // Live Currencies/Crypto (If 2+ letters and not a mismatched physical unit)
-      if (!fromUnit && !toUnit && parsed.from.length >= 2 && parsed.to.length >= 2) return 85;
+      if (!fromUnit && !toUnit && ctx.from.length >= 2 && ctx.to.length >= 2) return 85;
 
       return 0;
     }
 
-    async fetchData(signal) {
-      const parsed = this.constructor.parseQuery(this.query);
-      if (!parsed) return null;
-
+    async compute(amount, fromRaw, toRaw) {
       let result = 0;
       let isLive = false;
       let rateProvider = '';
+      let type = 'unknown';
 
-      if (['c', 'f', 'k'].includes(parsed.from) && ['c', 'f', 'k'].includes(parsed.to)) {
+      const baseFrom = this.constructor.normalizeUnit(fromRaw);
+      const baseTo = this.constructor.normalizeUnit(toRaw);
+      
+      const ctx = this.constructor.resolveContext(baseFrom, baseTo);
+      const from = ctx.from;
+      const to = ctx.to;
+
+      if (['c', 'f', 'k'].includes(from) && ['c', 'f', 'k'].includes(to)) {
+        type = 'temperature';
         let celsius = 0;
-        if (parsed.from === 'c') celsius = parsed.amount;
-        else if (parsed.from === 'f') celsius = (parsed.amount - 32) * 5/9;
-        else if (parsed.from === 'k') celsius = parsed.amount - 273.15;
+        if (from === 'c') celsius = amount;
+        else if (from === 'f') celsius = (amount - 32) * 5/9;
+        else if (from === 'k') celsius = amount - 273.15;
 
-        if (parsed.to === 'c') result = celsius;
-        else if (parsed.to === 'f') result = (celsius * 9/5) + 32;
-        else if (parsed.to === 'k') result = celsius + 273.15;
-      } else if (this.constructor.units[parsed.from] && this.constructor.units[parsed.to]) {
-        const fromUnit = this.constructor.units[parsed.from];
-        const toUnit = this.constructor.units[parsed.to];
-        const baseAmount = parsed.amount * fromUnit.factor;
+        if (to === 'c') result = celsius;
+        else if (to === 'f') result = (celsius * 9/5) + 32;
+        else if (to === 'k') result = celsius + 273.15;
+      } else if (this.constructor.units[from] && this.constructor.units[to]) {
+        const fromUnit = this.constructor.units[from];
+        const toUnit = this.constructor.units[to];
+        type = fromUnit.type;
+        const baseAmount = amount * fromUnit.factor;
         result = baseAmount / toUnit.factor;
       } else {
         isLive = true;
-        const fromCode = parsed.from.toUpperCase();
-        const toCode = parsed.to.toUpperCase();
+        type = 'currency';
+        const fromCode = from.toUpperCase();
+        const toCode = to.toUpperCase();
         const cacheKey = `rate_${fromCode}_${toCode}`;
 
         let cachedRate = await FluxHub.cache.get(cacheKey);
@@ -3943,57 +4074,218 @@
             });
           });
 
-          const cbUrl = `https://api.coinbase.com/v2/exchange-rates?currency=${fromCode}`;
-          const cbData = await fetchApi(cbUrl);
-
-          if (cbData && cbData.data && cbData.data.rates && cbData.data.rates[toCode]) { rate = parseFloat(cbData.data.rates[toCode]); rateProvider = 'Coinbase'; }
+          const cbData = await fetchApi(`https://api.coinbase.com/v2/exchange-rates?currency=${fromCode}`);
+          if (cbData?.data?.rates?.[toCode]) { rate = parseFloat(cbData.data.rates[toCode]); rateProvider = 'Coinbase'; }
 
           if (!rate) {
-            const fUrl = `https://api.frankfurter.app/latest?from=${fromCode}&to=${toCode}`;
-            const fData = await fetchApi(fUrl);
-            if (fData && fData.rates && fData.rates[toCode]) { rate = fData.rates[toCode]; rateProvider = 'Frankfurter'; }
+            const fData = await fetchApi(`https://api.frankfurter.app/latest?from=${fromCode}&to=${toCode}`);
+            if (fData?.rates?.[toCode]) { rate = fData.rates[toCode]; rateProvider = 'Frankfurter'; }
           }
 
           if (rate) await FluxHub.cache.set(cacheKey, { val: rate, provider: rateProvider }, 15 * 60 * 1000);
           else return null;
         }
-        result = parsed.amount * rate;
+        result = amount * rate;
       }
 
-      this.lastResult = Number.isInteger(result) ? result : parseFloat(result.toFixed(6));
-      this.parsed = parsed;
+      let finalResult;
+      if (Number.isInteger(result)) { finalResult = result; }
+      else if (Math.abs(result) < 0.001 && result !== 0) { finalResult = parseFloat(result.toPrecision(4)); }
+      else { finalResult = parseFloat(result.toFixed(4)); }
 
-      return {
-        from: parsed.from.toUpperCase(), to: parsed.to.toUpperCase(),
-        amount: parsed.amount, result: this.lastResult, isLive, rateProvider
-      };
+      return { amount, from, to, result: finalResult, isLive, rateProvider, type };
+    }
+
+    async fetchData(signal) {
+      const parsed = this.constructor.parseQuery(this.query);
+      if (!parsed) return null;
+
+      const data = await this.compute(parsed.amount, parsed.from, parsed.to);
+      if (!data) return null;
+
+      this.lastResult = data.result;
+      this.parsed = parsed;
+      return data;
     }
 
     renderListRow() {
       const isLive = this.parsed && !this.constructor.units[this.parsed.from] && !['c','f','k'].includes(this.parsed.from);
-      const icon = isLive ? 'currency' : 'unit';
-      return FluxKit.ui.omni.ListRow(this.lastResult !== undefined ? `${this.lastResult} ${this.parsed.to.toUpperCase()}` : 'Convert Values', icon, this.query, 'to Copy');
+      return FluxKit.ui.omni.ListRow(this.lastResult !== undefined ? `${this.lastResult} ${this.parsed.to.toUpperCase()}` : 'Convert Values', isLive ? 'currency' : 'unit', this.query, 'to Copy');
     }
 
     renderExpandedCard(data) {
-      const displayContainer = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 0', fontFamily: 'monospace' }, });
+      let currentData = { ...data };
 
-      const mathRow = createHTMLElement('div', {
-        style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '24px' },
-        children: [
-          createHTMLElement('div', { style: { fontSize: '28px', color: 'var(--omni-muted)' }, textContent: `${data.amount} ${data.from}` }),
-          createHTMLElement('div', { style: { fontSize: '24px', color: 'var(--omni-separator)' }, textContent: '=' }),
-          createHTMLElement('div', { style: { fontSize: '42px', fontWeight: 'bold', color: 'var(--omni-text)' }, textContent: `${data.result} ${data.to}` })
-        ]
+      const displayContainer = FluxKit.utils.createHTMLElement('div', { 
+        style: { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 0', fontFamily: 'monospace', width: '100%' } 
       });
 
-      displayContainer.appendChild(mathRow);
+      const mathRow = FluxKit.utils.createHTMLElement('div', { 
+        style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', width: '100%', transition: 'all 0.3s ease' } 
+      });
 
-      if (data.isLive) {
-        displayContainer.appendChild(createHTMLElement('div', { textContent: `Live rates via ${data.rateProvider}`,
-          style: { fontSize: '11px', color: 'var(--omni-muted)', marginTop: '12px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' },
+      const statusText = FluxKit.utils.createHTMLElement('div', { 
+        textContent: currentData.isLive ? `Live rates via ${currentData.rateProvider}` : '',
+        style: { fontSize: '11px', color: 'var(--omni-muted)', marginTop: '12px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px', height: '16px' }
+      });
+
+      const getOptionsForType = (type) => {
+        if (type === 'temperature') return [{val: 'c', label: 'Celsius (°C)'}, {val: 'f', label: 'Fahrenheit (°F)'}, {val: 'k', label: 'Kelvin (K)'}];
+        if (type === 'currency') return []; 
+        const options = [];
+        const seen = new Set();
+        for (const [key, obj] of Object.entries(this.constructor.units)) {
+          if (obj.type === type) {
+            const label = obj.label || key.toUpperCase();
+            if (!seen.has(label)) {
+              seen.add(label);
+              options.push({ val: key, label });
+            }
+          }
+        }
+        return options.sort((a,b) => a.label.localeCompare(b.label));
+      };
+
+      const createInlineSelect = (currentVal, type, isLarge, onChange) => {
+        const opts = getOptionsForType(type);
+        const shortText = currentVal.toUpperCase().replace('_', ' ');
+
+        if (opts.length === 0) {
+          return FluxKit.utils.createHTMLElement('div', { 
+            textContent: shortText, 
+            style: { fontSize: isLarge ? '42px' : '28px', fontWeight: isLarge ? 'bold' : 'normal', color: isLarge ? 'var(--omni-text)' : 'var(--omni-muted)' } 
+          });
+        }
+
+        const wrap = FluxKit.utils.createHTMLElement('div', { style: { position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' } });
+
+        const display = FluxKit.utils.createHTMLElement('div', {
+          textContent: shortText,
+          style: { 
+            fontSize: isLarge ? '42px' : '28px', fontWeight: isLarge ? 'bold' : 'normal', 
+            color: isLarge ? 'var(--omni-text)' : 'var(--omni-muted)', textAlign: 'center', 
+            textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: '6px', textDecorationThickness: '2px',
+            pointerEvents: 'none', whiteSpace: 'nowrap'
+          }
+        });
+
+        const sel = FluxKit.utils.createHTMLElement('select', {
+          style: { position: 'absolute', inset: '0', opacity: '0', cursor: 'pointer', width: '100%', height: '100%', appearance: 'none' },
+          eventListener: { change: (e) => onChange(e.target.value) }
+        });
+
+        opts.forEach(o => {
+          const isSelected = o.val === currentVal || o.val === this.constructor.normalizeUnit(currentVal);
+          sel.appendChild(FluxKit.utils.createHTMLElement('option', { value: o.val, textContent: o.label, selected: isSelected, style: { fontSize: '14px', background: 'var(--omni-bg)', color: 'var(--omni-text)' } }));
+        });
+        
+        wrap.appendChild(display);
+        wrap.appendChild(sel);
+        return wrap;
+      };
+
+      let leftValNode, rightValNode, swapBtnNode, leftWrap, rightWrap;
+
+      const evaluateLayout = () => {
+        const totalChars = String(currentData.amount).length + String(currentData.result).length;
+        const isVertical = totalChars > 13;
+        mathRow.style.flexDirection = isVertical ? 'column' : 'row';
+        mathRow.style.gap = isVertical ? '12px' : '24px';
+        if (swapBtnNode) swapBtnNode.style.transform = isVertical ? 'rotate(90deg)' : 'none';
+      };
+
+      const renderMathRow = () => {
+        mathRow.innerHTML = '';
+        
+        leftWrap = FluxKit.utils.createHTMLElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } });
+        
+        leftValNode = FluxKit.utils.createHTMLElement('span', { 
+          textContent: currentData.amount, contentEditable: 'true', spellcheck: 'false',
+          style: { fontSize: '28px', color: 'var(--omni-muted)', outline: 'none', borderBottom: '2px dashed var(--omni-separator)', minWidth: '1ch', display: 'inline-block', padding: '0 2px', transition: 'color 0.2s' },
+          eventListener: {
+            input: async (e) => {
+              const val = parseFloat(e.target.textContent);
+              if (isNaN(val)) return;
+              currentData.amount = val;
+              const newData = await this.compute(val, currentData.from, currentData.to);
+              if (newData) {
+                currentData.result = newData.result;
+                this.lastResult = newData.result;
+                if (rightValNode) rightValNode.textContent = newData.result;
+                evaluateLayout();
+              }
+            },
+            keydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } },
+            focus: (e) => { e.target.style.color = 'var(--omni-text)'; },
+            blur: (e) => { e.target.style.color = 'var(--omni-muted)'; }
+          }
+        });
+        
+        leftWrap.appendChild(leftValNode);
+        leftWrap.appendChild(createInlineSelect(currentData.from, currentData.type, false, async (newFrom) => {
+           mathRow.style.opacity = '0.5';
+           const newData = await this.compute(currentData.amount, newFrom, currentData.to);
+           if (newData) { currentData = newData; this.lastResult = newData.result; renderMathRow(); }
+           mathRow.style.opacity = '1';
         }));
-      }
+
+        swapBtnNode = FluxKit.utils.createHTMLElement('div', {
+          icon: 'swap', fluxHubTooltip: 'Swap Units',
+          style: { fontSize: '20px', color: 'var(--omni-separator)', cursor: 'pointer', padding: '8px', borderRadius: '50%', transition: 'all 0.3s ease', display: 'flex' },
+          eventListener: {
+            click: async () => {
+              mathRow.style.opacity = '0.5';
+              const newData = await this.compute(currentData.amount, currentData.to, currentData.from);
+              if (newData) { currentData = newData; this.lastResult = newData.result; renderMathRow(); }
+              mathRow.style.opacity = '1';
+            },
+            mouseenter: (e) => { e.target.style.background = 'var(--omni-hover)'; e.target.style.color = 'var(--omni-text)'; },
+            mouseleave: (e) => { e.target.style.background = 'transparent'; e.target.style.color = 'var(--omni-separator)'; }
+          }
+        });
+
+        rightWrap = FluxKit.utils.createHTMLElement('div', { style: { display: 'flex', alignItems: 'baseline', gap: '8px' } });
+        
+        rightValNode = FluxKit.utils.createHTMLElement('span', { 
+          textContent: currentData.result, contentEditable: 'true', spellcheck: 'false',
+          style: { fontSize: '42px', fontWeight: 'bold', color: 'var(--omni-text)', outline: 'none', borderBottom: '2px dashed var(--omni-separator)', minWidth: '1ch', display: 'inline-block', padding: '0 4px', transition: 'color 0.2s' },
+          eventListener: {
+            input: async (e) => {
+              const val = parseFloat(e.target.textContent);
+              if (isNaN(val)) return;
+              currentData.result = val;
+              this.lastResult = val; 
+              const reverseData = await this.compute(val, currentData.to, currentData.from);
+              if (reverseData) {
+                currentData.amount = reverseData.result;
+                if (leftValNode) leftValNode.textContent = reverseData.result;
+                evaluateLayout();
+              }
+            },
+            keydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } },
+            focus: (e) => { e.target.style.color = 'var(--omni-accent-text)'; },
+            blur: (e) => { e.target.style.color = 'var(--omni-text)'; }
+          }
+        });
+
+        rightWrap.appendChild(rightValNode);
+        rightWrap.appendChild(createInlineSelect(currentData.to, currentData.type, true, async (newTo) => {
+           mathRow.style.opacity = '0.5';
+           const newData = await this.compute(currentData.amount, currentData.from, newTo);
+           if (newData) { currentData = newData; this.lastResult = newData.result; renderMathRow(); }
+           mathRow.style.opacity = '1';
+        }));
+
+        mathRow.appendChild(leftWrap);
+        mathRow.appendChild(swapBtnNode);
+        mathRow.appendChild(rightWrap);
+        
+        evaluateLayout();
+      };
+
+      renderMathRow();
+      displayContainer.appendChild(mathRow);
+      displayContainer.appendChild(statusText);
 
       const copyBtn = FluxKit.ui.omni.Button('copy', 'Copy Result', (e) => { e.stopPropagation(); this.execute(); });
 
@@ -4553,6 +4845,8 @@
   class SettingsView extends BaseView {
     static isAvailable = true;
     static commandRegistry = [{ prefix: '> config', description: 'Manage & view app configurations', icon: 'settings' }];
+
+    validSubs = ['theme', 'ocr', 'saavn', 'shazam'];
     
     constructor(query, context = null) {
       super(query, context);
@@ -4578,8 +4872,7 @@
       const sub = match[2]?.toLowerCase() || '';
       const val = match[3] || '';
 
-      const validSubs = ['theme', 'ocr', 'saavn'];
-      if (validSubs.includes(sub)) {
+      if (this.validSubs.includes(sub)) {
         return { sub, val };
       }
 
@@ -4588,21 +4881,19 @@
 
     _autoExpandIfExactSubCommand() {
       const { sub } = this._parseCommand();
-      const validSubs = ['theme', 'ocr', 'saavn'];
       
-      if (validSubs.includes(sub) && this.lastAutoExpandSub !== sub) {
+      if (this.validSubs.includes(sub) && this.lastAutoExpandSub !== sub) {
         this.lastAutoExpandSub = sub;
         setTimeout(() => this.execute(), 50); // Force UI expansion without requiring the Enter key
-      } else if (!validSubs.includes(sub)) {
+      } else if (!this.validSubs.includes(sub)) {
         this.lastAutoExpandSub = null;
       }
     }
 
     async fetchData() {
       const { sub, val } = this._parseCommand();
-      const defaults = { theme: 'auto', ocrMode: 'live', launcherTrigger: 'alt+space', musicProvider: 'itunes_hub' };
       const stored = SettingsState.getAll();
-      const config = { ...defaults, ...stored };
+      const config = { ...DEFAULT_SETTINGS, ...stored };
 
       if (sub === 'theme') {
         const allThemes = [{ key: 'auto', name: 'Auto (Site Match)' }, ...Object.values(FluxKit.theme.presets)];
@@ -4617,6 +4908,9 @@
       if (sub === 'saavn') {
         return { mode: 'saavn', val, config };
       }
+      if (sub === 'shazam') {
+        return { mode: 'shazam', val, config };
+      }
 
       return { mode: 'default', config };
     }
@@ -4626,7 +4920,8 @@
 
       if (sub === 'theme') return FluxKit.ui.omni.ListRow(val ? `Search Themes: ${val}` : 'Select Theme', 'palette', 'Settings');
       if (sub === 'ocr') return FluxKit.ui.omni.ListRow(val ? `Search OCR Modes: ${val}` : 'Select OCR Mode', 'scan', 'Settings');
-      if (sub === 'saavn') return FluxKit.ui.omni.ListRow(val ? `Set Saavn URL` : 'Set Saavn URL', 'link', val || 'Paste URL to save');
+      if (sub === 'saavn') return FluxKit.ui.omni.ListRow(val ? `Set Saavn URL: ${val}` : 'Set Saavn URL', 'link', val || 'Paste URL to save');
+      if (sub === 'shazam') return FluxKit.ui.omni.ListRow(val ? `Set RapidAPI Key: ${val}` : 'Configure Shazam API', 'note', val || 'Set RapidAPI Key for Music Recognition');
 
       return FluxKit.ui.omni.ListRow('Flux Settings', 'settings', 'Configure Theme & Shortcuts'); 
     }
@@ -4635,18 +4930,20 @@
       if (mode === 'theme') {
         SettingsState.save({ theme: item.key });
         FluxHub.ui.applyTheme();
-        if (FluxKit.ui.showNotification) FluxKit.ui.showNotification(`Theme set to: ${item.name}`);
+        FluxKit.ui.showNotification(`Theme set to: ${item.name}`);
       } else if (mode === 'ocr') {
         SettingsState.save({ ocrMode: item.val });
-        if (FluxKit.ui.showNotification) FluxKit.ui.showNotification(`OCR Mode set to: ${item.text}`);
+        FluxKit.ui.showNotification(`OCR Mode set to: ${item.text}`);
       } else if (mode === 'saavn') {
         FluxHubState.set(STATE_KEYS.CUSTOM_SAAVN_URL, item);
-        if (FluxKit.ui.showNotification) FluxKit.ui.showNotification(`JioSaavn URL updated`);
+        FluxKit.ui.showNotification(`JioSaavn URL updated`);
+      } else if (mode === 'shazam') {
+        FluxHubState.set(STATE_KEYS.RAPIDAPI_KEY, item);
+        FluxKit.ui.showNotification(`RapidAPI Key updated`);
       }
       
       this.lastAutoExpandSub = null;
-      FluxHub.ui.input.value = '> config ';
-      FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true }));
+      FluxHub.ui.setInputVal('> config ');
     }
 
     handleKeydown(e) {
@@ -4697,6 +4994,12 @@
       const modernFont = 'var(--omni-font)';
       const config = data.config;
 
+      const selectStyle = {
+        padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--omni-border)',
+        background: 'var(--omni-input-bg)', color: 'var(--omni-text)', fontSize: '13px',
+        outline: 'none', cursor: 'pointer', fontFamily: modernFont
+      };
+
       if (data.mode === 'theme' || data.mode === 'ocr') {
         const container = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px' } });
         
@@ -4732,10 +5035,23 @@
         const container = createHTMLElement('div', { style: { padding: '16px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '8px' } });
         container.appendChild(createHTMLElement('div', { textContent: `JioSaavn Base URL`, style: { color: 'var(--omni-muted)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 'bold' } }));
         
-        const displayVal = data.val || FluxHubState.get(STATE_KEYS.CUSTOM_SAAVN_URL, '');
+        const prevVal = FluxHubState.get(STATE_KEYS.CUSTOM_SAAVN_URL, ''); 
+        const displayVal = data.val || prevVal;
         container.appendChild(createHTMLElement('div', { textContent: displayVal || 'Not configured', style: { fontWeight: '600', fontSize: '14px', wordBreak: 'break-all', color: 'var(--omni-text)' } }));
         
         const actions = [FluxKit.ui.omni.Button('success', 'Save Custom URL', () => this.saveAndClose('saavn', displayVal))];
+        return FluxKit.ui.omni.DetailCard(container, actions);
+      }
+
+      if (data.mode === 'shazam') {
+        const container = createHTMLElement('div', { style: { padding: '16px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '8px' } });
+        container.appendChild(createHTMLElement('div', { textContent: `RapidAPI Key (Shazam)`, style: { color: 'var(--omni-muted)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 'bold' } }));
+        
+        const prevVal = FluxHubState.get(STATE_KEYS.RAPIDAPI_KEY, ''); 
+        const displayVal = data.val || prevVal;
+        container.appendChild(createHTMLElement('div', { textContent: displayVal ? '••••••••' + displayVal.slice(-4) : 'Not configured', style: { fontWeight: '600', fontSize: '14px', wordBreak: 'break-all', color: 'var(--omni-text)' } }));
+        
+        const actions = [FluxKit.ui.omni.Button('success', 'Save API Key', () => this.saveAndClose('shazam', displayVal))];
         return FluxKit.ui.omni.DetailCard(container, actions);
       }
 
@@ -4746,12 +5062,6 @@
           style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--omni-separator)' },
           children: [ createHTMLElement('div', { style: { fontWeight: '500', fontSize: '14px', color: 'var(--omni-text)' }, textContent: labelText }), inputElement ]
         });
-      };
-
-      const selectStyle = {
-        padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--omni-border)',
-        background: 'var(--omni-input-bg)', color: 'var(--omni-text)', fontSize: '13px',
-        outline: 'none', cursor: 'pointer', fontFamily: modernFont
       };
 
       const themeSelect = createHTMLElement('select', {
@@ -4775,6 +5085,12 @@
         type: 'text', value: FluxHubState.get(STATE_KEYS.CUSTOM_SAAVN_URL, ''), placeholder: 'https://your-api.vercel.app',
         style: { ...selectStyle, textAlign: 'left', cursor: 'text', width: '220px', fontFamily: 'monospace' },
         eventListener: { input: (e) => FluxHubState.set(STATE_KEYS.CUSTOM_SAAVN_URL, e.target.value.trim()) }
+      });
+
+      const rapidApiKeyInput = createHTMLElement('input', {
+        type: 'password', value: FluxHubState.get(STATE_KEYS.RAPIDAPI_KEY, ''), placeholder: 'RapidAPI Key',
+        style: { ...selectStyle, textAlign: 'left', cursor: 'text', width: '220px', fontFamily: 'monospace' },
+        eventListener: { input: (e) => FluxHubState.set(STATE_KEYS.RAPIDAPI_KEY, e.target.value.trim()) }
       });
 
       const hotkeyInput = createHTMLElement('input', {
@@ -4820,6 +5136,7 @@
           createFormRow('Theme Engine', themeSelect),
           createFormRow('OCR Capture Mode', ocrSelect),
           createFormRow('JioSaavn Base URL', customSaavnInput),
+          createFormRow('RapidAPI Key (Shazam)', rapidApiKeyInput),
           createFormRow('Launcher Shortcut', hotkeyInput)
         ]
       });
@@ -4832,6 +5149,11 @@
 
       if (sub === 'saavn' && val) {
         this.saveAndClose('saavn', val);
+        return;
+      }
+
+      if (sub === 'shazam' && val) {
+        this.saveAndClose('shazam', val);
         return;
       }
 
@@ -5333,9 +5655,7 @@
     renderWidget(params) {
       const city = params?.city || 'Pune';
 
-      const widget = createHTMLElement('div', { class: 'flx-omni-widget', style: { gridColumn: 'span 2' },
-        eventListener: () => { FluxHub.ui.input.value = `> w ${city}`; FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true })); }
-      });
+      const widget = createHTMLElement('div', { class: 'flx-omni-widget', style: { gridColumn: 'span 2' }, eventListener: () => FluxHub.ui.setInputVal(`> w ${city}`) });
 
       widget.appendChild(createHTMLElement('div', { textContent: `Fetching ${city}...`, style: { color: 'var(--omni-muted)', fontSize: '13px', textAlign: 'center' }, }));
 
@@ -6584,7 +6904,125 @@
             }
           });
         });
-      }
+      },
+
+      identifyAmbientAudio: async function(signal = null) {
+        return new Promise(async (resolve, reject) => {
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            return reject({ type: 'hardware_error', message: 'Microphone access is not supported in this context.' });
+          }
+
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream);
+            const audioChunks = [];
+
+            mediaRecorder.addEventListener('dataavailable', event => {
+              if (event.data.size > 0) audioChunks.push(event.data);
+            });
+
+            mediaRecorder.addEventListener('stop', async () => {
+              stream.getTracks().forEach(track => track.stop());
+              
+              const rapidApiKey = FluxHubState.get(STATE_KEYS.RAPIDAPI_KEY, '');
+              if (!rapidApiKey) {
+                return reject({ type: 'auth_error', message: 'RapidAPI Key missing. Please set it in settings.' });
+              }
+
+              try {
+                const rawBlob = new Blob(audioChunks);
+                const arrayBuffer = await rawBlob.arrayBuffer();
+                const tempCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const decodedBuffer = await tempCtx.decodeAudioData(arrayBuffer);
+                
+                const offlineCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, decodedBuffer.duration * 44100, 44100);
+                const source = offlineCtx.createBufferSource();
+                source.buffer = decodedBuffer;
+                source.connect(offlineCtx.destination);
+                source.start(0);
+                
+                const audioBuffer = await offlineCtx.startRendering();
+                const channelData = audioBuffer.getChannelData(0); 
+                
+                const wavBuffer = new ArrayBuffer(44 + channelData.length * 2);
+                const view = new DataView(wavBuffer);
+                const writeStr = (offset, str) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); };
+                
+                writeStr(0, 'RIFF'); view.setUint32(4, 36 + channelData.length * 2, true);
+                writeStr(8, 'WAVE'); writeStr(12, 'fmt ');
+                view.setUint32(16, 16, true); view.setUint16(20, 1, true); 
+                view.setUint16(22, 1, true); view.setUint32(24, 44100, true);
+                view.setUint32(28, 44100 * 2, true); view.setUint16(32, 2, true); 
+                view.setUint16(34, 16, true); writeStr(36, 'data');
+                view.setUint32(40, channelData.length * 2, true);
+                
+                const pcm16 = new Int16Array(wavBuffer, 44);
+                for (let i = 0; i < channelData.length; i++) {
+                  let s = channelData[i];
+                  pcm16[i] = Math.max(-32768, Math.min(32767, s * 0x8000));
+                }
+
+                const wavBlob = new Blob([wavBuffer], { type: 'audio/wav' });
+                const reader = new FileReader();
+                
+                reader.onloadend = async () => {
+                  const base64Audio = reader.result.split(',')[1];
+
+                  try {
+                    const res = await FluxKit.api.gmFetch('https://shazam.p.rapidapi.com/songs/v2/detect', {
+                      method: 'POST',
+                      headers: {
+                        'content-type': 'text/plain',
+                        'x-rapidapi-host': 'shazam.p.rapidapi.com',
+                        'x-rapidapi-key': rapidApiKey
+                      },
+                      body: base64Audio,
+                      signal
+                    });
+
+                    if (res.status === 403 || res.status === 401) throw { type: 'auth_error', message: 'Invalid RapidAPI Key or Free Tier not subscribed.' };
+                    if (res.status === 413 || res.status === 429) throw { type: 'quota_error', message: 'RapidAPI monthly limit exceeded (500/mo).' };
+                    if (res.status === 400 || res.status === 500) throw { type: 'api_error', message: `Shazam Proxy Error (HTTP ${res.status}). Payload rejected.` };
+                    if (!res.ok) throw { type: 'network_error', message: `API HTTP ${res.status}` };
+
+                    const data = await res.json();
+
+                    if (data && data.track) {
+                      resolve({
+                        title: data.track.title,
+                        artist: data.track.subtitle,
+                        raw: data.track
+                      });
+                    } else {
+                      reject({ type: 'no_match', message: 'No matching song found in the captured audio.' });
+                    }
+                  } catch (e) {
+                    reject(e.type ? e : { type: 'network_error', message: e.message || 'Recognition service request failed.' });
+                  }
+                };
+                
+                reader.onerror = () => reject({ type: 'processing_error', message: 'Failed to encode Base64 audio.' });
+                reader.readAsDataURL(wavBlob);
+
+              } catch (err) {
+                reject(err.type ? err : { type: 'processing_error', message: `Local processing failed: ${err.message || 'Unknown Context Error'}` });
+              }
+            });
+
+            if (signal) {
+              signal.addEventListener('abort', () => {
+                if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+              });
+            }
+
+            mediaRecorder.start();
+            setTimeout(() => { if (mediaRecorder.state !== 'inactive') mediaRecorder.stop(); }, 4000);
+
+          } catch (e) {
+            reject({ type: 'hardware_error', message: 'Microphone permission denied or unavailable.' });
+          }
+        });
+      },
     }
   };
 
@@ -6597,36 +7035,53 @@
     let silentLoopObjectUrl = null;
     let playbackMode = null;
 
-    let truePlayTimeout = null, truePlayTriggered = false;
+    let truePlayTimeout = null;
     let timeTrackerStart = 0, timeTrackerTotal = 0;
 
     const commitTimeTracker = () => {
       if (timeTrackerStart) {
-        timeTrackerTotal += (Date.now() - timeTrackerStart);
+        let chunk = Date.now() - timeTrackerStart;
+        if (currentTrack && currentTrack.durationMs) chunk = Math.min(chunk, currentTrack.durationMs);
+        
+        timeTrackerTotal += chunk;
         timeTrackerStart = 0;
+
+        // Bank the chunk into the synced session state
+        const am = FluxHubState.get(STATE_KEYS.ACTIVE_MEDIA, {});
+        if (am && currentTrack && am.track?.id === currentTrack.id) {
+          am.sessionListenedMs = (am.sessionListenedMs || 0) + chunk;
+          FluxHubState.set(STATE_KEYS.ACTIVE_MEDIA, am);
+        }
       }
-      if (currentTrack && timeTrackerTotal > 1000 && typeof FluxKit.musicStats !== 'undefined') {
+      
+      if (currentTrack && timeTrackerTotal > 1000) {
         FluxKit.musicStats.recordTime(currentTrack, timeTrackerTotal);
       }
       timeTrackerTotal = 0;
     };
 
-    const evaluateTruePlay = (offsetSec) => {
-      if (!truePlayTriggered && currentTrack) {
-        clearTimeout(truePlayTimeout);
-        const durationMs = currentTrack.durationMs || 300000;
-        const thresholdMs = Math.min(30000, durationMs * 0.5); 
-        const currentMs = offsetSec * 1000;
-        
-        if (currentMs >= thresholdMs) {
-          truePlayTriggered = true;
-          if (typeof FluxKit.musicStats !== 'undefined') FluxKit.musicStats.recordPlay(currentTrack);
-        } else {
-          truePlayTimeout = setTimeout(() => {
-            truePlayTriggered = true;
-            if (typeof FluxKit.musicStats !== 'undefined') FluxKit.musicStats.recordPlay(currentTrack);
-          }, thresholdMs - currentMs);
-        }
+    const evaluateTruePlay = () => {
+      clearTimeout(truePlayTimeout);
+      if (!currentTrack || !isPlaying) return;
+
+      if (targetTrackId && currentTrack.id !== targetTrackId) return;
+
+      const am = FluxHubState.get(STATE_KEYS.ACTIVE_MEDIA, {});
+      if (am.sessionScrobbled) return; // Already counted this session
+
+      const durationMs = currentTrack.durationMs || 300000;
+      const thresholdMs = Math.min(30000, durationMs * 0.5); 
+      const currentListened = am.sessionListenedMs || 0;
+      
+      const currentChunk = timeTrackerStart ? (Date.now() - timeTrackerStart) : 0;
+      const totalListened = currentListened + currentChunk;
+
+      if (totalListened >= thresholdMs) {
+        am.sessionScrobbled = true;
+        FluxHubState.set(STATE_KEYS.ACTIVE_MEDIA, am);
+        FluxKit.musicStats.recordPlay(currentTrack);
+      } else {
+        truePlayTimeout = setTimeout(() => evaluateTruePlay(currentTrack.id), thresholdMs - totalListened);
       }
     };
 
@@ -6810,14 +7265,20 @@
     const updateMediaSession = () => {
       if ('mediaSession' in navigator && currentTrack) {
         const artwork = [];
-        if (currentTrack.cover) artwork.push({ src: currentTrack.cover, sizes: '512x512', type: 'image/jpeg' });
+        if (currentTrack.cover && currentTrack.cover.startsWith('http')) {
+          artwork.push({ src: currentTrack.cover, sizes: '512x512', type: 'image/jpeg' });
+        }
 
-        navigator.mediaSession.metadata = new MediaMetadata({
-          title: currentTrack.title || 'Unknown Title',
-          artist: currentTrack.artist || 'Unknown Artist',
-          album: FluxHubState.get(STATE_KEYS.ACTIVE_PLAYLIST_NAME, 'FluxHub Queue'),
-          artwork: artwork
-        });
+        try {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: currentTrack.title || 'Unknown Title',
+            artist: currentTrack.artist || 'Unknown Artist',
+            album: FluxHubState.get(STATE_KEYS.ACTIVE_PLAYLIST_NAME, 'FluxHub Queue'),
+            artwork: artwork
+          });
+        } catch (e) {
+          logWarning('MediaMetadata initialization bypassed due to strict constraints.');
+        }
       }
     };
 
@@ -6904,7 +7365,9 @@
       if (isPlaying && !timeTrackerStart) {
         timeTrackerStart = Date.now();
       } else if (!isPlaying && timeTrackerStart) {
-        timeTrackerTotal += (Date.now() - timeTrackerStart);
+        let chunk = Date.now() - timeTrackerStart;
+        if (currentTrack && currentTrack.durationMs) chunk = Math.min(chunk, currentTrack.durationMs);
+        timeTrackerTotal += chunk;
         timeTrackerStart = 0;
       }
 
@@ -6921,6 +7384,7 @@
         } catch(e) {}
       }
 
+      const existingAm = FluxHubState.get(STATE_KEYS.ACTIVE_MEDIA, {});
       const statePayload = {
         isPlaying, isLoading, track: currentTrack, hostTab: FluxKit.ipc.getTabId(),
         index: FluxHubState.get(STATE_KEYS.QUEUE_INDEX, 0),
@@ -6928,7 +7392,9 @@
         shuffle: FluxHubState.get(STATE_KEYS.QUEUE_SHUFFLE, false),
         progress: currentProgress,
         timestamp: Date.now(),
-        volume: FluxHubState.get(STATE_KEYS.MEDIA_VOLUME, 0.5)
+        volume: FluxHubState.get(STATE_KEYS.MEDIA_VOLUME, 0.5),
+        sessionListenedMs: existingAm.sessionListenedMs || 0,
+        sessionScrobbled: existingAm.sessionScrobbled || false
       };
 
       FluxHubState.set(STATE_KEYS.ACTIVE_MEDIA, statePayload);
@@ -7100,7 +7566,10 @@
           if (!_isStaleRetry) {
             commitTimeTracker();
             clearTimeout(truePlayTimeout);
-            truePlayTriggered = false;
+            const am = FluxHubState.get(STATE_KEYS.ACTIVE_MEDIA, {});
+            am.sessionListenedMs = 0;
+            am.sessionScrobbled = false;
+            FluxHubState.set(STATE_KEYS.ACTIVE_MEDIA, am);
           }
 
           if (currentTrack && currentTrack.id === trackMeta.id && audioBuffer &&
@@ -7308,7 +7777,7 @@
           if (title) currentTrack.title = title;
           if (artist) currentTrack.artist = artist;
           currentTrack.metaEdited = true;
-          if (typeof FluxKit.musicStats !== 'undefined') FluxKit.musicStats.migrateSlug(oldMeta, currentTrack);
+          FluxKit.musicStats.migrateSlug(oldMeta, currentTrack);
           this.persistActiveTrackMeta(currentTrack);
           broadcastState();
           updateMediaSession();
@@ -7534,19 +8003,30 @@
   })();
 
   FluxKit.musicStats ??= (function() {
-
     const getStatsDB = () => FluxHubState.get(STATE_KEYS.MUSIC_STATS, {});
-    const saveStatsDB = (db) => FluxHubState.set(STATE_KEYS.MUSIC_STATS, db);
+    const saveStatsDB = (db) => { 
+      FluxHubState.set(STATE_KEYS.MUSIC_STATS, db); 
+      AutoSync.notifyLocalChange(); 
+    };
+
+    const getBaselineDB = () => FluxHubState.get('flx_music_stats_baseline', {});
+    const saveBaselineDB = (db) => FluxHubState.set('flx_music_stats_baseline', db);
 
     const getHistoryDB = () => FluxHubState.get(STATE_KEYS.MUSIC_HISTORY, []);
-    const saveHistoryDB = (db) => FluxHubState.set(STATE_KEYS.MUSIC_HISTORY, db);
+    const saveHistoryDB = (db) => { 
+      FluxHubState.set(STATE_KEYS.MUSIC_HISTORY, db); 
+      AutoSync.notifyLocalChange(); 
+    };
+
+    const getDiscoveriesDB = () => FluxHubState.get(STATE_KEYS.MUSIC_DISCOVERIES, []);
+    const saveDiscoveriesDB = (db) => { 
+      FluxHubState.set(STATE_KEYS.MUSIC_DISCOVERIES, db); 
+      AutoSync.notifyLocalChange(); 
+    };
 
     const generateSlug = (rawTitle, rawArtist) => {
-      let title = (rawTitle || 'unknown').toLowerCase();
-      let artist = (rawArtist || 'unknown').toLowerCase();
-
-      title = title.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      artist = artist.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      let title = (rawTitle || 'unknown').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      let artist = (rawArtist || 'unknown').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
       if (title.startsWith(`${artist} - `) || title.startsWith(`${artist}- `)) {
         title = title.replace(new RegExp(`^${artist}\\s*-\\s*`), '');
@@ -7556,77 +8036,65 @@
         .replace(/[\[\{].*?[\]\}]/g, '')
         .replace(/\([^)]*(official|lyric|video|audio|remaster|edit|version|visualizer|exclusive)[^)]*\)/gi, '')
         .replace(/[-\|]\s*(official|lyric|video|audio|remaster|edit|version|visualizer).*/gi, '')
-        .replace(/\((feat|ft|prod|with|feat\.|ft\.).*?\)/gi, '');
-
-      title = title.replace(/\b(feat\.|ft\.|feat|ft|featuring|prod\.|prod)\b.*/gi, '');
+        .replace(/\((feat|ft|prod|with|feat\.|ft\.).*?\)/gi, '')
+        .replace(/\b(feat\.|ft\.|feat|ft|featuring|prod\.|prod)\b.*/gi, '');
 
       const cleanArtist = artist.replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/(^_|_$)/g, '');
       const cleanTitle = title.replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/(^_|_$)/g, '');
 
-      const finalTitle = cleanTitle.length > 0 ? cleanTitle : 'unknown_track';
-
-      return `${cleanArtist}_${finalTitle}`;
+      return `${cleanArtist}_${cleanTitle.length > 0 ? cleanTitle : 'unknown_track'}`;
     };
 
     return {
       recordPlay: function(trackMeta) {
         if (!trackMeta) return;
-
         const slug = generateSlug(trackMeta.title, trackMeta.artist);
         const db = getStatsDB();
         const now = Date.now();
 
         if (!db[slug]) {
-          db[slug] = {
-            slug, title: trackMeta.title, artist: trackMeta.artist, cover: trackMeta.cover,
-            playCount: 0, totalTimeMs: 0, firstPlayed: now, isFavorite: false
-          };
+          db[slug] = { slug, title: trackMeta.title, artist: trackMeta.artist, cover: trackMeta.cover, playCount: 0, totalTimeMs: 0, firstPlayed: now, isFavorite: false };
         }
 
         db[slug].playCount += 1;
         db[slug].lastPlayed = now;
+        db[slug].updatedAt = now;
         if (trackMeta.cover) db[slug].cover = trackMeta.cover;
+        
         saveStatsDB(db);
 
         const history = getHistoryDB();
         history.unshift({ slug, timestamp: now, meta: trackMeta });
         if (history.length > 150) history.length = 150;
-
         saveHistoryDB(history);
       },
 
       recordTime: function(trackMeta, listenedMs) {
         if (!trackMeta || listenedMs <= 0) return;
-
         const slug = generateSlug(trackMeta.title, trackMeta.artist);
         const db = getStatsDB();
 
         if (!db[slug]) {
-          db[slug] = {
-            slug, title: trackMeta.title, artist: trackMeta.artist, cover: trackMeta.cover,
-            playCount: 0, totalTimeMs: 0, firstPlayed: Date.now(), isFavorite: false
-          };
+          db[slug] = { slug, title: trackMeta.title, artist: trackMeta.artist, cover: trackMeta.cover, playCount: 0, totalTimeMs: 0, firstPlayed: Date.now(), isFavorite: false };
         }
 
         db[slug].totalTimeMs += listenedMs;
+        db[slug].updatedAt = Date.now();
         saveStatsDB(db);
       },
 
       toggleFavorite: function(trackMeta, forceState = null) {
         if (!trackMeta) return false;
-
         const slug = generateSlug(trackMeta.title, trackMeta.artist);
         const db = getStatsDB();
+        const now = Date.now();
 
         if (!db[slug]) {
-          // Initialize if track is marked favorite before it hits the 30-second play threshold
-          db[slug] = {
-            slug, title: trackMeta.title, artist: trackMeta.artist, cover: trackMeta.cover,
-            playCount: 0, totalTimeMs: 0, firstPlayed: Date.now(), lastPlayed: Date.now()
-          };
+          db[slug] = { slug, title: trackMeta.title, artist: trackMeta.artist, cover: trackMeta.cover, playCount: 0, totalTimeMs: 0, firstPlayed: now, lastPlayed: now };
         }
 
         db[slug].isFavorite = forceState !== null ? forceState : !db[slug].isFavorite;
+        db[slug].updatedAt = now;
         saveStatsDB(db);
 
         return db[slug].isFavorite;
@@ -7634,18 +8102,15 @@
 
       getTrackStats: function(trackMeta) {
         if (!trackMeta) return null;
-        const slug = generateSlug(trackMeta.title, trackMeta.artist);
-        return getStatsDB()[slug] || null;
+        return getStatsDB()[generateSlug(trackMeta.title, trackMeta.artist)] || null;
       },
 
       getFavorites: function() {
-        const db = getStatsDB();
-        return Object.values(db).filter(t => t.isFavorite).sort((a, b) => b.lastPlayed - a.lastPlayed);
+        return Object.values(getStatsDB()).filter(t => t.isFavorite).sort((a, b) => b.lastPlayed - a.lastPlayed);
       },
 
       getTopTracks: function(limit = 25) {
-        const db = getStatsDB();
-        return Object.values(db).sort((a, b) => b.playCount - a.playCount).slice(0, limit);
+        return Object.values(getStatsDB()).sort((a, b) => b.playCount - a.playCount).slice(0, limit);
       },
 
       getTopArtists: function(limit = 10) {
@@ -7653,9 +8118,7 @@
         const artistAgg = {};
 
         Object.values(db).forEach(track => {
-          if (!artistAgg[track.artist]) {
-            artistAgg[track.artist] = { artist: track.artist, playCount: 0, totalTimeMs: 0 };
-          }
+          if (!artistAgg[track.artist]) artistAgg[track.artist] = { artist: track.artist, playCount: 0, totalTimeMs: 0 };
           artistAgg[track.artist].playCount += track.playCount;
           artistAgg[track.artist].totalTimeMs += track.totalTimeMs;
         });
@@ -7667,50 +8130,79 @@
         return getHistoryDB().slice(0, limit);
       },
 
-      mergeSync: function(cloudStatsDB, cloudHistoryArray) {
+      recordDiscovery: function(trackMeta) {
+        if (!trackMeta) return;
+        const slug = generateSlug(trackMeta.title, trackMeta.artist);
+        const now = Date.now();
+        const discoveries = getDiscoveriesDB();
+        
+        if (discoveries.length > 0 && discoveries[0].slug === slug) return;
+
+        discoveries.unshift({ slug, timestamp: now, meta: trackMeta });
+        if (discoveries.length > 150) discoveries.length = 150;
+        saveDiscoveriesDB(discoveries);
+      },
+
+      getDiscoveries: function(limit = 50) {
+        return getDiscoveriesDB().slice(0, limit);
+      },
+
+      mergeSync: function(cloudStatsDB, cloudHistoryArray, cloudDiscoveriesArray = []) {
         let localStatsUpdated = false;
         let localHistoryUpdated = false;
+        let localDiscoveriesUpdated = false;
 
         if (cloudStatsDB && typeof cloudStatsDB === 'object') {
           const localDb = getStatsDB();
+          const baselineDb = getBaselineDB();
+          
+          const { merged } = MergeEngine.mergeKeyedCollection({
+            baseline: baselineDb, local: localDb, remote: cloudStatsDB, localTombstones: {}, remoteTombstones: {}
+          });
 
-          for (const [slug, cloudTrack] of Object.entries(cloudStatsDB)) {
-            if (!localDb[slug]) {
-              localDb[slug] = cloudTrack;
-              localStatsUpdated = true;
+          for (const key in merged) {
+            const lNode = localDb[key] || { playCount: 0, totalTimeMs: 0 };
+            const cNode = cloudStatsDB[key] || { playCount: 0, totalTimeMs: 0 };
+            const bNode = baselineDb[key];
+
+            if (!bNode) {
+              merged[key].playCount = Math.max(lNode.playCount, cNode.playCount);
+              merged[key].totalTimeMs = Math.max(lNode.totalTimeMs, cNode.totalTimeMs);
             } else {
-              const localTrack = localDb[slug];
-              if (cloudTrack.playCount > localTrack.playCount) {
-                localTrack.playCount = cloudTrack.playCount;
-                localTrack.totalTimeMs = Math.max(localTrack.totalTimeMs, cloudTrack.totalTimeMs);
-                localStatsUpdated = true;
-              }
-              if (cloudTrack.lastPlayed > localTrack.lastPlayed) {
-                localTrack.lastPlayed = cloudTrack.lastPlayed;
-                localStatsUpdated = true;
-              }
-              if (cloudTrack.isFavorite && !localTrack.isFavorite) {
-                localTrack.isFavorite = true;
-                localStatsUpdated = true;
-              }
+              const localDeltaPlays = Math.max(0, lNode.playCount - bNode.playCount);
+              const remoteDeltaPlays = Math.max(0, cNode.playCount - bNode.playCount);
+              merged[key].playCount = bNode.playCount + localDeltaPlays + remoteDeltaPlays;
+
+              const localDeltaTime = Math.max(0, lNode.totalTimeMs - bNode.totalTimeMs);
+              const remoteDeltaTime = Math.max(0, cNode.totalTimeMs - bNode.totalTimeMs);
+              merged[key].totalTimeMs = bNode.totalTimeMs + localDeltaTime + remoteDeltaTime;
             }
           }
-          if (localStatsUpdated) saveStatsDB(localDb);
+          
+          FluxHubState.set(STATE_KEYS.MUSIC_STATS, merged);
+          saveBaselineDB(merged);
+          localStatsUpdated = true;
         }
 
         if (Array.isArray(cloudHistoryArray) && cloudHistoryArray.length > 0) {
-          const localHistory = getHistoryDB();
-
-          const combined = [...localHistory, ...cloudHistoryArray];
+          const combined = [...getHistoryDB(), ...cloudHistoryArray];
           const uniqueHistory = Array.from(new Map(combined.map(item => [item.timestamp, item])).values())
                                      .sort((a, b) => b.timestamp - a.timestamp)
                                      .slice(0, 150);
-
-          saveHistoryDB(uniqueHistory);
+          FluxHubState.set(STATE_KEYS.MUSIC_HISTORY, uniqueHistory);
           localHistoryUpdated = true;
         }
 
-        return { statsMerged: localStatsUpdated, historyMerged: localHistoryUpdated };
+        if (Array.isArray(cloudDiscoveriesArray) && cloudDiscoveriesArray.length > 0) {
+          const combined = [...getDiscoveriesDB(), ...cloudDiscoveriesArray];
+          const uniqueDiscoveries = Array.from(new Map(combined.map(item => [item.timestamp, item])).values())
+                                     .sort((a, b) => b.timestamp - a.timestamp)
+                                     .slice(0, 150);
+          FluxHubState.set(STATE_KEYS.MUSIC_DISCOVERIES || 'flx_music_discoveries', uniqueDiscoveries);
+          localDiscoveriesUpdated = true;
+        }
+
+        return { statsMerged: localStatsUpdated, historyMerged: localHistoryUpdated, discoveriesMerged: localDiscoveriesUpdated };
       },
 
       migrateSlug: function(oldMeta, newMeta) {
@@ -7728,8 +8220,9 @@
           db[newSlug].totalTimeMs += oldEntry.totalTimeMs;
           db[newSlug].isFavorite = db[newSlug].isFavorite || oldEntry.isFavorite;
           db[newSlug].firstPlayed = Math.min(db[newSlug].firstPlayed, oldEntry.firstPlayed);
+          db[newSlug].updatedAt = Date.now();
         } else {
-          db[newSlug] = { ...oldEntry, slug: newSlug, title: newMeta.title, artist: newMeta.artist };
+          db[newSlug] = { ...oldEntry, slug: newSlug, title: newMeta.title, artist: newMeta.artist, updatedAt: Date.now() };
         }
         delete db[oldSlug];
         saveStatsDB(db);
@@ -7929,7 +8422,7 @@
       const meta = source && MusicView.PROVIDER_META[source];
       if (!meta) return null;
 
-      return FluxKit.utils.createHTMLElement('div', {
+      return createHTMLElement('div', {
         icon: meta.icon, textContent: meta.label,
         style: {
           display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '4px',
@@ -8166,14 +8659,14 @@
         { id: 'itunes', label: 'iTunes' }
       ];
 
-      const chipContainer = FluxKit.utils.createHTMLElement('div', {
+      const chipContainer = createHTMLElement('div', {
         style: { display: 'flex', gap: '8px', padding: '12px', borderBottom: '1px solid var(--omni-separator)', overflowX: 'auto', alignItems: 'center' }
       });
       chipContainer.style.cssText += '::-webkit-scrollbar { display: none; }';
 
       const currentQueue = FluxHubState.get(STATE_KEYS.MEDIA_QUEUE, []);
       if (currentQueue.length > 0 && currentMode !== 'empty') {
-        const queueChip = FluxKit.utils.createHTMLElement('div', {
+        const queueChip = createHTMLElement('div', {
           icon: 'note', textContent: `Queue (${currentQueue.length})`, class: 'flx-queue-chip',
           style: {
             padding: '4px 12px', borderRadius: '16px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer',
@@ -8181,24 +8674,20 @@
             display: 'flex', alignItems: 'center', gap: '6px', flexShrink: '0', transition: 'background 0.2s ease'
           },
           eventListener: {
-            click: (e) => {
-              e.stopPropagation();
-              FluxHub.ui.input.value = '> queue ';
-              FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true }));
-            },
+            click: (e) => { e.stopPropagation(); FluxHub.ui.setInputVal('> queue '); },
             mouseenter: (e) => { e.target.style.background = 'var(--omni-hover)' },
             mouseleave: (e) => { e.target.style.background = 'var(--omni-input-bg)' }
           }
         });
         chipContainer.appendChild(queueChip);
 
-        const divider = FluxKit.utils.createHTMLElement('div', { style: { width: '1px', height: '16px', background: 'var(--omni-separator)', margin: '0 4px', flexShrink: '0' } });
+        const divider = createHTMLElement('div', { style: { width: '1px', height: '16px', background: 'var(--omni-separator)', margin: '0 4px', flexShrink: '0' } });
         chipContainer.appendChild(divider);
       }
 
       providers.forEach(prov => {
         const isActive = activeProvider === prov.id;
-        const chip = FluxKit.utils.createHTMLElement('div', {
+        const chip = createHTMLElement('div', {
           textContent: prov.label,
           style: {
             padding: '4px 12px', borderRadius: '16px', fontSize: '12px', fontWeight: '600', cursor: 'pointer',
@@ -8290,7 +8779,7 @@
         chipsData.forEach(c => {
           const chip = createHTMLElement('div', { icon: c.icon, textContent: c.label,
             style: { padding: '8px 16px', display: 'flex', gap: '8px', background: 'var(--omni-hover)', borderRadius: '24px', fontSize: '13px', fontWeight: 'bold', color: 'var(--omni-text)', cursor: 'pointer', border: '1px solid var(--omni-border)' },
-            eventListener: () => { FluxHub.ui.input.value = c.cmd; FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true })); }
+            eventListener: () => FluxHub.ui.setInputVal(c.cmd)
           });
           quickActions.appendChild(chip);
         });
@@ -8374,8 +8863,7 @@
                 mouseleave: (e) => { e.target.style.background = 'var(--omni-input-bg)'; e.target.style.color = 'var(--omni-muted)'; },
                 click: (e) => {
                   e.stopPropagation();
-                  FluxHub.ui.input.value = `> pl rename ${pName} to `;
-                  FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true }));
+                  FluxHub.ui.setInputVal(`> pl rename ${pName} to `);
                   setTimeout(() => FluxHub.ui.input.focus(), 10);
                 }
               }
@@ -8540,8 +9028,7 @@
             eventListener: (e) => {
               e.stopPropagation();
               FluxHubState.set(STATE_KEYS.PENDING_ADD_TRACK, track);
-              FluxHub.ui.input.value = `> pl addtrack `;
-              FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true }));
+              FluxHub.ui.setInputVal(`> pl addtrack `);
             }
           });
 
@@ -8599,8 +9086,7 @@
             click: (e) => {
               e.stopPropagation();
               FluxHubState.set('flx_inspect_track', track);
-              FluxHub.ui.input.value = '> stats';
-              FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true }));
+              FluxHub.ui.setInputVal('> stats');
             }
           }
         });
@@ -8696,8 +9182,7 @@
             click: (e) => {
               e.stopPropagation();
               FluxHubState.set('flx_inspect_track', track);
-              FluxHub.ui.input.value = '> stats';
-              FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true }));
+              FluxHub.ui.setInputVal('> stats');
             },
             mouseenter: (e) => { e.target.style.transform = 'scale(1.05)' },
             mouseleave: (e) => { e.target.style.transform = 'scale(1)' }
@@ -9158,8 +9643,7 @@
                 click: (e) => {
                   e.stopPropagation();
                   FluxHubState.set(STATE_KEYS.PENDING_ADD_TRACK, qTrack);
-                  FluxHub.ui.input.value = `> pl addtrack `;
-                  FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true }));
+                  FluxHub.ui.setInputVal(`> pl addtrack `);
                   setTimeout(() => FluxHub.ui.input.focus(), 10);
                 }
               }
@@ -9418,8 +9902,7 @@
           PlaylistsState.save(name, [...existingTracks, ...newTracks]);
           FluxHubState.set(STATE_KEYS.ACTIVE_PLAYLIST_NAME, name);
           FluxKit.ui.showNotification(`Saved queue to "${name}"`);
-          FluxHub.ui.input.value = '> pl';
-          FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true }));
+          FluxHub.ui.setInputVal('> pl');
           return;
         }
       } else {
@@ -9437,8 +9920,7 @@
           }
           FluxHubState.delete(STATE_KEYS.PENDING_ADD_TRACK);
           FluxKit.ui.showNotification(`Added "${trackToAdd.title}" to "${name}"`);
-          FluxHub.ui.input.value = '> pl';
-          FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true }));
+          FluxHub.ui.setInputVal('> pl');
           return;
         }
       }
@@ -9470,16 +9952,13 @@
             FluxHubState.delete(STATE_KEYS.ACTIVE_PLAYLIST_NAME);
           }
           if (FluxKit.ui.showNotification) FluxKit.ui.showNotification(`Deleted playlist "${pName}"`);
-          FluxHub.ui.input.value = '> pl ';
-          FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true }));
+          FluxHub.ui.setInputVal('> pl ');
         }
       } else if (action === 'rename' || action === 'edit') {
-        FluxHub.ui.input.value = `> pl rename ${pName} to `;
-        FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true }));
+        FluxHub.ui.setInputVal(`> pl rename ${pName} to `);
         setTimeout(() => FluxHub.ui.input.focus(), 10);
       } else {
-        FluxHub.ui.input.value = `> pl ${action} ${pName}`;
-        FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true }));
+        FluxHub.ui.setInputVal(`> pl ${action} ${pName}`);
       }
     }
 
@@ -9553,8 +10032,7 @@
           FluxHubState.set(STATE_KEYS.QUEUE_INDEX, queue.length - 1);
         } else FluxHubState.set(STATE_KEYS.QUEUE_INDEX, existingIdx);
         FluxKit.media.loadTrack(track, track.streamUrl);
-        FluxHub.ui.input.value = '> queue ';
-        FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true }));
+        FluxHub.ui.setInputVal('> queue ');
       }
     }
 
@@ -9691,8 +10169,7 @@
         style: { padding: '12px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '12px', minHeight: '80px', cursor: 'pointer', position: 'relative', overflow: 'hidden' },
         eventListener: () => {
           const queue = FluxHubState.get(STATE_KEYS.MEDIA_QUEUE, []);
-          FluxHub.ui.input.value = queue.length > 0 ? '> queue ' : '> play ';
-          FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true }));
+          FluxHub.ui.setInputVal(queue.length > 0 ? '> queue ' : '> play ');
         }
       });
 
@@ -9810,8 +10287,7 @@
             if (FluxHubState.get(STATE_KEYS.ACTIVE_PLAYLIST_NAME) === name) {
               FluxHubState.delete(STATE_KEYS.ACTIVE_PLAYLIST_NAME);
             }
-            FluxHub.ui.input.value = '> pl';
-            FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true }));
+            FluxHub.ui.setInputVal('> pl');
             return;
           }
         }
@@ -9825,8 +10301,7 @@
               if (FluxHubState.get(STATE_KEYS.ACTIVE_PLAYLIST_NAME) === oldName) {
                 FluxHubState.set(STATE_KEYS.ACTIVE_PLAYLIST_NAME, newName);
               }
-              FluxHub.ui.input.value = '> pl';
-              FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true }));
+              FluxHub.ui.setInputVal('> pl');
               return;
             }
           }
@@ -9867,8 +10342,8 @@
     static get groupWidgets() { return false; }
 
     static commandRegistry = [
-      { prefix: '> stats', description: 'Dashboard of your personal music listening habits', icon: 'activity' },
-      { prefix: '> top', description: 'View your most played tracks and artists', icon: 'trending' },
+      { prefix: '> stats', description: 'Dashboard of your personal music listening habits', icon: 'trending' },
+      { prefix: '> top', description: 'View your most played tracks and artists', icon: 'shine' },
       { prefix: '> history', description: 'View your recently played tracks', icon: 'history' },
       { prefix: '> fav', description: 'View your favorite tracks', icon: 'heart' }
     ];
@@ -9909,6 +10384,7 @@
       else if (this.query.match(/^>\s*history/)) initialTab = 'history';
       else if (this.query.match(/^>\s*fav/)) initialTab = 'favorites';
       else if (this.query.match(/^>\s*artist/)) initialTab = 'artists';
+      else if (this.query.match(/^>\s*(discoveries|shazam)/)) initialTab = 'discoveries'; // ADD THIS LINE
 
       return { initialTab };
     }
@@ -9940,7 +10416,7 @@
       this.activeTab = activeTab;
 
       const tabBar = createHTMLElement('div', {
-        style: { display: 'flex', gap: '8px', marginBottom: '16px', overflowX: 'auto', paddingBottom: '4px' }
+        style: { display: 'flex', gap: '2px', marginBottom: '16px', overflowX: 'auto', paddingBottom: '4px' }
       });
 
       const tabs = [
@@ -9948,6 +10424,7 @@
         { id: 'top', label: 'Top Tracks' },
         { id: 'artists', label: 'Top Artists' },
         { id: 'history', label: 'History' },
+        { id: 'discoveries', label: 'Discoveries' },
         { id: 'favorites', label: 'Favorites' }
       ];
 
@@ -9986,7 +10463,7 @@
         }
 
         items.forEach((item, i) => {
-          const track = type === 'history' ? item.meta : item;
+          const track = (type === 'history' || type === 'discoveries') ? item.meta : item; // UPDATE THIS LINE
           if (!track) return;
 
           const row = createHTMLElement('div', {
@@ -9998,12 +10475,8 @@
               mouseenter: (e) => { e.currentTarget.style.background = 'var(--omni-hover)' },
               mouseleave: (e) => { e.currentTarget.style.background = 'transparent' },
               click: () => {
-                if (type === 'artists') {
-                  FluxHub.ui.input.value = `> play ${item.artist}`;
-                  FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true }));
-                } else {
-                  this.renderTrackInspector(track);
-                }
+                if (type === 'artists') FluxHub.ui.setInputVal(`> play ${item.artist}`);
+                else this.renderTrackInspector(track);
               }
             }
           });
@@ -10024,7 +10497,7 @@
           const statWrap = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', flexShrink: '0' }});
           let statMain = '', statSub = '';
 
-          if (type === 'history') {
+          if (type === 'history' || type === 'discoveries') {
             statMain = this.formatTimeAgo(item.timestamp);
           } else {
             statMain = `${item.playCount} plays`;
@@ -10066,6 +10539,8 @@
          renderList(FluxKit.musicStats.getTopArtists(30), 'artists');
       } else if (activeTab === 'history') {
          renderList(FluxKit.musicStats.getHistory(50), 'history');
+      } else if (activeTab === 'discoveries') { 
+         renderList(FluxKit.musicStats.getDiscoveries(50), 'discoveries');
       } else if (activeTab === 'favorites') {
          renderList(FluxKit.musicStats.getFavorites(), 'favorites');
       }
@@ -10134,10 +10609,7 @@
         innerHTML: safeHTML(`${FluxKit.ui.getIcon('play') || '▶'} Play Now`),
         style: { ...btnStyle, background: 'var(--omni-text)', color: 'var(--omni-bg-light)' },
         eventListener: {
-          click: () => {
-            FluxHub.ui.input.value = `> play ${trackStat.title} ${trackStat.artist}`;
-            FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true }));
-          },
+          click: () => FluxHub.ui.setInputVal(`> play ${trackStat.title} ${trackStat.artist}`),
           mouseenter: e => { e.target.style.transform = 'scale(1.05)' },
           mouseleave: e => { e.target.style.transform = 'scale(1)' }
         }
@@ -10169,6 +10641,221 @@
     handleKeydown(e) { return false; }
 
     async execute() { const data = await this.fetchData(); FluxHub.ui.expandListItem(this, data); }
+  }
+
+  class IdentifyMusicView extends BaseView {
+    constructor(query, context = null) {
+      super(query, context);
+      this.isListening = false;
+    }
+
+    static get isAvailable() { return true; }
+    
+    static get commandRegistry() {
+      if (!FluxHubState.get(STATE_KEYS.RAPIDAPI_KEY, null)) return [];
+      return [{ prefix: '> identify', description: 'Listen and identify playing music', icon: 'note' }]
+    };
+
+    static matchConfidence(query) {
+      if (!FluxHubState.get(STATE_KEYS.RAPIDAPI_KEY, null)) return 0;
+      const q = query.trim().toLowerCase();
+      if (/^>\s*(identify|shazam|song)\b/i.test(q)) return 100;
+      return 0;
+    }
+
+    renderListRow() {
+      return FluxKit.ui.omni.ListRow('Identify Music', 'note', 'Listen to ambient audio to find a track');
+    }
+
+    renderExpandedCard(data) {
+      const container = createHTMLElement('div', {
+        style: { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 16px', gap: '16px', fontFamily: 'var(--omni-font)', position: 'relative', overflow: 'hidden' }
+      });
+
+      if (data.mode === 'listening' || data.mode === 'resolving') {
+        const pulseUi = createHTMLElement('div', {
+          icon: data.mode === 'listening' ? 'mic' : 'search',
+          style: {
+            fontSize: '42px', color: 'var(--omni-accent)', 
+            animation: 'flx-pulse 1.5s infinite ease-in-out',
+            background: 'var(--omni-input-bg)', padding: '24px', borderRadius: '50%'
+          }
+        });
+        
+        container.appendChild(pulseUi);
+        container.appendChild(createHTMLElement('div', {
+          textContent: data.mode === 'listening' ? 'Listening to audio (approx. 4 seconds)...' : `Identified "${data.match.title}". Resolving stream...`,
+          style: { color: 'var(--omni-text)', fontSize: '14px', fontWeight: 'bold', marginTop: '16px', textAlign: 'center' }
+        }));
+        
+        if (data.mode === 'listening') {
+          container.appendChild(createHTMLElement('div', {
+            textContent: 'Please ensure your microphone is picking up the music.',
+            style: { color: 'var(--omni-muted)', fontSize: '12px' }
+          }));
+        }
+      } else if (data.mode === 'resolved' || data.mode === 'result_only') {
+        const track = data.mode === 'resolved' ? data.track : data.ghostTrack;
+        const trackStat = (FluxKit.musicStats.getTrackStats(track) || {});
+        let isFav = !!trackStat.isFavorite;
+
+        const heroBg = createHTMLElement('div', {
+          style: {
+            width: '100%', height: '180px', position: 'absolute', top: '0', left: '0',
+            backgroundImage: `url(${track.cover || ''})`,
+            backgroundSize: 'cover', backgroundPosition: 'center',
+            filter: 'blur(30px) opacity(0.2)', zIndex: '0', pointerEvents: 'none'
+          }
+        });
+        container.appendChild(heroBg);
+
+        const contentZ = createHTMLElement('div', { style: { position: 'relative', zIndex: '1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', width: '100%' } });
+
+        contentZ.appendChild(createHTMLElement('img', {
+          src: track.cover || '',
+          style: { width: '200px', height: '200px', borderRadius: '12px', objectFit: 'cover', boxShadow: '0 16px 32px rgba(0,0,0,0.3)', border: '1px solid color-mix(in srgb, var(--omni-border) 50%, transparent)' }
+        }));
+
+        const textWrap = createHTMLElement('div', { style: { textAlign: 'center', maxWidth: '85%' }});
+        textWrap.appendChild(createHTMLElement('div', { textContent: track.title, style: { fontSize: '24px', fontWeight: '800', color: 'var(--omni-text)', lineHeight: '1.2' }}));
+        textWrap.appendChild(createHTMLElement('div', { textContent: track.artist, style: { fontSize: '15px', color: 'var(--omni-muted)', marginTop: '4px', fontWeight: '500' }}));
+        contentZ.appendChild(textWrap);
+
+        if (data.mode === 'result_only') {
+            contentZ.appendChild(createHTMLElement('div', { 
+              textContent: data.reason === 'no_results' 
+                ? `Not available on ${FluxHubState.get(STATE_KEYS.MUSIC_PROVIDER, 'itunes_hub')}.`
+                : 'Active provider returned a mismatched track.', 
+              style: { fontSize: '12px', color: 'var(--omni-warning)', textAlign: 'center', background: 'rgba(245, 158, 11, 0.1)', padding: '6px 12px', borderRadius: '6px' } 
+            }));
+        }
+
+        const actionsRow = createHTMLElement('div', { style: { display: 'flex', gap: '12px', marginTop: '8px' }});
+        const btnStyle = { padding: '12px 24px', borderRadius: '24px', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', transition: 'transform 0.15s, filter 0.15s' };
+
+        if (data.mode === 'resolved') {
+          const playBtn = createHTMLElement('button', {
+            innerHTML: safeHTML(`${FluxKit.ui.getIcon('play')} Play Now`),
+            style: { ...btnStyle, background: 'var(--omni-text)', color: 'var(--omni-bg-light)' },
+            eventListener: {
+              click: () => FluxHub.ui.setInputVal(`> play ${track.title} ${track.artist}`),
+              mouseenter: e => { e.target.style.transform = 'scale(1.05)' },
+              mouseleave: e => { e.target.style.transform = 'scale(1)' }
+            }
+          });
+          actionsRow.appendChild(playBtn);
+        } else {
+          const searchBtn = createHTMLElement('button', {
+            innerHTML: safeHTML(`${FluxKit.ui.getIcon('search') || '🔍'} Search Everywhere`),
+            style: { ...btnStyle, background: 'var(--omni-text)', color: 'var(--omni-bg-light)' },
+            eventListener: {
+              click: () => FluxHub.ui.setInputVal(`> search ${track.title} ${track.artist}`),
+              mouseenter: e => { e.target.style.transform = 'scale(1.05)' },
+              mouseleave: e => { e.target.style.transform = 'scale(1)' }
+            }
+          });
+          actionsRow.appendChild(searchBtn);
+        }
+
+        const favBtn = createHTMLElement('button', {
+          innerHTML: safeHTML(`${FluxKit.ui.getIcon('heart') || '♥'} <span class="flx-fav-text">${isFav ? 'Unfavorite' : 'Favorite'}</span>`),
+          style: { ...btnStyle, background: isFav ? 'var(--omni-danger)' : 'var(--omni-input-bg)', color: isFav ? 'var(--omni-accent-text)' : 'var(--omni-text)', border: '1px solid var(--omni-border)' },
+          eventListener: {
+            click: (e) => {
+              {
+                isFav = FluxKit.musicStats.toggleFavorite(track);
+                const textSpan = e.currentTarget.querySelector('.flx-fav-text');
+                if (textSpan) textSpan.textContent = isFav ? 'Unfavorite' : 'Favorite';
+                e.currentTarget.style.background = isFav ? 'var(--omni-danger)' : 'var(--omni-input-bg)';
+                e.currentTarget.style.color = isFav ? 'var(--omni-accent-text)' : 'var(--omni-text)';
+              }
+            },
+            mouseenter: e => { e.target.style.filter = 'brightness(1.1)' },
+            mouseleave: e => { e.target.style.filter = 'none' }
+          }
+        });
+        actionsRow.appendChild(favBtn);
+        
+        contentZ.appendChild(actionsRow);
+        container.appendChild(contentZ);
+
+      } else if (data.mode === 'error') {
+        const errorType = data.error?.type || 'unknown';
+        const icon = (errorType === 'auth_error' || errorType === 'quota_error') ? 'lock' : 'warning';
+        container.appendChild(createHTMLElement('div', { icon: icon, style: { fontSize: '32px', color: 'var(--omni-danger)', marginBottom: '8px' } }));
+        container.appendChild(createHTMLElement('div', { textContent: data.error?.message || 'An unknown error occurred.', style: { color: 'var(--omni-text)', fontWeight: 'bold', fontSize: '14px', textAlign: 'center' } }));
+        if (errorType === 'auth_error') {
+          container.appendChild(createHTMLElement('div', { textContent: 'Configure your RapidAPI Key in your settings to continue. (Requires the free Shazam API by apidojo)', style: { color: 'var(--omni-muted)', fontSize: '12px', marginTop: '4px', textAlign: 'center' } }));
+        }
+        const actions = createHTMLElement('div', { style: { display: 'flex', gap: '12px', marginTop: '16px' }});
+        actions.appendChild(FluxKit.ui.omni.Button('refresh', 'Try Again', () => this.execute()));
+        container.appendChild(actions);
+      }
+
+      return FluxKit.ui.omni.DetailCard(container, []);
+    }
+
+    async execute() {
+      if (this.isListening) return;
+      this.isListening = true;
+
+      FluxHub.ui.expandListItem(this, { mode: 'listening' });
+
+      try {
+        const match = await FluxKit.api.music.identifyAmbientAudio(this.abortController?.signal);
+        
+        FluxHub.ui.expandListItem(this, { mode: 'resolving', match });
+        
+        const cleanTitle = match.title.replace(/\(feat\..*?\)/gi, '').trim();
+        const searchQuery = `${cleanTitle} ${match.artist}`.trim();
+        
+        const results = await FluxKit.api.music.search(searchQuery, 3, this.abortController?.signal);
+
+        let isResolved = false;
+        let finalTrack = null;
+
+        if (results && results.length > 0) {
+          const resultWords = `${results[0].title.toLowerCase()} ${results[0].artist.toLowerCase()}`;
+          const matchWords = `${match.title.toLowerCase()} ${match.artist.toLowerCase()}`.split(' ');
+          
+          let confidence = 0;
+          matchWords.forEach(word => {
+            if (word.length > 2 && resultWords.includes(word)) confidence++;
+          });
+
+          if (confidence >= 1) {
+            if (match.raw?.images?.coverart && (!results[0].cover || results[0].cover.includes('150x150'))) {
+              results[0].cover = match.raw.images.coverart;
+            }
+            finalTrack = results[0];
+            isResolved = true;
+          }
+        }
+
+        if (!isResolved) {
+          finalTrack = {
+            id: `ghost_${Date.now()}`,
+            title: match.title,
+            artist: match.artist,
+            cover: match.raw?.images?.coverart || '',
+            durationMs: 0,
+            streamUrl: null
+          };
+        }
+
+        FluxKit.musicStats.recordDiscovery(finalTrack);
+
+        if (isResolved) {
+          FluxHub.ui.expandListItem(this, { mode: 'resolved', match, track: finalTrack });
+        } else {
+          FluxHub.ui.expandListItem(this, { mode: 'result_only', match, ghostTrack: finalTrack, reason: results?.length > 0 ? 'mismatch' : 'no_results' });
+        }
+      } catch (err) {
+        FluxHub.ui.expandListItem(this, { mode: 'error', error: err });
+      } finally {
+        this.isListening = false;
+      }
+    }
   }
 
   class StockView extends BaseView {
@@ -10311,8 +10998,7 @@
           click: (e) => {
             e.stopPropagation();
             const fromCode = (data.currency || 'USD').toLowerCase();
-            FluxHub.ui.input.value = `${data.price} ${fromCode} to inr`;
-            FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true }));
+            FluxHub.ui.setInputVal(`${data.price} ${fromCode} to inr`);
           },
           mouseenter: (e) => { e.currentTarget.style.color = 'var(--omni-accent)'; },
           mouseleave: (e) => { e.currentTarget.style.color = 'var(--omni-text)'; }
@@ -10386,7 +11072,7 @@
               display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer',
               border: '1px solid var(--omni-border)'
             },
-            eventListener: () => { FluxHub.ui.input.value = `> market ${resolvedSymbol}`; FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true })); }
+            eventListener: () => FluxHub.ui.setInputVal(`> market ${resolvedSymbol}`)
           });
 
           const leftCol = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column' } });
@@ -10425,8 +11111,7 @@
             priceEl.addEventListener('click', (e) => {
               e.stopPropagation();
               const fromCode = currency.toLowerCase();
-              FluxHub.ui.input.value = `${data.price} ${fromCode} to inr`;
-              FluxHub.ui.input.dispatchEvent(new Event('input', { bubbles: true }));
+              FluxHub.ui.setInputVal(`${data.price} ${fromCode} to inr`);
             });
 
             const color = data.isUp ? 'var(--omni-success)' : 'var(--omni-danger)';
@@ -10596,7 +11281,7 @@
     DictionaryView, TranslateView, WikipediaView,
     DuckDuckGoView, BangView, GoogleFallbackView, GitHubView,
     WeatherView, StockView, RSSView,
-    MusicView, MusicStatsHubView
+    MusicView, MusicStatsHubView, IdentifyMusicView
   ]);
 
   FluxHub.engine.registerAction({
@@ -10725,6 +11410,11 @@
       if (selectionText && selectionContext && selectionContext.rect) { coords = { x: selectionContext.rect.left, y: selectionContext.rect.bottom }; }
 
       FluxHub.ui.show(selectionText, coords, selectionContext);
+    }
+
+    if (stored === config.commandTrigger) {
+      e.preventDefault(); e.stopPropagation();
+      FluxHub.ui.show('> ', null, null, false);
     }
   }, true);
 })();
