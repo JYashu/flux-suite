@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Flux Hub
 // @namespace    https://github.com/JYashu/flux-suite
-// @version      1.1.0
+// @version      1.1.1
 // @description  Universal Command Palette and Search Engine. Press a hotkey to calculate, translate, convert, search the web, or control other Flux scripts instantly.
 // @icon         https://logo-bits.s3.us-east-2.amazonaws.com/flux-hub.svg
 // @author       JYashu
@@ -7060,7 +7060,7 @@
       timeTrackerTotal = 0;
     };
 
-    const evaluateTruePlay = () => {
+    const evaluateTruePlay = (targetTrackId = null) => {
       clearTimeout(truePlayTimeout);
       if (!currentTrack || !isPlaying) return;
 
@@ -7449,7 +7449,7 @@
       }
 
       isPlaying = true;
-      evaluateTruePlay(offset);
+      evaluateTruePlay();
       broadcastState();
     };
 
@@ -7492,7 +7492,7 @@
         }
         isPlaying = true;
         isLoading = false;
-        evaluateTruePlay(targetOffset);
+        evaluateTruePlay();
         broadcastState();
       };
 
@@ -7921,7 +7921,6 @@
         if (elapsed > 3) {
           commitTimeTracker(); 
           clearTimeout(truePlayTimeout);
-          truePlayTriggered = false;
           if (playbackMode === 'graph') return playGraph(0);
           if (playbackMode === 'native') return playNative(0);
         }
@@ -7991,7 +7990,6 @@
         currentTrack = null;
 
         clearTimeout(truePlayTimeout);
-        truePlayTriggered = false;
 
         if (bridgeAudioEl) bridgeAudioEl.pause();
         clearMediaSession();
@@ -9312,7 +9310,7 @@
               click: async () => {
                 const msg = `You are rerolling the track, this will blacklist current instance and find a new match from available providers!<br /><br /><b>Note:</b> To get the current match back you'll have to reroll all other matches or remove and add the track again!`;
                 if (await FluxKit.ui.confirm(msg, { confirmText: 'Yes, find a new match', cancelText: 'No, keep current match', title: 'Reroll Track' }))
-                  sendCommand('reroll');
+                  this._sendCommand('reroll');
               },
               mouseenter: hoverEffect,
               mouseleave: leaveEffect
@@ -10649,15 +10647,17 @@
       this.isListening = false;
     }
 
+    _fallbackCover() {
+      return 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiBmaWxsPSIjMjIyIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgcng9IjgiLz48dGV4dCB4PSI1MCIgeT0iNTUiIGZvbnQtc2l6ZT0iMzAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM1NTUiPvCfjbc8L3RleHQ+PC9zdmc+';
+    }
+
     static get isAvailable() { return true; }
     
     static get commandRegistry() {
-      if (!FluxHubState.get(STATE_KEYS.RAPIDAPI_KEY, null)) return [];
-      return [{ prefix: '> identify', description: 'Listen and identify playing music', icon: 'note' }]
-    };
+      return [{ prefix: '> identify', description: 'Listen and identify playing music', icon: 'audio' }];
+    }
 
     static matchConfidence(query) {
-      if (!FluxHubState.get(STATE_KEYS.RAPIDAPI_KEY, null)) return 0;
       const q = query.trim().toLowerCase();
       if (/^>\s*(identify|shazam|song)\b/i.test(q)) return 100;
       return 0;
@@ -10696,7 +10696,7 @@
         }
       } else if (data.mode === 'resolved' || data.mode === 'result_only') {
         const track = data.mode === 'resolved' ? data.track : data.ghostTrack;
-        const trackStat = (FluxKit.musicStats.getTrackStats(track) || {});
+        const trackStat = typeof FluxKit.musicStats !== 'undefined' ? (FluxKit.musicStats.getTrackStats(track) || {}) : {};
         let isFav = !!trackStat.isFavorite;
 
         const heroBg = createHTMLElement('div', {
@@ -10712,8 +10712,9 @@
         const contentZ = createHTMLElement('div', { style: { position: 'relative', zIndex: '1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', width: '100%' } });
 
         contentZ.appendChild(createHTMLElement('img', {
-          src: track.cover || '',
-          style: { width: '200px', height: '200px', borderRadius: '12px', objectFit: 'cover', boxShadow: '0 16px 32px rgba(0,0,0,0.3)', border: '1px solid color-mix(in srgb, var(--omni-border) 50%, transparent)' }
+          src: track.cover || this._fallbackCover(),
+          style: { width: '200px', height: '200px', borderRadius: '12px', objectFit: 'cover', boxShadow: '0 16px 32px rgba(0,0,0,0.3)', border: '1px solid color-mix(in srgb, var(--omni-border) 50%, transparent)' },
+          eventListener: { error: (e) => { e.target.onerror = null; e.target.src = this._fallbackCover(); } }
         }));
 
         const textWrap = createHTMLElement('div', { style: { textAlign: 'center', maxWidth: '85%' }});
@@ -10762,13 +10763,11 @@
           style: { ...btnStyle, background: isFav ? 'var(--omni-danger)' : 'var(--omni-input-bg)', color: isFav ? 'var(--omni-accent-text)' : 'var(--omni-text)', border: '1px solid var(--omni-border)' },
           eventListener: {
             click: (e) => {
-              {
-                isFav = FluxKit.musicStats.toggleFavorite(track);
-                const textSpan = e.currentTarget.querySelector('.flx-fav-text');
-                if (textSpan) textSpan.textContent = isFav ? 'Unfavorite' : 'Favorite';
-                e.currentTarget.style.background = isFav ? 'var(--omni-danger)' : 'var(--omni-input-bg)';
-                e.currentTarget.style.color = isFav ? 'var(--omni-accent-text)' : 'var(--omni-text)';
-              }
+              isFav = FluxKit.musicStats.toggleFavorite(track);
+              const textSpan = e.currentTarget.querySelector('.flx-fav-text');
+              if (textSpan) textSpan.textContent = isFav ? 'Unfavorite' : 'Favorite';
+              e.currentTarget.style.background = isFav ? 'var(--omni-danger)' : 'var(--omni-input-bg)';
+              e.currentTarget.style.color = isFav ? 'var(--omni-accent-text)' : 'var(--omni-text)';
             },
             mouseenter: e => { e.target.style.filter = 'brightness(1.1)' },
             mouseleave: e => { e.target.style.filter = 'none' }
