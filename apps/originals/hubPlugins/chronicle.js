@@ -2,7 +2,7 @@
 // @name         FHP: Chronicle
 // @description  Track events, eras, and people with automatic milestone/timehop detection, multi-profile cloud sync, and external ICS calendar subscriptions.
 // @namespace    http://tampermonkey.net/
-// @version      1.2.0
+// @version      1.3.0
 // @author       JYashu
 // @license      Apache-2.0
 // @match        *://*/*
@@ -12,6 +12,7 @@
 // @grant        GM_listValues
 // @grant        GM_deleteValue
 // @grant        GM_xmlhttpRequest
+// @grant        unsafeWindow
 // @require      https://flux-suite.vercel.app/libs/flux-kit/core.js
 // @require      https://flux-suite.vercel.app/libs/flux-kit/sync.js
 // @connect      api.github.com
@@ -31,7 +32,7 @@
 
   const { createLogger, createHTMLElement, safeHTML, getUniqueId } = FluxKit.utils;
 
-  const { logError } = createLogger('FluxHub', 'Chronicle');
+  const { logMessage, logError } = createLogger('FluxHub', 'Chronicle');
 
   const SYNC_FILENAME = 'chronicle_vault.json';
 
@@ -54,6 +55,19 @@
   let isSyncing = false;
 
   const DateUtils = {
+    getNextOccurrence: (dateStr) => {
+      const d = new Date(dateStr);
+      const now = new Date();
+      
+      if (d.getTime() > now.getTime()) return d.getTime(); 
+      
+      const nextAnniv = new Date(now.getFullYear(), d.getMonth(), d.getDate());
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      
+      if (nextAnniv.getTime() < todayStart) nextAnniv.setFullYear(now.getFullYear() + 1);
+      return nextAnniv.getTime();
+    },
+
     getDaysBetween: (d1, d2) => {
       const utc1 = Date.UTC(d1.getFullYear(), d1.getMonth(), d1.getDate());
       const utc2 = Date.UTC(d2.getFullYear(), d2.getMonth(), d2.getDate());
@@ -122,7 +136,8 @@
     },
 
     parseICS: (icsText, sourceName) => {
-      const lines = icsText.split(/\r?\n/);
+      const unfoldedText = icsText.replace(/\r?\n[ \t]/g, '');
+      const lines = unfoldedText.split(/\r?\n/);
       const events = [];
       let currentEvent = null;
 
@@ -162,6 +177,42 @@
         }
       });
       return events;
+    },
+
+    getSourceColor: (sourceName, targetNode) => {
+      const parsedAccent = FluxKit.theme.parseColor('var(--omni-accent)', targetNode);
+      if (!parsedAccent) return 'var(--omni-accent)';
+      
+      const palette = FluxKit.theme.getPalette(parsedAccent);
+      const colors = [
+        palette.complementary,
+        palette.triadic1,
+        palette.triadic2,
+        palette.analogous1,
+        palette.analogous2,
+        `rgb(${parsedAccent.r}, ${parsedAccent.g}, ${parsedAccent.b})`
+      ];
+      
+      let hash = 0;
+      for (let i = 0; i < sourceName.length; i++) {
+        hash = sourceName.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      return colors[Math.abs(hash) % colors.length];
+    },
+
+    createSourceBadge: (sourceName, targetNode) => {
+      const { createHTMLElement } = FluxKit.utils;
+      const color = DateUtils.getSourceColor(sourceName, targetNode);
+      return createHTMLElement('div', {
+        icon: 'worldClock', title: `Source: ${sourceName}`,
+        style: {
+          display: 'inline-flex', alignItems: 'center', gap: '4px',
+          fontSize: '9px', fontWeight: '800', letterSpacing: '0.5px', textTransform: 'uppercase',
+          color: color, background: 'var(--omni-input-bg)', border: `1px solid ${color}`,
+          borderRadius: '4px', padding: '1px 6px', height: '16px', whiteSpace: 'nowrap'
+        },
+        textContent: sourceName.length > 15 ? sourceName.substring(0, 15) + '...' : sourceName
+      });
     }
   };
 
@@ -194,21 +245,29 @@
 
     getMilestones: (now) => {
       const { getDaysBetween } = DateUtils;
+      const getOrdinal = n => { const s = ["th","st","nd","rd"], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
       return [
-        { group: 'today', muteKey: 'today', calc: d => getDaysBetween(d, now) === 0, getLabel: () => { return { icon: 'pin', label: 'Happening Today' } } },
-        { group: 'upcoming', muteKey: 'upcoming_standard', calc: d => { const diff = getDaysBetween(now, d); return diff > 0 && diff <= 14; }, getLabel: d => { return { label: `Upcoming (in ${getDaysBetween(now, d)}d)` } }},
-        { group: 'timehop', muteKey: '100_days', calc: d => getDaysBetween(d, now) === 100, getLabel: () => { return { label: '100 Days Ago' } } },
-        { group: 'upcoming', muteKey: '100_days', calc: d => { const diff = getDaysBetween(d, now); return diff >= 93 && diff < 100; }, getLabel: d => { return { label: `100 Days Approaching (in ${100 - getDaysBetween(d, now)}d)` } }},
-        { group: 'upcoming', muteKey: 'yearly', calc: d => { if (d.getFullYear() >= now.getFullYear()) return false; let nextAnniv = new Date(now.getFullYear(), d.getMonth(), d.getDate()); if (nextAnniv.getTime() < now.getTime()) nextAnniv.setFullYear(now.getFullYear() + 1); const diff = getDaysBetween(now, nextAnniv); return diff > 0 && diff <= 14; }, getLabel: d => { let nextAnniv = new Date(now.getFullYear(), d.getMonth(), d.getDate()); let yrs = now.getFullYear() - d.getFullYear(); if (nextAnniv.getTime() < now.getTime()) { nextAnniv.setFullYear(now.getFullYear() + 1); yrs += 1; } return { label: `Upcoming ${yrs} Yr Anniversary (in ${getDaysBetween(now, nextAnniv)}d)` }; } },
-        { group: 'timehop', muteKey: 'monthly', calc: d => d.getMonth() === (now.getMonth() - 6 + 12) % 12 && d.getFullYear() === (now.getMonth() < 6 ? now.getFullYear() - 1 : now.getFullYear()) && d.getDate() === now.getDate(), getLabel: () => { return { label: '6 Months Ago Today' } } },
-        { group: 'timehop', muteKey: 'yearly', calc: d => d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() < now.getFullYear(), getLabel: d => { const yrs = now.getFullYear() - d.getFullYear(); return { label: yrs === 1 ? '1 Year Ago Today' : `${yrs} Years Ago Today` }; } }
+        { group: 'today', muteKey: 'today', calc: d => getDaysBetween(d, now) === 0, getLabel: () => ({ icon: 'pin', label: 'Happening Today' }) },
+        { group: 'upcoming', muteKey: 'upcoming_standard', calc: d => { const diff = getDaysBetween(now, d); return diff > 0 && diff <= 14; }, getLabel: (d) => ({ label: `Upcoming (in ${getDaysBetween(now, d)}d)` })},
+        { group: 'timehop', muteKey: '100_days', calc: d => getDaysBetween(d, now) === 100, getLabel: () => ({ label: '100 Days Ago' }) },
+        { group: 'upcoming', muteKey: '100_days', calc: d => { const diff = getDaysBetween(d, now); return diff >= 93 && diff < 100; }, getLabel: (d) => ({ label: `100 Days Approaching (in ${100 - getDaysBetween(d, now)}d)` })},
+        { group: 'upcoming', muteKey: 'yearly', calc: d => { if (d.getFullYear() >= now.getFullYear()) return false; let nextAnniv = new Date(now.getFullYear(), d.getMonth(), d.getDate()); if (nextAnniv.getTime() < now.getTime()) nextAnniv.setFullYear(now.getFullYear() + 1); const diff = getDaysBetween(now, nextAnniv); return diff > 0 && diff <= 14; }, getLabel: (d, evt) => { 
+          let nextAnniv = new Date(now.getFullYear(), d.getMonth(), d.getDate()); let yrs = now.getFullYear() - d.getFullYear(); if (nextAnniv.getTime() < now.getTime()) { nextAnniv.setFullYear(now.getFullYear() + 1); yrs += 1; }
+          const isPerson = evt && evt.type === 'person';
+          return { label: `Upcoming ${isPerson ? getOrdinal(yrs) + ' Birthday' : yrs + ' Yr Anniversary'} (in ${getDaysBetween(now, nextAnniv)}d)` }; 
+        } },
+        { group: 'timehop', muteKey: 'monthly', calc: d => d.getMonth() === (now.getMonth() - 6 + 12) % 12 && d.getFullYear() === (now.getMonth() < 6 ? now.getFullYear() - 1 : now.getFullYear()) && d.getDate() === now.getDate(), getLabel: () => ({ label: '6 Months Ago Today' }) },
+        { group: 'timehop', muteKey: 'yearly', calc: d => d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() < now.getFullYear(), getLabel: (d, evt) => { 
+          const yrs = now.getFullYear() - d.getFullYear(); 
+          if (evt && evt.type === 'person') return { label: getOrdinal(yrs) + ' Birthday Today' };
+          return { label: yrs === 1 ? `1 Year Ago Today` : `${yrs} Years Ago Today` }; 
+        } }
       ];
     },
 
-    _getVault: () => hopState.get(STATE_KEYS.vault, { events: {}, people: {}, subscriptions: {}, exclusions: {} }),
+    _getVault: () => hopState.get(STATE_KEYS.vault, { events: {}, subscriptions: {}, exclusions: {} }),
 
     getEvents: () => ChronicleManager._getVault().events[ChronicleManager.getActiveProfile()] || [],
-    getPeople: () => ChronicleManager._getVault().people[ChronicleManager.getActiveProfile()] || [],
 
     getSubscriptions: () => {
       const profile = ChronicleManager.getActiveProfile();
@@ -267,13 +326,29 @@
 
       const savedUids = nativeEvents.filter(e => e.externalUid).map(e => e.externalUid);
 
-      const filteredTransient = transientEventsCache.filter(extEvt => {
-        if (exclusions.includes(extEvt.externalUid)) return false;
+      const sortedTransient = [...transientEventsCache].sort((a, b) => new Date(a.date) - new Date(b.date));
+      const seenExternalFutureTitles = new Set();
+      
+      const MAX_FUTURE_LIMIT_MS = 365 * 24 * 60 * 60 * 1000;
+      const horizonTime = Date.now() + MAX_FUTURE_LIMIT_MS;
 
+      const filteredTransient = sortedTransient.filter(extEvt => {
+        if (exclusions.includes(extEvt.externalUid)) return false;
         if (savedUids.includes(extEvt.externalUid)) return false;
 
-        const isRelevant = (new Date(extEvt.date).getTime() + 24 * 60 * 60 * 1000) > Date.now();
-        return isRelevant || extEvt.isMilestone;
+        const eventTime = new Date(extEvt.date).getTime();
+        const isFuture = (eventTime + 24 * 60 * 60 * 1000) > Date.now();
+        if (!isFuture && !extEvt.isMilestone) return false;
+
+        if (eventTime > horizonTime) return false;
+
+        if (isFuture && !extEvt.isMilestone) {
+          const dedupeKey = `${extEvt.source}_${(extEvt.title || '').toLowerCase().trim()}`;
+          if (seenExternalFutureTitles.has(dedupeKey)) return false;
+          seenExternalFutureTitles.add(dedupeKey);
+        }
+
+        return true;
       });
 
       const allMerged = [...nativeEvents, ...filteredTransient];
@@ -294,21 +369,42 @@
 
       const subs = ChronicleManager.getSubscriptions();
       let newTransient = [];
+      let fetchFailures = 0;
 
       for (const sub of subs) {
         try {
           const response = await new Promise((resolve, reject) => {
             GM_xmlhttpRequest({
               method: 'GET', url: sub.url,
-              onload: res => resolve(res.responseText),
+              onload: res => {
+                if (res.status >= 200 && res.status < 400) resolve(res.responseText);
+                else reject(new Error('HTTP ' + res.status));
+              },
               onerror: err => reject(err)
             });
           });
           newTransient.push(...DateUtils.parseICS(response, sub.name));
-        } catch(e) { logError('ICS Fetch Failed for:', sub.url, { __v: 1 }); }
+        } catch(e) { fetchFailures++; logError('ICS Fetch Failed for:', sub.url, 'error:', e, { __v: 1 }); }
       }
 
       transientEventsCache = newTransient;
+
+      if (fetchFailures === 0) {
+        const profile = ChronicleManager.getActiveProfile();
+        const vault = ChronicleManager._getVault();
+        if (vault.exclusions[profile] && vault.exclusions[profile].length > 0) {
+          const activeUids = new Set(newTransient.map(e => e.externalUid).filter(Boolean));
+          const originalExclusions = vault.exclusions[profile];
+          
+          const prunedExclusions = originalExclusions.filter(uid => activeUids.has(uid));
+
+          if (prunedExclusions.length !== originalExclusions.length) {
+            vault.exclusions[profile] = prunedExclusions;
+            hopState.set(STATE_KEYS.vault, vault);
+            ChronicleManager._registerDelta('SET_EXCLUSIONS', { profile, exclusions: prunedExclusions });
+          }
+        }
+      }
 
       const host = document.querySelector('#flx-hub-host')?.shadowRoot;
       if (host) {
@@ -360,58 +456,43 @@
         ChronicleManager._registerDelta('UPDATE_EVENT', { profile, event: updatedEvent });
       }
     },
-
     resolvePerson: (rawName) => {
       const profile = ChronicleManager.getActiveProfile();
       const vault = ChronicleManager._getVault();
-      if (!vault.people[profile]) vault.people[profile] = [];
+      if (!vault.events[profile]) vault.events[profile] = [];
 
       const name = rawName.trim();
       const lowerName = name.toLowerCase();
-      const people = vault.people[profile];
+      const events = vault.events[profile];
 
-      let match = people.find(p => p.name.toLowerCase() === lowerName || (p.aliases || []).some(a => a.toLowerCase() === lowerName));
+      let match = events.find(e => e.type === 'person' && 
+        (e.title.toLowerCase() === lowerName || (e.aliases || []).some(a => a.toLowerCase() === lowerName)));
+      
       if (match) return match.id;
 
-      const newPerson = { id: 'ppl_' + getUniqueId(), name: name, aliases: [] };
-      vault.people[profile].push(newPerson);
+      const newPerson = { 
+        id: 'evt_ppl_' + FluxKit.utils.getUniqueId(), title: name, 
+        aliases: [], date: new Date().toISOString(),
+        hasSpecificTime: false, type: 'person',
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        isPinned: false, endedOn: null, isArchived: false,
+        mutedGroups: [], alerts: [], location: '',
+        context: 'Auto-generated from command line.',
+        parentIds: []
+      };
+      
+      events.push(newPerson);
       hopState.set(STATE_KEYS.vault, vault);
-      ChronicleManager._registerDelta('SAVE_PERSON', { profile, person: newPerson });
+      ChronicleManager._registerDelta('SAVE_EVENT', { profile, event: newPerson });
+      
       return newPerson.id;
     },
-    getPeopleNames: (ids) => {
-      if (!ids || !ids.length) return [];
-      const people = ChronicleManager.getPeople();
-      return ids.map(id => {
-        const p = people.find(node => node.id === id);
-        return p ? p.name : 'Unknown';
-      });
-    },
-    updatePerson: (updatedPerson) => {
-      const profile = ChronicleManager.getActiveProfile();
-      const vault = ChronicleManager._getVault();
-      if (vault.people[profile]) {
-        const index = vault.people[profile].findIndex(p => p.id === updatedPerson.id);
-        if (index > -1) vault.people[profile][index] = updatedPerson;
-        hopState.set(STATE_KEYS.vault, vault);
-        ChronicleManager._registerDelta('UPDATE_PERSON', { profile, person: updatedPerson });
-      }
-    },
-    mergePeople: (sourceId, targetId) => {
+    mergeNodes: (sourceId, targetId) => {
       const profile = ChronicleManager.getActiveProfile();
       let vault = ChronicleManager._getVault();
-      vault = ChronicleManager._applyJournalToVault(vault, [{ action: 'MERGE_PEOPLE', payload: { profile, sourceId, targetId } }]);
+      vault = ChronicleManager._applyJournalToVault(vault, [{ action: 'MERGE_NODES', payload: { profile, sourceId, targetId } }]);
       hopState.set(STATE_KEYS.vault, vault);
-
-      ChronicleManager._registerDelta('MERGE_PEOPLE', { profile, sourceId, targetId });
-    },
-    deletePerson: (personId) => {
-      const profile = ChronicleManager.getActiveProfile();
-      let vault = ChronicleManager._getVault();
-      vault = ChronicleManager._applyJournalToVault(vault, [{ action: 'DELETE_PERSON', payload: { profile, personId } }]);
-      hopState.set(STATE_KEYS.vault, vault);
-
-      ChronicleManager._registerDelta('DELETE_PERSON', { profile, personId });
+      ChronicleManager._registerDelta('MERGE_NODES', { profile, sourceId, targetId });
     },
 
     _isEffectivelyArchived: (event, allEvents) => {
@@ -446,14 +527,78 @@
       ChronicleManager._syncTimer = setTimeout(() => ChronicleManager.flushJournal(), 5000);
     },
 
+    _mergeVaults: (v1, v2) => {
+      const result = { events: {}, subscriptions: {}, exclusions: {} };
+      const allProfiles = new Set([
+        ...Object.keys(v1.events || {}),
+        ...Object.keys(v2.events || {}),
+        ...Object.keys(v1.subscriptions || {}),
+        ...Object.keys(v2.subscriptions || {}),
+        ...Object.keys(v1.exclusions || {}),
+        ...Object.keys(v2.exclusions || {})
+      ]);
+
+      allProfiles.forEach(profile => {
+        const events1 = v1.events?.[profile] || [];
+        const events2 = v2.events?.[profile] || [];
+        const eventMap = new Map();
+
+        [...events1, ...events2].forEach(e => {
+          if (!e || !e.id) return;
+          const existing = eventMap.get(e.id);
+          if (!existing) {
+            eventMap.set(e.id, { ...e });
+          } else {
+            const chosen = (new Date(e.date).getTime() >= new Date(existing.date).getTime())
+              ? { ...existing, ...e }
+              : { ...e, ...existing };
+            chosen.parentIds = [...new Set([...(existing.parentIds || []), ...(e.parentIds || [])])];
+            if (e.aliases || existing.aliases) {
+              chosen.aliases = [...new Set([...(existing.aliases || []), ...(e.aliases || [])])];
+            }
+            eventMap.set(e.id, chosen);
+          }
+        });
+        result.events[profile] = Array.from(eventMap.values());
+
+        const subs1 = v1.subscriptions?.[profile] || [];
+        const subs2 = v2.subscriptions?.[profile] || [];
+        const subMap = new Map();
+        [...subs1, ...subs2].forEach(s => {
+          if (!s || !s.url) return;
+          const key = s.id || s.url;
+          const existing = subMap.get(key);
+          if (!existing) {
+            subMap.set(key, { ...s });
+          } else {
+            subMap.set(key, { ...existing, ...s, deleted: s.deleted || existing.deleted || null });
+          }
+        });
+        result.subscriptions[profile] = Array.from(subMap.values());
+
+        const exc1 = v1.exclusions?.[profile] || [];
+        const exc2 = v2.exclusions?.[profile] || [];
+        result.exclusions[profile] = [...new Set([...exc1, ...exc2])];
+      });
+
+      return result;
+    },
     pullRemote: async () => {
       const syncProfile = hopState.get(STATE_KEYS.syncProfile, null);
       if (!FluxKit.sync || !FluxKit.sync.isConfigured(syncProfile)) return;
       try {
         const data = await FluxKit.sync.fetch(syncProfile, { filename: SYNC_FILENAME });
-        if (data && data.files && data.files[SYNC_FILENAME]) {
-          hopState.set(STATE_KEYS.vault, JSON.parse(data.files[SYNC_FILENAME].content));
+        const localVault = ChronicleManager._getVault();
+        const hasLocalData = Object.values(localVault.events || {}).some(arr => arr.length > 0);
+
+        if (data && data.files && data.files[SYNC_FILENAME] && data.files[SYNC_FILENAME].content) {
+          const remoteVault = JSON.parse(data.files[SYNC_FILENAME].content);
+          const mergedVault = ChronicleManager._mergeVaults(localVault, remoteVault);
+          hopState.set(STATE_KEYS.vault, mergedVault);
           hopState.set(STATE_KEYS.lastSync, Date.now());
+        } else if (hasLocalData) {
+          logMessage('Remote backup missing on server. Re-seeding remote vault from local...', { __v: 1 });
+          await ChronicleManager.pushRemote();
         }
       } catch (e) { logError('Background pull failed:', e, { __v: 1 }); }
     },
@@ -472,12 +617,10 @@
         const profile = payload.profile;
 
         if (!vault.events[profile]) vault.events[profile] = [];
-        if (!vault.people[profile]) vault.people[profile] = [];
         if (!vault.subscriptions[profile]) vault.subscriptions[profile] = [];
         if (!vault.exclusions[profile]) vault.exclusions[profile] = [];
 
         const events = vault.events[profile];
-        const people = vault.people[profile];
         const subs = vault.subscriptions[profile];
         const exclusions = vault.exclusions[profile];
 
@@ -502,39 +645,21 @@
             });
             vault.events[profile] = events.filter(e => e.id !== payload.eventId);
             break;
-
-          case 'SAVE_PERSON':
-            if (!people.some(p => p.id === payload.person.id)) {
-              people.push(payload.person);
-            }
-            break;
-          case 'UPDATE_PERSON': {
-            const pIdx = people.findIndex(p => p.id === payload.person.id);
-            if (pIdx > -1) people[pIdx] = payload.person;
-            break;
-          }
-          case 'MERGE_PEOPLE': {
+          case 'MERGE_NODES': {
             const { sourceId, targetId } = payload;
-            const sourceP = people.find(p => p.id === sourceId);
-            const targetP = people.find(p => p.id === targetId);
-            if (sourceP && targetP) {
-              targetP.aliases = [...new Set([...(targetP.aliases || []), sourceP.name, ...(sourceP.aliases || [])])];
+            const sourceNode = events.find(e => e.id === sourceId);
+            const targetNode = events.find(e => e.id === targetId);
+            if (sourceNode && targetNode) {
+              targetNode.aliases = [...new Set([...(targetNode.aliases || []), sourceNode.title, ...(sourceNode.aliases || [])])];
               events.forEach(evt => {
-                if (evt.people && evt.people.includes(sourceId)) {
-                  evt.people = [...new Set(evt.people.map(id => id === sourceId ? targetId : id))];
+                if (evt.parentIds && evt.parentIds.includes(sourceId)) {
+                  evt.parentIds = [...new Set(evt.parentIds.map(id => id === sourceId ? targetId : id))];
                 }
               });
-              vault.people[profile] = people.filter(p => p.id !== sourceId);
+              vault.events[profile] = events.filter(e => e.id !== sourceId);
             }
             break;
           }
-          case 'DELETE_PERSON':
-            vault.people[profile] = people.filter(p => p.id !== payload.personId);
-            events.forEach(evt => {
-              if (evt.people) evt.people = evt.people.filter(id => id !== payload.personId);
-            });
-            break;
-
           case 'ADD_SUB': {
             const { name, url, id } = payload.sub;
             const existingSub = subs.find(s => s.url === url);
@@ -553,6 +678,9 @@
           }
           case 'EXCLUDE_UID':
             if (!exclusions.includes(payload.uid)) exclusions.push(payload.uid);
+            break;
+          case 'SET_EXCLUSIONS':
+            vault.exclusions[profile] = payload.exclusions || [];
             break;
         }
       });
@@ -596,19 +724,27 @@
         isSyncing = true;
 
         const jData = await FluxKit.sync.fetch(syncProfile, { filename: 'chronicle_journal.json' });
-        let remoteJournal = jData && jData.files['chronicle_journal.json'] ? JSON.parse(jData.files['chronicle_journal.json'].content) : [];
+        let remoteJournal = (jData && jData.files && jData.files['chronicle_journal.json'] && jData.files['chronicle_journal.json'].content)
+          ? JSON.parse(jData.files['chronicle_journal.json'].content)
+          : [];
 
         let mergedJournal = [...remoteJournal, ...deltasToPush];
 
         if (mergedJournal.length >= 50) {
-          const vData = await FluxKit.sync.fetch(syncProfile, { filename: 'chronicle_vault.json' });
-          let masterVault = vData && vData.files['chronicle_vault.json'] ? JSON.parse(vData.files['chronicle_vault.json'].content) : { events: {}, people: {}, subscriptions: {}, exclusions: {} };
+          const vData = await FluxKit.sync.fetch(syncProfile, { filename: SYNC_FILENAME });
+          let remoteVault = (vData && vData.files && vData.files[SYNC_FILENAME] && vData.files[SYNC_FILENAME].content)
+            ? JSON.parse(vData.files[SYNC_FILENAME].content)
+            : null;
+
+          let currentLocalVault = ChronicleManager._getVault();
+          let masterVault = remoteVault ? ChronicleManager._mergeVaults(currentLocalVault, remoteVault) : currentLocalVault;
 
           masterVault = ChronicleManager._applyJournalToVault(masterVault, mergedJournal);
 
-          await FluxKit.sync.upload(syncProfile, masterVault, 'chronicle_vault.json');
-
+          await FluxKit.sync.upload(syncProfile, masterVault, SYNC_FILENAME);
           await FluxKit.sync.upload(syncProfile, [], 'chronicle_journal.json');
+
+          hopState.set(STATE_KEYS.vault, masterVault);
         } else {
           await FluxKit.sync.upload(syncProfile, mergedJournal, 'chronicle_journal.json');
         }
@@ -620,8 +756,71 @@
 
         hopState.set(STATE_KEYS.lastSync, Date.now());
       } catch (e) {
-        logError('[Dates] Journal flush failed:', e);
+        logError('Journal flush failed:', e);
       } finally { isSyncing = false; }
+    },
+
+    _migrateVaultSchema: (vault) => {
+      let migrated = false;
+
+      if (vault.people && Object.keys(vault.people).length > 0) {
+        for (const profile of Object.keys(vault.people)) {
+          const legacyPeople = vault.people[profile];
+          if (!legacyPeople || legacyPeople.length === 0) continue;
+
+          if (!vault.events[profile]) vault.events[profile] = [];
+          const events = vault.events[profile];
+
+          legacyPeople.forEach(person => {
+            const taggedEvents = events.filter(e => e.people && e.people.includes(person.id));
+
+            let birthDate = new Date().toISOString();
+            if (taggedEvents.length > 0) {
+              const timestamps = taggedEvents.map(e => new Date(e.date).getTime()).filter(t => !isNaN(t));
+              if (timestamps.length > 0) {
+                birthDate = new Date(Math.min(...timestamps)).toISOString();
+              }
+            }
+
+            const personEpicId = 'evt_ppl_' + FluxKit.utils.getUniqueId();
+            const personEpic = {
+              id: personEpicId, title: person.name,
+              aliases: person.aliases || [], date: birthDate, hasSpecificTime: false,
+              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+              type: 'person', isPinned: false, endedOn: null, isArchived: false,
+              mutedGroups: [], alerts: [], location: '',
+              context: 'Migrated from legacy tags.',
+              parentIds: []
+            };
+
+            events.push(personEpic);
+
+            taggedEvents.forEach(e => {
+              if (!e.parentIds) e.parentIds = [];
+              if (!e.parentIds.includes(personEpicId)) e.parentIds.push(personEpicId);
+            });
+          });
+        }
+        migrated = true;
+      }
+
+      if (vault.people) {
+        delete vault.people;
+        migrated = true;
+      }
+
+      if (vault.events) {
+        for (const profile of Object.keys(vault.events)) {
+          vault.events[profile].forEach(e => {
+            if (e.people !== undefined) {
+              delete e.people;
+              migrated = true;
+            }
+          });
+        }
+      }
+
+      return { vault, migrated };
     },
   };
 
@@ -674,7 +873,7 @@
 
       const withMatch = text.match(/\bwith\s+(.+)$/i);
       if (withMatch) {
-        event.people = withMatch[1].split(/,| and /i).map(s => s.trim()).filter(Boolean);
+        event.people = withMatch[1].split(/,|\band\b|&/i).map(s => s.trim()).filter(Boolean);
         text = text.replace(withMatch[0], '').trim();
       }
 
@@ -722,6 +921,15 @@
   };
 
   function registerToHub() {
+    const currentVault = hopState.get(STATE_KEYS.vault, { events: {}, subscriptions: {}, exclusions: {} });
+    const { vault: migratedVault, migrated } = ChronicleManager._migrateVaultSchema(currentVault);
+    
+    if (migrated) {
+      logMessage('Executing one-time Entity Graph migration...', { __v: 1 });
+      hopState.set(STATE_KEYS.vault, migratedVault);
+      ChronicleManager.pushRemote();
+    }
+
     FluxKit.ipc.broadcast('register-command', {
       id: 'plugin-chronicle-view', prefix: '> date', title: 'Timeline & Memory Tracker',
       icon: 'calendar', type: 'view', acceptsArgs: true
@@ -748,7 +956,10 @@
     FluxKit.ipc.broadcast('register-widget', { id: 'widget-chronicle-today', pluginId: 'plugin-chronicle-view', title: 'Today in History' });
 
     const lastSync = hopState.get(STATE_KEYS.lastSync, 0);
-    if (Date.now() - lastSync > 300000) ChronicleManager.pullJournal();;
+    if (Date.now() - lastSync > 300000) {
+      ChronicleManager.pullRemote();
+      ChronicleManager.pullJournal();
+    }
     ChronicleManager.syncSubscriptions();
 
     if (hopState.get(STATE_KEYS.pendingDeltas, []).length > 0) {
@@ -897,7 +1108,6 @@
       emptyState.style.display = 'block';
       listContainer.appendChild(emptyState);
     } else {
-      // Only show the search bar if there are actually epics to filter
       interactiveWrap.appendChild(searchInput);
       listContainer.appendChild(emptyState);
 
@@ -910,10 +1120,9 @@
         checkboxes.push(cb);
 
         row.appendChild(cb);
-        row.appendChild(createHTMLElement('span', { textContent: opt.label, style: { fontSize: '13px', color: 'var(--omni-text)' } }));
+        row.appendChild(createHTMLElement('span', { icon: opt.icon, textContent: opt.label, style: { display: 'flex', gap: '4px', fontSize: '13px', color: 'var(--omni-text)' } }));
         listContainer.appendChild(row);
 
-        // Store reference for lightning-fast search filtering
         rows.push({ el: row, textLabel: opt.label.toLowerCase() });
       });
     }
@@ -951,9 +1160,9 @@
         };
 
         if (syncProfile && FluxKit.sync.isConfigured(syncProfile)) {
-          new FluxKit.sync.Editor(container, syncProfile, { namespace: 'FluxChronicle' }, onSyncComplete).render(container);
+          new FluxKit.sync.Editor(container, syncProfile, { namespace: 'Flux/Chronicle', theme: FluxKit.theme.get(hopState.get(STATE_KEYS.activeTheme, 'auto')) }, onSyncComplete).render(container);
         } else {
-          new FluxKit.sync.Wizard(container, { namespace: 'FluxChronicle' }, onSyncComplete).render(container);
+          new FluxKit.sync.Wizard(container, { namespace: 'Flux/Chronicle', theme: FluxKit.theme.get(hopState.get(STATE_KEYS.activeTheme, 'auto')) }, onSyncComplete).render(container);
         }
       } catch (err) {
         container.innerHTML = safeHTML(`<div style="color: #ff4757; padding: 16px; font-size: 14px;"><strong>Wizard Crash:</strong> ${err.message}</div>`);
@@ -987,16 +1196,18 @@
 
     if (query.toLowerCase().startsWith('add')) {
       const inputStr = query.substring(3).trim();
-
       const parsed = EventParser.parse(inputStr);
 
-      const parentId = ChronicleManager.getParentContext();
-      if (parentId && parsed.people.length === 0) {
-        const parentEvt = ChronicleManager.getEvents().find(e => e.id === parentId);
-        if (parentEvt && parentEvt.people) {
-          parsed.people = ChronicleManager.getPeopleNames(parentEvt.people);
-        }
-      }
+      const prefilledPeopleStr = (parsed.people || []).join(', ');
+      delete parsed.people; 
+
+      const activeCtxId = ChronicleManager.getContext();
+      const activeParentCtxId = ChronicleManager.getParentContext();
+      
+      const initialParentIds = [...new Set([
+        ...(activeParentCtxId ? [activeParentCtxId] : []),
+        ...(activeCtxId ? [activeCtxId] : [])
+      ])].filter(Boolean);
 
       const container = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '12px', padding: '4px' } });
       container.appendChild(createHTMLElement('div', { textContent: 'Add New Event', style: { fontWeight: 'bold', fontSize: '14px', color: 'var(--omni-accent)' }}));
@@ -1009,34 +1220,22 @@
 
       const titleField = makeInput('Title', parsed.title, 'text', 'span 2');
       const dateField = makeInput('Start Date', localISOTime, 'datetime-local');
+      const typeField = makeSelect('Entity Type', [
+        { value: 'one-off', label: 'One-off Event' },
+        { value: 'era', label: 'Continuous Epic' },
+        { value: 'person', label: 'Person Entity' }
+      ], parsed.type === 'era' ? 'era' : 'one-off');
       const locField = makeInput('Location', parsed.location);
-      const peopleField = makeInput('People (CSV)', parsed.people.join(', '), 'text', 'span 2');
+      const newPeopleField = makeInput('Quick Add People (CSV)', prefilledPeopleStr);
 
-      const allEras = ChronicleManager.getEvents().filter(e => e.type === 'era');
-      const eraOptions = [];
-      allEras.forEach(e => eraOptions.push({ value: e.id, label: e.title }));
+      const allContexts = ChronicleManager.getEvents().filter(e => e.type === 'era' || e.type === 'person');
+      const contextOptions = allContexts.map(e => ({ value: e.id, icon: e.type === 'person' ? 'user' : 'folder', label: e.title }));
 
-      const activeCtxId = ChronicleManager.getContext();
-      const initialParentIds = activeCtxId ? [activeCtxId] : [];
-      const parentField = makeMultiSelect('Linked Epics', eraOptions, initialParentIds, 'span 2');
-
+      const parentField = makeMultiSelect('Linked Contexts', contextOptions, initialParentIds, 'span 2');
       const ctxField = makeInput('Context / Notes', parsed.context, 'text', 'span 2');
 
-      inputGrid.append(titleField.wrap, dateField.wrap, locField.wrap, peopleField.wrap, parentField.wrap, ctxField.wrap);
+      inputGrid.append(titleField.wrap, dateField.wrap, typeField.wrap, locField.wrap, newPeopleField.wrap, parentField.wrap, ctxField.wrap);
       container.appendChild(inputGrid);
-
-      const makeToggle = (icon, label, isChecked) => {
-        const wrap = createHTMLElement('label', { style: { display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', background: 'var(--omni-hover)', padding: '6px 10px', borderRadius: '6px' } });
-        const cb = createHTMLElement('input', { type: 'checkbox', checked: isChecked, style: { accentColor: 'var(--omni-accent)', cursor: 'pointer' } });
-        wrap.appendChild(cb);
-        wrap.appendChild(createHTMLElement('span', { icon, textContent: label, style: { display: 'flex', gap: '4px', fontSize: '11px', color: 'var(--omni-text)' } }));
-        return { wrap, cb };
-      };
-
-      const toggleContainer = createHTMLElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '4px' } });
-      const typeToggle = makeToggle('', 'Is Continuous Era', parsed.type === 'era');
-      toggleContainer.appendChild(typeToggle.wrap);
-      container.appendChild(toggleContainer);
 
       const finalizeAndSave = () => {
         parsed.title = titleField.input.value.trim();
@@ -1051,12 +1250,11 @@
 
         parsed.location = locField.input.value.trim();
         parsed.context = ctxField.input.value.trim();
-        parsed.type = typeToggle.cb.checked ? 'era' : 'one-off';
+        parsed.type = typeField.select.value; 
 
-        const rawPeople = peopleField.input.value.split(',').map(s => s.trim()).filter(Boolean);
-        parsed.people = rawPeople.map(rawName => ChronicleManager.resolvePerson(rawName));
-
-        parsed.parentIds = parentField.getSelected();
+        const rawNewPeople = newPeopleField.input.value.split(',').map(s => s.trim()).filter(Boolean);
+        const resolvedPersonIds = rawNewPeople.map(rawName => ChronicleManager.resolvePerson(rawName));
+        parsed.parentIds = [...new Set([...parentField.getSelected(), ...resolvedPersonIds])];
 
         ChronicleManager.saveEvent(parsed);
         ChronicleManager.clearParentContext();
@@ -1077,7 +1275,7 @@
       }, { signal: viewAbortController.signal });
       return;
     }
-
+    
     if (query.toLowerCase().startsWith('edit-mode')) {
       const eventId = ChronicleManager.getContext();
       if (!eventId) {
@@ -1104,18 +1302,26 @@
       const inputGrid = createHTMLElement('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' } });
       const titleField = makeInput('Title', evt.title, 'text', 'span 2');
       const dateField = makeInput('Start Date', localISOTime, 'datetime-local');
+      const typeField = makeSelect('Entity Type', [
+        { value: 'one-off', label: 'One-off Event' },
+        { value: 'era', label: 'Continuous Epic' },
+        { value: 'person', label: 'Person Entity' }
+      ], evt.type);
       const endedField = makeInput('Ended On (Blank = Active)', evt.endedOn ? evt.endedOn.split('T')[0] : '', 'date');
       const locField = makeInput('Location', evt.location);
-      const peopleField = makeInput('People (CSV)', ChronicleManager.getPeopleNames(evt.people).join(', '));
-      const allEras = ChronicleManager.getEvents().filter(e => e.type === 'era' && e.id !== evt.id);
-      const eraOptions = [];
-      allEras.forEach(e => eraOptions.push({ value: e.id, label: e.title }));
+      const newPeopleField = makeInput('Quick Add People (CSV)', '');
+      const aliasField = makeInput('Aliases (CSV)', (evt.aliases || []).join(', '));
+      
+      const allContexts = ChronicleManager.getEvents().filter(e => (e.type === 'era' || e.type === 'person') && e.id !== evt.id);
+      const contextOptions = allContexts.map(e => ({ value: e.id, icon: e.type === 'person' ? 'user' : 'folder', label: e.title }));
 
       const currentParentIds = evt.parentIds || (evt.parentId ? [evt.parentId] : []);
-      const parentField = makeMultiSelect('Linked Epics', eraOptions, currentParentIds, 'span 2');
+      const parentField = makeMultiSelect('Linked Contexts', contextOptions, currentParentIds, 'span 2');
       const ctxField = makeInput('Context / Notes', evt.context, 'text', 'span 2');
 
-      inputGrid.append(titleField.wrap, dateField.wrap, endedField.wrap, locField.wrap, peopleField.wrap, parentField.wrap, ctxField.wrap);
+      inputGrid.append(titleField.wrap, dateField.wrap, typeField.wrap, endedField.wrap, locField.wrap, newPeopleField.wrap);
+      if (evt.type === 'person') inputGrid.append(aliasField.wrap);
+      inputGrid.append(parentField.wrap, ctxField.wrap);
       container.appendChild(inputGrid);
 
       evt.mutedGroups = evt.mutedGroups || [];
@@ -1128,13 +1334,12 @@
       };
 
       const toggleContainer = createHTMLElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '4px' } });
-      const typeToggle = makeToggle('', 'Is Continuous Era', evt.type === 'era');
       const pinToggle = makeToggle('', 'Pin to Widget', !!evt.isPinned);
       const muteYearly = makeToggle('', 'Mute Yearly', evt.mutedGroups.includes('yearly'));
       const muteMonthly = makeToggle('', 'Mute Monthly', evt.mutedGroups.includes('100_days'));
       const archiveGlobal = makeToggle('', 'Archive (Hide)', !!evt.isArchived);
 
-      toggleContainer.append(typeToggle.wrap, pinToggle.wrap, muteYearly.wrap, muteMonthly.wrap, archiveGlobal.wrap);
+      toggleContainer.append(pinToggle.wrap, muteYearly.wrap, muteMonthly.wrap, archiveGlobal.wrap);
       container.appendChild(toggleContainer);
 
       const actions = [
@@ -1145,20 +1350,23 @@
           evt.date = updatedDate.toISOString();
           evt.hasSpecificTime = (updatedDate.getHours() !== 0 || updatedDate.getMinutes() !== 0);
           evt.location = locField.input.value.trim();
-          evt.people = peopleField.input.value.split(',').map(s => s.trim()).filter(Boolean).map(n => ChronicleManager.resolvePerson(n));
-          evt.parentIds = parentField.getSelected();
+          
+          const rawNewPeople = newPeopleField.input.value.split(',').map(s => s.trim()).filter(Boolean);
+          const resolvedPersonIds = rawNewPeople.map(rawName => ChronicleManager.resolvePerson(rawName));
+          evt.parentIds = [...new Set([...parentField.getSelected(), ...resolvedPersonIds])];
+
           delete evt.parentId;
           evt.context = ctxField.input.value.trim();
-
           evt.isArchived = archiveGlobal.cb.checked;
-
           evt.mutedGroups = [];
           if (muteYearly.cb.checked) evt.mutedGroups.push('yearly');
           if (muteMonthly.cb.checked) evt.mutedGroups.push('100_days');
-
-          evt.type = typeToggle.cb.checked ? 'era' : 'one-off';
+          
+          evt.type = typeField.select.value; 
+          evt.aliases = aliasField.input.value.split(',').map(s => s.trim()).filter(Boolean);
           evt.isPinned = pinToggle.cb.checked;
           evt.endedOn = endedField.input.value ? new Date(endedField.input.value).toISOString() : null;
+          
           ChronicleManager.updateEvent(evt);
           FluxKit.ipc.broadcast('flxhub-set-input', { value: ChronicleManager.getEditReturnPath() });
         }),
@@ -1175,16 +1383,20 @@
     if (query.toLowerCase().startsWith('edit')) {
       const filterTerm = query.substring(4).trim().toLowerCase();
       let events = ChronicleManager.getMergedEvents();
+      const allEventsLookup = ChronicleManager.getEvents();
 
       if (filterTerm) {
         const isYearFilter = /^\d{4}$/.test(filterTerm);
 
         events = events.filter(e => {
-          const peopleNames = ChronicleManager.getPeopleNames(e.people || []);
+          const parentTitles = (e.parentIds || []).map(pid => {
+            const parent = allEventsLookup.find(node => node.id === pid);
+            return parent ? parent.title.toLowerCase() : '';
+          });
           const textMatch = (e.title || '').toLowerCase().includes(filterTerm) ||
-                 (e.context || '').toLowerCase().includes(filterTerm) ||
-                 (e.location || '').toLowerCase().includes(filterTerm) ||
-                 peopleNames.some(p => p.toLowerCase().includes(filterTerm));
+                  (e.context || '').toLowerCase().includes(filterTerm) ||
+                  (e.location || '').toLowerCase().includes(filterTerm) ||
+                  parentTitles.some(title => title.includes(filterTerm));
 
           if (isYearFilter) {
             const eventYear = new Date(e.date).getFullYear().toString();
@@ -1195,11 +1407,14 @@
         });
       }
 
-      events.sort((a, b) => new Date(b.date) - new Date(a.date));
+      events.sort((a, b) => {
+        const diff = DateUtils.getNextOccurrence(a.date) - DateUtils.getNextOccurrence(b.date);
+        return diff !== 0 ? diff : new Date(b.date) - new Date(a.date);
+      });
 
       if (events.length === 0) {
         const emptyDiv = createHTMLElement('div', { style: { padding: '16px', textAlign: 'center', color: 'var(--omni-muted)', fontSize: '13px' } });
-        emptyDiv.innerHTML = safeHTML(filterTerm ? `No events match "<strong>${filterTerm}</strong>".` : `No active timeline events. Type "> date add one-off [event]" to begin.`);
+        emptyDiv.innerHTML = safeHTML(filterTerm ? `No events match "<strong>${filterTerm}</strong>".` : `No active timeline events. Type "> date add [event]" to begin.`);
         slot.innerHTML = safeHTML(''); slot.appendChild(FluxKit.ui.omni.DetailCard([emptyDiv], []));
         return;
       }
@@ -1247,20 +1462,31 @@
         const leftCol = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px' } });
         const titleWrap = createHTMLElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' }});
 
-        if (evt.isReadOnly) titleWrap.appendChild(createHTMLElement('span', { icon: 'worldClock', title: `From: ${evt.source}`, style: { marginTop: '4px', fontSize: '12px', opacity: '0.7' } }));
-        else if (evt.type === 'era') titleWrap.appendChild(createHTMLElement('span', { icon: 'sync', style: { fontSize: '12px', opacity: '0.7' } }));
-        titleWrap.appendChild(createHTMLElement('span', { style: { fontSize: '14px', fontWeight: 'bold', color: 'var(--omni-text)' }, textContent: evt.title }));
+        if (!evt.isReadOnly) {
+          if (evt.type === 'era') titleWrap.appendChild(createHTMLElement('span', { icon: 'sync', style: { fontSize: '12px', opacity: '0.7' } }));
+          else if (evt.type === 'person') titleWrap.appendChild(createHTMLElement('span', { icon: 'user', style: { fontSize: '12px', opacity: '0.7' } }));
+        }
+        
+        titleWrap.appendChild(createHTMLElement('span', { style: { fontSize: '14px', fontWeight: 'bold', color: 'var(--omni-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }, textContent: evt.title }));
         leftCol.appendChild(titleWrap);
 
         const dateStr = evt.hasSpecificTime
           ? new Date(evt.date).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
           : new Date(evt.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 
-        leftCol.appendChild(createHTMLElement('div', { style: { fontSize: '11px', color: 'var(--omni-muted)' }, textContent: dateStr }));
+        const metaRow = createHTMLElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' } });
+        metaRow.appendChild(createHTMLElement('span', { style: { fontSize: '11px', color: 'var(--omni-muted)', whiteSpace: 'nowrap' }, textContent: dateStr }));
+        
+        if (evt.isReadOnly) {
+          metaRow.appendChild(DateUtils.createSourceBadge(evt.source, slot));
+        }
+
+        leftCol.appendChild(metaRow);
         row.appendChild(leftCol);
 
-        let durationStr = DateUtils.getRelativeString(evt.date, new Date());
-        if (evt.type === 'era' && !evt.endedOn) durationStr = durationStr.replace(/( ago| from now)$/, '');
+        let durationStr;
+        if ((evt.type === 'era' || evt.type === 'person') && !evt.endedOn) durationStr = DateUtils.getRelativeString(DateUtils.getNextOccurrence(evt.date), new Date());
+        else durationStr = DateUtils.getRelativeString(evt.date, new Date());
         row.appendChild(createHTMLElement('div', { style: { fontSize: '13px', fontWeight: 'bold', color: 'var(--omni-accent)' }, textContent: durationStr }));
 
         node.appendChild(row);
@@ -1321,31 +1547,42 @@
       const events = ChronicleManager.getMergedEvents();
       const evt = events.find(e => e.id === eventId);
       if (!evt) return;
-
+      
+      const isPerson = evt.type === 'person';
       const dateObj = new Date(evt.date);
       const displayDate = evt.hasSpecificTime
         ? dateObj.toLocaleString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
         : dateObj.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
 
       let timeCurrency = DateUtils.getRelativeString(evt.date, new Date());
-      if (evt.type === 'era' && evt.endedOn) {
+      if (evt.endedOn) {
         const totalDuration = DateUtils.getRelativeString(evt.endedOn, evt.date).replace(/( ago| from now)$/, '');
-        timeCurrency = `Ended: ${new Date(evt.endedOn).toLocaleDateString()} — Total Duration: ${totalDuration}`;
+        timeCurrency = `Ended: ${new Date(evt.endedOn).toLocaleDateString()} — ${isPerson ? 'Lifespan' : 'Total Duration'}: ${totalDuration}`;
+      } else if (isPerson || evt.type === 'era') {
+        timeCurrency = `${isPerson ? 'Age: ' : ''}${timeCurrency.replace(/( ago| from now)$/, '')}`;
       }
 
-      const grid = FluxKit.ui.omni.DataGrid({
+      const gridData = {
         'Profile': `<span style="color: var(--omni-muted)">${currentProfile}</span>`,
-        'Event': `<strong style="color: var(--omni-text)">${evt.title}</strong>`,
-        'Timeline': `<span style="color: var(--omni-accent)">${displayDate}</span> <span style="font-size: 11px; color: var(--omni-muted);">(${timeCurrency})</span>`,
-        'Location': evt.location || '<em>None</em>',
-        'People': (evt.people && evt.people.length > 0) ? ChronicleManager.getPeopleNames(evt.people).join(', ') : '<em>None</em>',
-        'Context': evt.context || '<em>None</em>'
-      });
+        [isPerson ? 'Entity' : 'Event']: `<strong style="color: var(--omni-text)">${evt.title}</strong>`,
+        [isPerson ? 'Born' : 'Timeline']: `<span style="color: var(--omni-accent)">${displayDate}</span> <span style="font-size: 11px; color: var(--omni-muted);">(${timeCurrency})</span>`
+      };
+      
+      if (evt.isReadOnly) {
+        const sourceColor = DateUtils.getSourceColor(evt.source, slot);
+        gridData['Source Feed'] = `<span style="color: ${sourceColor}; font-weight: bold;">${evt.source}</span>`;
+      }
+      
+      if (evt.location) gridData['Location'] = evt.location;
+      if (evt.people && evt.people.length > 0) gridData['People'] = ChronicleManager.getPeopleNames(evt.people).join(', ');
+      if (evt.context) gridData['Context'] = evt.context;
+
+      const grid = FluxKit.ui.omni.DataGrid(gridData);
 
       const container = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '12px' } });
 
       const headRow = createHTMLElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' } });
-      headRow.appendChild(createHTMLElement('div', { textContent: evt.type === 'era' ? 'Epic Details' : 'Event Details', style: { fontWeight: 'bold', fontSize: '14px' }}));
+      headRow.appendChild(createHTMLElement('div', { textContent: isPerson ? 'Person Profile' : (evt.type === 'era' ? 'Epic Details' : 'Event Details'), style: { fontWeight: 'bold', fontSize: '14px' }}));
       container.appendChild(headRow);
 
       const parentIds = evt.parentIds || (evt.parentId ? [evt.parentId] : []);
@@ -1357,14 +1594,14 @@
           const parentWrap = createHTMLElement('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '-4px' } });
           parentEvents.forEach(p => {
             parentWrap.appendChild(createHTMLElement('div', {
-              textContent: `📂 ${p.title}`, title: 'Go to Parent Epic',
-              style: { fontSize: '11px', padding: '4px 8px', borderRadius: '6px', background: 'var(--omni-hover)', color: 'var(--omni-text)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', border: '1px solid var(--omni-border)', fontWeight: '600', transition: 'all 0.15s ease' },
+              icon: p.type === 'person' ? 'user' : 'folder', textContent: `${p.title}`, title: 'Go to Parent Epic',
+              style: { display: 'flex', gap: '4px', fontSize: '11px', padding: '4px 8px', borderRadius: '6px', background: 'var(--omni-hover)', color: 'var(--omni-text)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', border: '1px solid var(--omni-border)', fontWeight: '600', transition: 'all 0.15s ease' },
               eventListener: {
                 mouseenter: (e) => { e.currentTarget.style.borderColor = 'var(--omni-accent)'; e.currentTarget.style.color = 'var(--omni-accent)'; },
                 mouseleave: (e) => { e.currentTarget.style.borderColor = 'var(--omni-border)'; e.currentTarget.style.color = 'var(--omni-text)'; },
                 click: (e) => {
                   e.stopPropagation();
-                  ChronicleManager.pushContext(p.id); // Stacks the navigation cleanly
+                  ChronicleManager.pushContext(p.id);
                   FluxKit.ipc.broadcast('flxhub-set-input', { value: '> date view-mode' });
                 }
               }
@@ -1380,7 +1617,7 @@
       const subEvents = allMerged.filter(e => {
         const pids = e.parentIds || (e.parentId ? [e.parentId] : []);
         return pids.includes(evt.id);
-      }).sort((a, b) => new Date(a.date) - new Date(b.date)); // Chronological sort for Timeline
+      }).sort((a, b) => new Date(a.date) - new Date(b.date)); 
 
       if (subEvents.length > 0) {
         const subContainer = createHTMLElement('div', {
@@ -1388,7 +1625,7 @@
         });
 
         subContainer.appendChild(createHTMLElement('div', {
-          icon: 'link', textContent: 'TIMELINE',
+          icon: 'link', textContent: isPerson ? 'MEMORY LANE' : 'TIMELINE',
           style: { display: 'flex', gap: '6px', fontSize: '12px', fontWeight: 'bold', color: 'var(--omni-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }
         }));
 
@@ -1438,7 +1675,7 @@
           row.appendChild(nodeWrap);
 
           const headWrap = createHTMLElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }});
-
+          
           const grandChildren = allMerged.filter(e => {
             const pids = e.parentIds || (e.parentId ? [e.parentId] : []);
             return pids.includes(subEvt.id);
@@ -1474,7 +1711,7 @@
       const actions = [];
 
       if (!evt.isReadOnly) {
-        if (evt.type === 'era') {
+        if (evt.type === 'era' || evt.type === 'person') {
           actions.push(FluxKit.ui.omni.Button('plus', 'Add Linked Event', (e) => {
             e.stopPropagation();
             ChronicleManager.setParentContext(evt.id);
@@ -1489,7 +1726,7 @@
           e.stopPropagation();
           DateUtils.exportICS(evt, false);
         }));
-        actions.push(FluxKit.ui.omni.Button('edit', 'Edit Event', (e) => {
+        actions.push(FluxKit.ui.omni.Button('edit', 'Edit', (e) => {
           e.stopPropagation();
           ChronicleManager.setEditReturnPath('> date view-mode');
           FluxKit.ipc.broadcast('flxhub-set-input', { value: '> date edit-mode' });
@@ -1500,13 +1737,13 @@
             ChronicleManager.deleteEvent(evt.id);
             const prevId = ChronicleManager.popContext();
             if (prevId) FluxKit.ipc.broadcast('flxhub-set-input', { value: '> date view-mode' });
-            else FluxKit.ipc.broadcast('flxhub-set-input', { value: evt.type === 'era' ? '> eras' : '> date' });
+            else FluxKit.ipc.broadcast('flxhub-set-input', { value: evt.type === 'era' ? '> eras' : (evt.type === 'person' ? '> people' : '> date') });
           }
         }));
       } else {
-        actions.push(createHTMLElement('div', {
-          style: { padding: '6px 12px', fontSize: '12px', color: 'var(--omni-muted)', background: 'var(--omni-bg)', borderRadius: '6px', border: '1px solid var(--omni-border)' },
-          textContent: `Source: ${evt.source}`
+        actions.push(FluxKit.ui.omni.Button('settings', 'Manage Subscriptions', (e) => {
+          e.stopPropagation();
+          FluxKit.ipc.broadcast('flxhub-set-input', { value: '> date sub' });
         }));
 
         actions.push(FluxKit.ui.omni.Button('plus', 'Save to Timeline', (e) => {
@@ -1537,7 +1774,7 @@
         } else {
           FluxKit.ipc.broadcast('flxhub-set-input', { value: ChronicleManager.getReturnPath() });
         }
-      }))
+      }));
 
       slot.innerHTML = safeHTML(''); slot.appendChild(FluxKit.ui.omni.DetailCard([container], actions));
       return;
@@ -1546,9 +1783,11 @@
     if (query.toLowerCase().startsWith('sub')) {
       const inputStr = query.substring(3).trim();
 
-      if (inputStr.startsWith('http')) {
+      if (inputStr.startsWith('http') || inputStr.startsWith('webcal')) {
         const parts = inputStr.split('|');
-        const url = parts[0].trim();
+        let url = parts[0].trim();
+        if (url.startsWith('webcal://')) url = url.replace(/^webcal:\/\//i, 'https://');
+
         const name = parts[1] ? parts[1].trim() : 'External Calendar';
 
         const container = createHTMLElement('div', { style: { padding: '16px', textAlign: 'center' }});
@@ -1557,7 +1796,7 @@
         const actions = [ FluxKit.ui.omni.Button('success', 'Subscribe', async (e) => {
           e.stopPropagation();
           ChronicleManager.addSubscription(name, url);
-          ChronicleManager.syncSubscriptions();
+          ChronicleManager.syncSubscriptions(true);
           FluxKit.ipc.broadcast('flxhub-set-input', { value: '> date sub' });
         }) ];
 
@@ -1599,10 +1838,10 @@
             }
           });
 
-          function triggerUnsubscribe() {
-            if(confirm(`Unsubscribe from ${sub.name}? All imported events will be instantly removed from your timeline.`)) {
+          async function triggerUnsubscribe() {
+            if(await FluxKit.ui.confirm(`Unsubscribe from ${sub.name}? All imported events will be instantly removed from your timeline.`, { themeKey: hopState.get(STATE_KEYS.activeTheme, 'auto') })) {
               ChronicleManager.removeSubscription(sub.id);
-              ChronicleManager.syncSubscriptions();
+              ChronicleManager.syncSubscriptions(true);
               FluxKit.ipc.broadcast('flxhub-set-input', { value: '> date sub' });
             }
           }
@@ -1637,7 +1876,7 @@
         headerWrap.appendChild(createHTMLElement('button', {
             textContent: 'Sync Feeds',
             style: { background: 'transparent', border: 'none', color: 'var(--omni-accent)', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase' },
-            eventListener: { click: (e) => { e.stopPropagation(); ChronicleManager.syncSubscriptions(); } }
+            eventListener: { click: (e) => { e.stopPropagation(); ChronicleManager.syncSubscriptions(true); } }
         }));
       }
 
@@ -1662,6 +1901,7 @@
 
     let events = ChronicleManager.getMergedEvents();
     const filterTerm = query.toLowerCase();
+    const allEventsLookup = ChronicleManager.getEvents();
 
     if (filterTerm === 'archive' || filterTerm === 'archived') {
       events = events.filter(e => e.isArchived);
@@ -1672,23 +1912,28 @@
         const isYearFilter = /^\d{4}$/.test(filterTerm);
 
         events = events.filter(e => {
-          const peopleNames = ChronicleManager.getPeopleNames(e.people || []);
+          const parentTitles = (e.parentIds || []).map(pid => {
+            const parent = allEventsLookup.find(node => node.id === pid);
+            return parent ? parent.title.toLowerCase() : '';
+          });
           const textMatch = (e.title || '').toLowerCase().includes(filterTerm) ||
-                 (e.context || '').toLowerCase().includes(filterTerm) ||
-                 (e.location || '').toLowerCase().includes(filterTerm) ||
-                 peopleNames.some(p => p.toLowerCase().includes(filterTerm));
+                  (e.context || '').toLowerCase().includes(filterTerm) ||
+                  (e.location || '').toLowerCase().includes(filterTerm) ||
+                  parentTitles.some(title => title.includes(filterTerm));
 
           if (isYearFilter) {
             const eventYear = new Date(e.date).getFullYear().toString();
             return textMatch || eventYear === filterTerm;
           }
-
           return textMatch;
         });
       }
     }
 
-    events.sort((a, b) => new Date(b.date) - new Date(a.date));
+    events.sort((a, b) => {
+      const diff = DateUtils.getNextOccurrence(a.date) - DateUtils.getNextOccurrence(b.date);
+      return diff !== 0 ? diff : new Date(b.date) - new Date(a.date);
+    });
 
     if (events.length === 0) {
       const emptyDiv = createHTMLElement('div', { style: { padding: '16px', textAlign: 'center', color: 'var(--omni-muted)', fontSize: '13px' } });
@@ -1740,8 +1985,11 @@
       const leftCol = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px' } });
       const titleWrap = createHTMLElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' }});
 
-      if (evt.isReadOnly) titleWrap.appendChild(createHTMLElement('span', { icon: 'worldClock', title: `From: ${evt.source}`, style: { marginTop: '4px', fontSize: '12px', opacity: '0.7' } }));
-      else if (evt.type === 'era') titleWrap.appendChild(createHTMLElement('span', { icon: 'sync', style: { fontSize: '12px', opacity: '0.7' } }));
+      if (!evt.isReadOnly) {
+        if (evt.type === 'era') titleWrap.appendChild(createHTMLElement('span', { icon: 'sync', style: { fontSize: '12px', opacity: '0.7' } }));
+        else if (evt.type === 'person') titleWrap.appendChild(createHTMLElement('span', { icon: 'user', style: { fontSize: '12px', opacity: '0.7' } }));
+      }
+      
       titleWrap.appendChild(createHTMLElement('span', { style: { fontSize: '14px', fontWeight: 'bold', color: 'var(--omni-text)' }, textContent: evt.title }));
       leftCol.appendChild(titleWrap);
 
@@ -1749,11 +1997,19 @@
         ? new Date(evt.date).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
         : new Date(evt.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 
-      leftCol.appendChild(createHTMLElement('div', { style: { fontSize: '11px', color: 'var(--omni-muted)' }, textContent: dateStr }));
+      const metaRow = createHTMLElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' } });
+      metaRow.appendChild(createHTMLElement('span', { style: { fontSize: '11px', color: 'var(--omni-muted)', whiteSpace: 'nowrap' }, textContent: dateStr }));
+      
+      if (evt.isReadOnly) {
+        metaRow.appendChild(DateUtils.createSourceBadge(evt.source, slot));
+      }
+
+      leftCol.appendChild(metaRow);
       row.appendChild(leftCol);
 
-      let durationStr = DateUtils.getRelativeString(evt.date, new Date());
-      if (evt.type === 'era' && !evt.endedOn) durationStr = durationStr.replace(/( ago| from now)$/, '');
+      let durationStr;
+      if ((evt.type === 'era' || evt.type === 'person') && !evt.endedOn) durationStr = DateUtils.getRelativeString(DateUtils.getNextOccurrence(evt.date), new Date());
+      else durationStr = DateUtils.getRelativeString(evt.date, new Date());
       row.appendChild(createHTMLElement('div', { style: { fontSize: '13px', fontWeight: 'bold', color: 'var(--omni-accent)' }, textContent: durationStr }));
 
       node.appendChild(row);
@@ -1829,7 +2085,7 @@
           if (muted.includes(ms.muteKey)) continue;
           groupedEvents[ms.group === 'today' || ms.group === 'upcoming' ? ms.group : 'timehop'].push({
             ...evt,
-            milestoneLabel: ms.getLabel(evtDate).label
+            milestoneLabel: ms.getLabel(evtDate, evt).label
           });
           break;
         }
@@ -1885,8 +2141,10 @@
           const header = createHTMLElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } });
           const titleWrap = createHTMLElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } });
 
-          if (evt.isReadOnly) titleWrap.appendChild(createHTMLElement('span', { icon: 'worldClock', title: `From: ${evt.source}`, style: { marginTop: '4px', fontSize: '12px', opacity: '0.7' } }));
-          else if (evt.type === 'era') titleWrap.appendChild(createHTMLElement('span', { icon: 'sync', style: { fontSize: '12px', opacity: '0.7' } }));
+          if (!evt.isReadOnly) {
+            if (evt.type === 'era') titleWrap.appendChild(createHTMLElement('span', { icon: 'sync', style: { fontSize: '12px', opacity: '0.7' } }));
+            else if (evt.type === 'person') titleWrap.appendChild(createHTMLElement('span', { icon: 'user', style: { fontSize: '12px', opacity: '0.7' } }));
+          }
 
           if (!evt.milestoneLabel.includes('Happening Today')) {
             titleWrap.appendChild(createHTMLElement('span', { style: { fontSize: '11px', color: 'var(--omni-accent)', fontWeight: 'bold', padding: '2px 6px', background: 'var(--omni-hover)', borderRadius: '4px' }, textContent: evt.milestoneLabel }));
@@ -1904,9 +2162,23 @@
 
           if (evt.context) row.appendChild(createHTMLElement('div', { style: { fontSize: '13px', color: 'var(--omni-muted)', fontStyle: 'italic', lineHeight: '1.4', marginTop: '4px' }, textContent: evt.context }));
 
-          const metaRow = createHTMLElement('div', { style: { display: 'flex', gap: '12px', marginTop: '4px' }});
+          const metaRow = createHTMLElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: '4px', alignItems: 'center' }});
           if (evt.location) metaRow.appendChild(createHTMLElement('div', { style: { fontSize: '11px', color: 'var(--omni-text)', opacity: '0.7' }, textContent: `📍 ${evt.location}` }));
-          if (evt.people && evt.people.length > 0) metaRow.appendChild(createHTMLElement('div', { style: { display: 'flex', gap: '4px', fontSize: '11px', color: 'var(--omni-text)', opacity: '0.7' }, icon: 'user', textContent: `${ChronicleManager.getPeopleNames(evt.people).join(', ')}` }));
+          
+          const pids = evt.parentIds || (evt.parentId ? [evt.parentId] : []);
+          const parentPeople = pids.map(id => allEvents.find(e => e.id === id && e.type === 'person')).filter(Boolean);
+          if (parentPeople.length > 0) {
+            metaRow.appendChild(createHTMLElement('div', { 
+              style: { display: 'flex', gap: '4px', fontSize: '11px', color: 'var(--omni-text)', opacity: '0.7' }, 
+              icon: 'user', 
+              textContent: parentPeople.map(p => p.title).join(', ') 
+            }));
+          }
+
+          if (evt.isReadOnly) {
+            metaRow.appendChild(DateUtils.createSourceBadge(evt.source, slot));
+          }
+
           if (metaRow.children.length > 0) row.appendChild(metaRow);
 
           section.appendChild(row);
@@ -1931,9 +2203,9 @@
 
       container.appendChild(emptyState);
     } else {
-      if (groupedEvents.today.length > 0) renderSection('📍', 'Happening Today', groupedEvents.today);
-      if (groupedEvents.upcoming.length > 0) renderSection('⏳', 'Upcoming Reminders', groupedEvents.upcoming);
-      if (groupedEvents.timehop.length > 0) renderSection('🕰️', 'Timehop', groupedEvents.timehop);
+      if (groupedEvents.today.length > 0) renderSection('pin', 'Happening Today', groupedEvents.today);
+      if (groupedEvents.upcoming.length > 0) renderSection('hourglass', 'Upcoming Reminders', groupedEvents.upcoming);
+      if (groupedEvents.timehop.length > 0) renderSection('clock', 'Timehop', groupedEvents.timehop);
     }
 
     if (rowElements.length > 0) {
@@ -1967,19 +2239,22 @@
     let events = ChronicleManager.getEvents().filter(e => e.type === 'era' && !e.isArchived);
 
     if (filterTerm) {
+      const allEventsLookup = ChronicleManager.getEvents();
       events = events.filter(e => {
-        const peopleNames = ChronicleManager.getPeopleNames(e.people || []);
+        const parentTitles = (e.parentIds || []).map(pid => {
+          const parent = allEventsLookup.find(node => node.id === pid);
+          return parent ? parent.title.toLowerCase() : '';
+        });
         return (e.title || '').toLowerCase().includes(filterTerm) ||
                 (e.context || '').toLowerCase().includes(filterTerm) ||
                 (e.location || '').toLowerCase().includes(filterTerm) ||
-                peopleNames.some(p => p.toLowerCase().includes(filterTerm));
+                parentTitles.some(title => title.includes(filterTerm));
       });
     }
 
     events.sort((a, b) => {
-      if (a.endedOn && !b.endedOn) return 1;
-      if (!a.endedOn && b.endedOn) return -1;
-      return new Date(b.date) - new Date(a.date);
+      const diff = DateUtils.getNextOccurrence(a.date) - DateUtils.getNextOccurrence(b.date);
+      return diff !== 0 ? diff : new Date(b.date) - new Date(a.date);
     });
 
     if (events.length === 0) {
@@ -2109,25 +2384,26 @@
         return;
       }
 
-      const sourcePerson = ChronicleManager.getPeople().find(p => p.id === sourceId);
-      const targetPeople = ChronicleManager.getPeople().filter(p => p.id !== sourceId);
+      const allEvents = ChronicleManager.getEvents();
+      const sourcePerson = allEvents.find(p => p.id === sourceId);
+      const targetPeople = allEvents.filter(p => p.type === 'person' && p.id !== sourceId);
 
       const container = createHTMLElement('div', { style: { padding: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }});
       container.appendChild(createHTMLElement('div', {
-        innerHTML: `Select person to merge <strong>${sourcePerson ? sourcePerson.name : 'Unknown'}</strong> into:`,
+        innerHTML: `Select person to merge <strong>${sourcePerson ? sourcePerson.title : 'Unknown'}</strong> into:`,
         style: { fontSize: '13px', color: 'var(--omni-text)' }
       }));
 
       targetPeople.forEach(p => {
         const row = createHTMLElement('div', {
           style: { padding: '10px', background: 'var(--omni-bg)', border: '1px solid var(--omni-border)', borderRadius: '6px', cursor: 'pointer', transition: 'all 0.15s ease', fontSize: '14px', color: 'var(--omni-text)', fontWeight: 'bold' },
-          textContent: p.name,
+          textContent: p.title,
           eventListener: {
             mouseenter: e => { e.target.style.borderColor = 'var(--omni-accent)' },
             mouseleave: e => { e.target.style.borderColor = 'var(--omni-border)' },
             click: (e) => {
               e.stopPropagation();
-              ChronicleManager.mergePeople(sourceId, p.id);
+              ChronicleManager.mergeNodes(sourceId, p.id);
               ChronicleManager.clearPersonContext();
               FluxKit.ipc.broadcast('flxhub-set-input', { value: '> people' });
             }
@@ -2140,143 +2416,141 @@
       return;
     }
 
-    if (query.startsWith('edit-mode')) {
-      const personId = ChronicleManager.getPersonContext();
-      if (!personId) {
-        FluxKit.ipc.broadcast('flxhub-set-input', { value: '> people' });
-        return;
-      }
+    const filterTerm = query.toLowerCase();
+    let events = ChronicleManager.getEvents().filter(e => e.type === 'person' && !e.isArchived);
 
-      const person = ChronicleManager.getPeople().find(p => p.id === personId);
-      if (!person) return;
+    if (filterTerm) {
+      events = events.filter(e => 
+        (e.title || '').toLowerCase().includes(filterTerm) ||
+        (e.aliases || []).some(a => a.toLowerCase().includes(filterTerm))
+      );
+    }
 
-      const container = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px', padding: '4px' } });
+    events.sort((a, b) => a.title.localeCompare(b.title));
 
-      const nameField = makeInput('Primary Name', person.name);
-      const aliasField = makeInput('Aliases (Comma Separated)', (person.aliases || []).join(', '));
-      container.append(nameField.wrap, aliasField.wrap);
-
-      const actions = [ FluxKit.ui.omni.Button('success', 'Save Changes', async (e) => {
-        e.stopPropagation();
-        person.name = nameField.input.value.trim();
-        person.aliases = aliasField.input.value.split(',').map(s => s.trim()).filter(Boolean);
-        ChronicleManager.updatePerson(person);
-        ChronicleManager.clearPersonContext();
-        FluxKit.ipc.broadcast('flxhub-set-input', { value: '> people' });
-      }) ];
-
-      slot.innerHTML = safeHTML(''); slot.appendChild(FluxKit.ui.omni.DetailCard([container], actions));
+    if (events.length === 0) {
+      const emptyDiv = createHTMLElement('div', { style: { padding: '16px', textAlign: 'center', color: 'var(--omni-muted)', fontSize: '13px' }, textContent: 'No People tracked yet.' });
+      slot.innerHTML = safeHTML(''); slot.appendChild(FluxKit.ui.omni.DetailCard([emptyDiv], []));
       return;
     }
 
-    const people = ChronicleManager.getPeople();
-    const events = ChronicleManager.getEvents();
+    const ROW_HEIGHT = 72;
+    const CONTAINER_HEIGHT = 350;
+    let selectedIndex = 0;
 
-    const freqMap = {};
-    events.forEach(evt => {
-      (evt.people || []).forEach(id => { freqMap[id] = (freqMap[id] || 0) + 1; });
-    });
-
-    people.sort((a, b) => (freqMap[b.id] || 0) - (freqMap[a.id] || 0) || a.name.localeCompare(b.name));
-
-    const container = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', padding: '8px 0', maxHeight: '350px', overflowY: 'auto' } });
-
-    const rowElements = [];
-    let selectedIndex = -1;
-
-    const updateSelection = () => {
-      rowElements.forEach((item, idx) => {
-        if (idx === selectedIndex) {
-          item.el.style.borderColor = 'var(--omni-accent)';
-          item.el.style.background = 'var(--omni-hover)';
-          item.el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-        } else {
-          item.el.style.borderColor = 'var(--omni-border)';
-          item.el.style.background = 'var(--omni-bg)';
+    const updateSelection = (ctx) => {
+      ctx.physicalNodes.forEach((node, i) => {
+        const itemIndex = ctx.getStartIndex() + i;
+        if (itemIndex < events.length) {
+          const row = node.firstElementChild;
+          if (!row) return;
+          if (itemIndex === selectedIndex) {
+            row.style.borderColor = 'var(--omni-accent)';
+            row.style.background = 'var(--omni-hover)';
+          } else {
+            row.style.borderColor = 'var(--omni-border)';
+            row.style.background = 'var(--omni-bg)';
+          }
         }
       });
     };
 
-    if (people.length === 0) {
-      container.appendChild(createHTMLElement('div', { style: { padding: '16px', textAlign: 'center', color: 'var(--omni-muted)', fontSize: '13px' }, textContent: 'No people tagged yet.' }));
-    } else {
-      people.forEach((p, idx) => {
-        const count = freqMap[p.id] || 0;
-        const row = createHTMLElement('div', {
-          style: { padding: '12px', background: 'var(--omni-bg)', border: '1px solid var(--omni-border)', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', transition: 'all 0.15s ease' },
-          eventListener: {
-            mouseenter: () => { selectedIndex = idx; updateSelection(); },
-            mouseleave: () => { selectedIndex = -1; updateSelection(); },
-            click: (e) => { e.stopPropagation(); triggerView(); }
-          }
-        });
+    function triggerView(evt) {
+      ChronicleManager.setContext(evt.id);
+      ChronicleManager.setReturnPath('> people ' + query);
+      FluxKit.ipc.broadcast('flxhub-set-input', { value: '> date view-mode' });
+    }
 
-        function triggerView() {
-          FluxKit.ipc.broadcast('flxhub-set-input', { value: '> date ' + p.name });
+    const vListCtx = createVirtualList(events, ROW_HEIGHT, CONTAINER_HEIGHT, (node, evt, idx) => {
+      node.innerHTML = '';
+      node.style.padding = '0 8px';
+
+      const row = createHTMLElement('div', {
+        style: { padding: '12px', background: 'var(--omni-bg)', border: '1px solid var(--omni-border)', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', transition: 'background-color 0.1s', marginBottom: '8px', opacity: evt.endedOn ? '0.6' : '1' },
+        eventListener: {
+          mouseenter: () => { selectedIndex = idx; updateSelection(vListCtx); },
+          mouseleave: () => { selectedIndex = -1; updateSelection(vListCtx); },
+          click: (e) => { e.stopPropagation(); triggerView(evt); }
         }
-
-        const leftCol = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px' } });
-        leftCol.appendChild(createHTMLElement('div', { style: { fontSize: '14px', fontWeight: 'bold', color: 'var(--omni-text)' }, textContent: p.name }));
-
-        if (p.aliases && p.aliases.length > 0) {
-          leftCol.appendChild(createHTMLElement('div', { style: { fontSize: '11px', color: 'var(--omni-muted)' }, textContent: `Aliases: ${p.aliases.join(', ')}` }));
-        }
-        row.appendChild(leftCol);
-
-        const rightCol = createHTMLElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } });
-        rightCol.appendChild(createHTMLElement('div', { style: { fontSize: '12px', color: 'var(--omni-accent)', fontWeight: 'bold', marginRight: '4px' }, textContent: `${count} Event${count === 1 ? '' : 's'}` }));
-
-        const makeMiniBtn = (icon, color, onClick) => createHTMLElement('button', {
-          icon,
-          style: { background: 'var(--omni-hover)', border: 'none', color: color, cursor: 'pointer', fontSize: '10px', padding: '4px 8px', borderRadius: '4px', textTransform: 'uppercase', fontWeight: 'bold' },
-          eventListener: {
-            mouseenter: e => { e.target.style.background = 'var(--omni-border)' },
-            mouseleave: e => { e.target.style.background = 'var(--omni-hover)' },
-            click: onClick
-          }
-        });
-
-        rightCol.appendChild(makeMiniBtn('edit', 'var(--omni-text)', (e) => {
-          e.stopPropagation();
-          ChronicleManager.setPersonContext(p.id);
-          FluxKit.ipc.broadcast('flxhub-set-input', { value: '> people edit-mode' });
-        }));
-
-        rightCol.appendChild(makeMiniBtn('merge', 'var(--omni-text)', (e) => {
-          e.stopPropagation();
-          ChronicleManager.setPersonContext(p.id);
-          FluxKit.ipc.broadcast('flxhub-set-input', { value: '> people merge-mode' });
-        }));
-
-        rightCol.appendChild(makeMiniBtn('trash', 'var(--omni-danger)', (e) => {
-          e.stopPropagation();
-          if(confirm(`Are you sure you want to delete ${p.name}? They will be removed from all events.`)) {
-            ChronicleManager.deletePerson(p.id);
-            FluxKit.ipc.broadcast('flxhub-set-input', { value: '> people' });
-          }
-        }));
-
-        row.appendChild(rightCol);
-        container.appendChild(row);
-
-        rowElements.push({ el: row, trigger: triggerView });
       });
-    }
 
-    if (rowElements.length > 0) {
-      selectedIndex = 0;
-      updateSelection();
+      const leftCol = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px' } });
+      leftCol.appendChild(createHTMLElement('div', { style: { fontSize: '14px', fontWeight: 'bold', color: 'var(--omni-text)' }, textContent: evt.title }));
 
-      slot.addEventListener('flx-remote-keydown', (e) => {
-        const { key } = e.detail;
-        if (key === 'ArrowDown') { e.preventDefault(); selectedIndex = (selectedIndex + 1) % rowElements.length; updateSelection(); }
-        else if (key === 'ArrowUp') { e.preventDefault(); selectedIndex = (selectedIndex - 1 + rowElements.length) % rowElements.length; updateSelection(); }
-        else if (key === 'Enter') { e.preventDefault(); if (rowElements[selectedIndex]) rowElements[selectedIndex].trigger(); }
-      }, { signal });
-    }
+      if (evt.aliases && evt.aliases.length > 0) {
+        leftCol.appendChild(createHTMLElement('div', { style: { fontSize: '11px', color: 'var(--omni-muted)' }, textContent: `Aliases: ${evt.aliases.join(', ')}` }));
+      }
+      row.appendChild(leftCol);
 
+      const rightCol = createHTMLElement('div', { style: { display: 'flex', alignItems: 'center', gap: '12px' } });
+
+      const baseDate = evt.endedOn ? new Date(evt.endedOn) : new Date();
+      let durationStr = DateUtils.getRelativeString(evt.date, baseDate).replace(/( ago| from now)$/, '');
+      
+      rightCol.appendChild(createHTMLElement('div', { style: { fontSize: '13px', fontWeight: 'bold', color: 'var(--omni-accent)' }, textContent: `Age: ${durationStr}` }));
+
+      const makeMiniBtn = (icon, color, onClick) => createHTMLElement('button', {
+        icon, title: icon === 'merge' ? 'Merge with another Person' : 'Quick Actions',
+        style: { background: 'var(--omni-hover)', border: 'none', color: color, cursor: 'pointer', fontSize: '10px', padding: '4px 8px', borderRadius: '4px', textTransform: 'uppercase', fontWeight: 'bold' },
+        eventListener: {
+          mouseenter: e => { e.target.style.background = 'var(--omni-border)' },
+          mouseleave: e => { e.target.style.background = 'var(--omni-hover)' },
+          click: onClick
+        }
+      });
+
+      rightCol.appendChild(makeMiniBtn('merge', 'var(--omni-text)', (e) => {
+        e.stopPropagation();
+        ChronicleManager.setPersonContext(evt.id);
+        FluxKit.ipc.broadcast('flxhub-set-input', { value: '> people merge-mode' });
+      }));
+
+      row.appendChild(rightCol);
+      node.appendChild(row);
+
+      if (idx === selectedIndex) {
+        row.style.borderColor = 'var(--omni-accent)';
+        row.style.background = 'var(--omni-hover)';
+      }
+    });
+
+    updateSelection(vListCtx);
+
+    slot.addEventListener('flx-remote-keydown', (e) => {
+      const { key } = e.detail;
+      if (key === 'ArrowDown') {
+        e.preventDefault();
+        selectedIndex = (selectedIndex + 1) % events.length;
+        const scrollTarget = selectedIndex * ROW_HEIGHT;
+        if (scrollTarget > vListCtx.container.scrollTop + CONTAINER_HEIGHT - ROW_HEIGHT) {
+          vListCtx.container.scrollTop = scrollTarget - CONTAINER_HEIGHT + ROW_HEIGHT;
+        } else if (scrollTarget < vListCtx.container.scrollTop) {
+          vListCtx.container.scrollTop = scrollTarget;
+        }
+        updateSelection(vListCtx);
+      }
+      else if (key === 'ArrowUp') {
+        e.preventDefault();
+        selectedIndex = (selectedIndex - 1 + events.length) % events.length;
+        const scrollTarget = selectedIndex * ROW_HEIGHT;
+        if (scrollTarget < vListCtx.container.scrollTop) {
+          vListCtx.container.scrollTop = scrollTarget;
+        } else if (scrollTarget > vListCtx.container.scrollTop + CONTAINER_HEIGHT - ROW_HEIGHT) {
+          vListCtx.container.scrollTop = scrollTarget - CONTAINER_HEIGHT + ROW_HEIGHT;
+        }
+        updateSelection(vListCtx);
+      }
+      else if (key === 'Enter') {
+        e.preventDefault();
+        const targetEvent = events[selectedIndex];
+        if (targetEvent) triggerView(targetEvent);
+      }
+    }, { signal: viewAbortController?.signal });
+
+    const listWrap = createHTMLElement('div', { style: { padding: '8px 0' } });
+    listWrap.appendChild(vListCtx.container);
     slot.innerHTML = safeHTML('');
-    slot.appendChild(FluxKit.ui.omni.DetailCard([container], []));
+    slot.appendChild(FluxKit.ui.omni.DetailCard([listWrap], []));
   }
 
   FluxKit.ipc.listen('flxhub-mount-view', async (payload) => {
@@ -2305,7 +2579,7 @@
       const evtDate = new Date(evt.date);
       for (const ms of milestones) {
         if (ms.calc(evtDate)) {
-          notableEvents.push({ ...evt, milestoneLabel: ms.getLabel(evtDate).label });
+          notableEvents.push({ ...evt, milestoneLabel: ms.getLabel(evtDate, evt).label });
           break;
         }
       }
@@ -2319,7 +2593,7 @@
     const headerWrap = createHTMLElement('div', {
       style: { fontSize: '11px', fontWeight: 'bold', color: 'var(--omni-text)', borderBottom: '1px solid var(--omni-separator)', paddingBottom: '6px', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', justifyContent: 'space-between' }
     });
-    headerWrap.appendChild(createHTMLElement('span', { textContent: '📅 Today\'s Highlights' }));
+    headerWrap.appendChild(createHTMLElement('span', { icon: 'calendar', textContent: 'Today\'s Highlights', style: { display: 'flex', gap: '4px' } }));
     headerWrap.appendChild(createHTMLElement('span', {
       style: { color: 'var(--omni-accent)' },
       textContent: currentProfile

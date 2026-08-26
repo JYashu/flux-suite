@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FluxKit Core
 // @namespace    https://github.com/JYashu
-// @version      1.3.0
+// @version      1.3.1
 // @description  A high-performance UI toolkit.
 // @author       JYashu
 // @license      Apache-2.0
@@ -83,7 +83,7 @@
     vector-effect="non-scaling-stroke"
   `;
 
-  FluxKit.ui.icons = {
+  FluxKit.ui.icons ??= {
     ban: `<svg ${ICON}><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM4.93 4.93l14.14 14.14" /></svg>`,
     bell: `<svg ${ICON}><path d="M 12 4 A 4 4 0 0 0 8 8 C 8 13 4 14 4 16 A 1 1 0 0 0 5 17 H 19 A 1 1 0 0 0 20 16 C 20 14 16 13 16 8 M 15 5 v .01 M 10 17 A 2 2 0 0 0 14 17"/></svg>`,
     bold: `<svg ${ICON}><path d="M 9 4 H 12 A 4 4 0 0 1 12 12 H 6 V 8 M 6 12 V 20 H 14 A 4 4 0 0 0 14 12 H 12" /></svg>`,
@@ -117,6 +117,7 @@
     fileAdd: `<svg ${ICON}><path d="M 14 3 H 7 A 2 2 0 0 0 5 5 V 19 A 2 2 0 0 0 7 21 H 11 M 14 3 L 19 8 V 13 M 14 3 V 7 A 1 1 0 0 0 15 8 H 19 M 13 18 H 19 M 16 15 V 21" /></svg>`,
     fileDelete: `<svg ${ICON}><path d="M 14 3 H 7 A 2 2 0 0 0 5 5 V 19 A 2 2 0 0 0 7 21 H 10 M 14 3 L 19 8 V 12 M 14 3 V 7 A 1 1 0 0 0 15 8 H 19 M 13.5 15.5 L 18.5 20.5 M 18.5 15.5 L 13.5 20.5" /></svg>`,
     focus: `<svg ${ICON}><circle cx="12" cy="12" r="3"></circle><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path></svg>`,
+    folder: `<svg ${ICON}><path d="M 5 4 H 8 L 11 7 H 19 A 2 2 0 0 1 21 9 V 18 A 2 2 0 0 1 19 20 H 5 A 2 2 0 0 1 3 18 V 6 A 2 2 0 0 1 5 4 Z"/></svg>`,
     google: `<svg ${ICON}><path d="M 17 6 A 8 8 0 1 0 20 12 H 12"/></svg>`,
     hash: `<svg ${ICON}><path d="M 10 4 L 8 20 M 16 4 L 14 20 M 5 9 H 19 M 4 15 H 18"/></svg>`,
     heading: `<svg ${ICON}><path d="M6 4v16m0-8h12m0-8v16" /></svg>`,
