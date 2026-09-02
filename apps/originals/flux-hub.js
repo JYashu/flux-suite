@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Flux Hub
 // @namespace    https://github.com/JYashu/flux-suite
-// @version      1.1.1
+// @version      1.1.2
 // @description  Universal Command Palette and Search Engine. Press a hotkey to calculate, translate, convert, search the web, or control other Flux scripts instantly.
 // @icon         https://logo-bits.s3.us-east-2.amazonaws.com/flux-hub.svg
 // @author       JYashu
@@ -431,12 +431,14 @@
     const localClips = FluxHubState.get(STATE_KEYS.CLIP_HISTORY, []);
     const mergedClips = [...new Set([...localClips, ...(remote.clipHistory || [])])].slice(0, 50);
 
-    let finalMusicStats = FluxHubState.get(STATE_KEYS.MUSIC_STATS || 'flx_music_stats', {});
-    let finalMusicHistory = FluxHubState.get(STATE_KEYS.MUSIC_HISTORY || 'flx_music_history', []);
+    let finalMusicStats = FluxHubState.get(STATE_KEYS.MUSIC_STATS, {});
+    let finalMusicHistory = FluxHubState.get(STATE_KEYS.MUSIC_HISTORY, []);
+    let finalMusicDiscoveries = FluxHubState.get(STATE_KEYS.MUSIC_DISCOVERIES, []);
 
     FluxKit.musicStats.mergeSync(remote.musicStats || {}, remote.musicHistory || []);
-    finalMusicStats = FluxHubState.get(STATE_KEYS.MUSIC_STATS || 'flx_music_stats', {});
-    finalMusicHistory = FluxHubState.get(STATE_KEYS.MUSIC_HISTORY || 'flx_music_history', []);
+    finalMusicStats = FluxHubState.get(STATE_KEYS.MUSIC_STATS, {});
+    finalMusicHistory = FluxHubState.get(STATE_KEYS.MUSIC_HISTORY, []);
+    finalMusicDiscoveries = FluxHubState.get(STATE_KEYS.MUSIC_DISCOVERIES, []);
 
     FluxHubState.set(STATE_KEYS.SAVED_PLAYLISTS, pl.merged);
     PlaylistsState.setTombstones(pl.tombstones);
@@ -453,7 +455,7 @@
       bangs: bg.merged, bangTombstones: bg.tombstones,
       widgets: Object.values(wg.merged), widgetTombstones: wg.tombstones,
       clipHistory: mergedClips, settings: mergedSettings, settingsUpdatedAt: mergedSettingsAt,
-      musicStats: finalMusicStats, musicHistory: finalMusicHistory
+      musicStats: finalMusicStats, musicHistory: finalMusicHistory, musicDiscoveries: finalMusicDiscoveries
     };
 
     await FluxKit.sync.upload(profile, { [BACKUP_FILE]: { content: JSON.stringify(payload, null, 2) } }, BACKUP_FILE);
@@ -1335,6 +1337,7 @@
           const slotId = `flx-widget-${widget.id}`;
 
           const slotContainer = createHTMLElement('div', { id: slotId, style: { display: 'flex', flexDirection: 'column' } });
+          if (widget.gridColumn) slotContainer.style.gridColumn = widget.gridColumn;
 
           const loadingContent = createHTMLElement('div', {
             class: 'flx-omni-widget', icon: 'hourglassSpin', textContent: `Loading ${widget.title || 'Widget'}...`,
@@ -3684,7 +3687,7 @@
 
         if (params.tool === 'timer') {
           node = createHTMLElement('div', { class: 'flx-omni-widget', style: { alignItems: 'center', cursor: 'pointer', flex: '1' }, eventListener: () => FluxHub.ui.setInputVal('> timer') });
-          node.appendChild(createHTMLElement('div', { style: { fontSize: '11px', textTransform: 'uppercase', color: 'var(--omni-muted)', fontWeight: 'bold' }, textContent: `⏱️ ${params.payload.label || 'Timer'}` }));
+          node.appendChild(createHTMLElement('div', { style: { fontSize: '11px', textTransform: 'uppercase', color: 'var(--omni-muted)', fontWeight: 'bold' }, textContent: params.payload.label || 'Timer' }));
           const display = createHTMLElement('div', { style: { fontSize: '32px', fontWeight: 'bold', color: 'var(--omni-text)', fontVariantNumeric: 'tabular-nums' } });
           node.appendChild(display);
           const i = setInterval(() => {
@@ -5242,7 +5245,7 @@
       overlay.appendChild(modal);
       document.body.appendChild(overlay);
 
-      const wizardOptions = { namespace: 'FluxHub', theme: { autoDark: true } };
+      const wizardOptions = { namespace: 'Flux/Hub', theme: { autoDark: true } };
 
       activeWizard = new FluxKit.sync.Wizard(wizardTarget, wizardOptions, (newProfileData) => {
         const currentConfig = FluxHubState.get(STATE_KEYS.SYNC_CONFIG, { syncProfiles: {} });
@@ -8196,7 +8199,7 @@
           const uniqueDiscoveries = Array.from(new Map(combined.map(item => [item.timestamp, item])).values())
                                      .sort((a, b) => b.timestamp - a.timestamp)
                                      .slice(0, 150);
-          FluxHubState.set(STATE_KEYS.MUSIC_DISCOVERIES || 'flx_music_discoveries', uniqueDiscoveries);
+          FluxHubState.set(STATE_KEYS.MUSIC_DISCOVERIES, uniqueDiscoveries);
           localDiscoveriesUpdated = true;
         }
 
@@ -10164,7 +10167,7 @@
       const track = state.track;
 
       const widget = createHTMLElement('div', { class: 'flx-omni-widget',
-        style: { padding: '12px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '12px', minHeight: '80px', cursor: 'pointer', position: 'relative', overflow: 'hidden' },
+        style: { padding: '12px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '12px', minHeight: '80px', cursor: 'pointer', position: 'relative', overflow: 'hidden', gridColumn: 'span 2' },
         eventListener: () => {
           const queue = FluxHubState.get(STATE_KEYS.MEDIA_QUEUE, []);
           FluxHub.ui.setInputVal(queue.length > 0 ? '> queue ' : '> play ');
@@ -10433,7 +10436,7 @@
           style: {
             padding: '6px 14px', borderRadius: '16px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '600', whiteSpace: 'nowrap',
             background: isAct ? 'var(--omni-accent)' : 'var(--omni-input-bg)',
-            color: isAct ? 'var(--omni-accent-text)' : 'var(--omni-text)',
+            color: isAct ? 'var(--omni-btn-text)' : 'var(--omni-text)',
             opacity: isAct ? '1' : '0.7', transition: 'all 0.2s'
           },
           eventListener: {
@@ -10604,8 +10607,8 @@
       const btnStyle = { padding: '12px 24px', borderRadius: '24px', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', transition: 'transform 0.15s, filter 0.15s' };
 
       const playBtn = createHTMLElement('button', {
-        innerHTML: safeHTML(`${FluxKit.ui.getIcon('play') || '▶'} Play Now`),
-        style: { ...btnStyle, background: 'var(--omni-text)', color: 'var(--omni-bg-light)' },
+        icon: 'play', textContent: 'Play Now',
+        style: { ...btnStyle, display: 'flex', gap: '6px', background: 'var(--omni-accent)', color: 'var(--omni-btn-text)' },
         eventListener: {
           click: () => FluxHub.ui.setInputVal(`> play ${trackStat.title} ${trackStat.artist}`),
           mouseenter: e => { e.target.style.transform = 'scale(1.05)' },
@@ -10614,15 +10617,13 @@
       });
 
       const favBtn = createHTMLElement('button', {
-        innerHTML: safeHTML(`${FluxKit.ui.getIcon('heart') || '♥'} ${trackStat.isFavorite ? 'Unfavorite' : 'Favorite'}`),
-        style: { ...btnStyle, background: trackStat.isFavorite ? 'var(--omni-danger)' : 'var(--omni-input-bg)', color: trackStat.isFavorite ? 'var(--omni-accent-text)' : 'var(--omni-text)', border: '1px solid var(--omni-border)' },
+        icon: trackStat.isFavorite ? 'heartFilled' : 'heart', textContent: trackStat.isFavorite ? 'Unfavorite' : 'Favorite',
+        style: { ...btnStyle, display: 'flex', gap: '6px', background: 'var(--omni-input-bg)', color: 'var(--omni-danger)', border: '1px solid var(--omni-border)' },
         eventListener: {
           click: () => {
             const newState = FluxKit.musicStats.toggleFavorite(trackMeta);
             trackStat.isFavorite = newState;
-            favBtn.innerHTML = safeHTML(`${FluxKit.ui.getIcon('heart') || '♥'} ${newState ? 'Unfavorite' : 'Favorite'}`);
-            favBtn.style.background = newState ? 'var(--omni-danger)' : 'var(--omni-input-bg)';
-            favBtn.style.color = newState ? 'var(--omni-accent-text)' : 'var(--omni-text)';
+            favBtn.innerHTML = newState ? `${FluxKit.ui.getIcon('heartFilled')}<span>Unfavorite</span>` : `${FluxKit.ui.getIcon('heart')}<span>Favorite</span>`;
           },
           mouseenter: e => { e.target.style.filter = 'brightness(1.1)' },
           mouseleave: e => { e.target.style.filter = 'none' }
@@ -10736,8 +10737,8 @@
 
         if (data.mode === 'resolved') {
           const playBtn = createHTMLElement('button', {
-            innerHTML: safeHTML(`${FluxKit.ui.getIcon('play')} Play Now`),
-            style: { ...btnStyle, background: 'var(--omni-text)', color: 'var(--omni-bg-light)' },
+            icon: 'play', textContent: 'Play Now',
+            style: { ...btnStyle, display: 'flex', gap: '6px', background: 'var(--omni-accent)', color: 'var(--omni-btn-text)' },
             eventListener: {
               click: () => FluxHub.ui.setInputVal(`> play ${track.title} ${track.artist}`),
               mouseenter: e => { e.target.style.transform = 'scale(1.05)' },
@@ -10747,8 +10748,8 @@
           actionsRow.appendChild(playBtn);
         } else {
           const searchBtn = createHTMLElement('button', {
-            innerHTML: safeHTML(`${FluxKit.ui.getIcon('search') || '🔍'} Search Everywhere`),
-            style: { ...btnStyle, background: 'var(--omni-text)', color: 'var(--omni-bg-light)' },
+            icon: 'search', innerHTML: 'Search Everywhere',
+            style: { ...btnStyle, display: 'flex', gap: '6px', background: 'var(--omni-text)', color: 'var(--omni-bg-light)' },
             eventListener: {
               click: () => FluxHub.ui.setInputVal(`> search ${track.title} ${track.artist}`),
               mouseenter: e => { e.target.style.transform = 'scale(1.05)' },
@@ -10759,15 +10760,12 @@
         }
 
         const favBtn = createHTMLElement('button', {
-          innerHTML: safeHTML(`${FluxKit.ui.getIcon('heart') || '♥'} <span class="flx-fav-text">${isFav ? 'Unfavorite' : 'Favorite'}</span>`),
-          style: { ...btnStyle, background: isFav ? 'var(--omni-danger)' : 'var(--omni-input-bg)', color: isFav ? 'var(--omni-accent-text)' : 'var(--omni-text)', border: '1px solid var(--omni-border)' },
+          icon: isFav ? 'heartFilled' : 'heart', innerHTML: safeHTML(`<span class="flx-fav-text">${isFav ? 'Unfavorite' : 'Favorite'}</span>`),
+          style: { ...btnStyle, display: 'flex', gap: '6px', background: 'var(--omni-input-bg)', color: 'var(--omni-danger)', border: '1px solid var(--omni-border)' },
           eventListener: {
             click: (e) => {
               isFav = FluxKit.musicStats.toggleFavorite(track);
-              const textSpan = e.currentTarget.querySelector('.flx-fav-text');
-              if (textSpan) textSpan.textContent = isFav ? 'Unfavorite' : 'Favorite';
-              e.currentTarget.style.background = isFav ? 'var(--omni-danger)' : 'var(--omni-input-bg)';
-              e.currentTarget.style.color = isFav ? 'var(--omni-accent-text)' : 'var(--omni-text)';
+              favBtn.innerHTML = isFav ? `${FluxKit.ui.getIcon('heartFilled')}<span>Unfavorite</span>` : `${FluxKit.ui.getIcon('heart')}<span>Favorite</span>`;
             },
             mouseenter: e => { e.target.style.filter = 'brightness(1.1)' },
             mouseleave: e => { e.target.style.filter = 'none' }
@@ -11359,7 +11357,7 @@
       if (isHost || hostIsDead) {
         FluxHubState.delete(STATE_KEYS.ACTIVE_TIMER);
 
-        FluxKit.ui.showNotification(`⏱️ Timer Complete: ${timer.label || 'Time is up!'}`, { icon: 'bell' });
+        FluxKit.ui.showNotification(`Timer Complete: ${timer.label || 'Time is up!'}`, { icon: 'bell' });
 
         try {
           const ctx = new (window.AudioContext || window.webkitAudioContext)();

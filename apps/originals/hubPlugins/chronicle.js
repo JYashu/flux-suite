@@ -2,7 +2,7 @@
 // @name         FHP: Chronicle
 // @description  Track events, eras, and people with automatic milestone/timehop detection, multi-profile cloud sync, and external ICS calendar subscriptions.
 // @namespace    http://tampermonkey.net/
-// @version      1.3.0
+// @version      1.3.1
 // @author       JYashu
 // @license      Apache-2.0
 // @match        *://*/*
@@ -55,6 +55,12 @@
   let isSyncing = false;
 
   const DateUtils = {
+    getDisplayDate: (dateObj, hasSpecificTime = false) => {
+      return hasSpecificTime
+        ? dateObj.toLocaleString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+        : dateObj.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+    },
+
     getNextOccurrence: (dateStr) => {
       const d = new Date(dateStr);
       const now = new Date();
@@ -180,17 +186,17 @@
     },
 
     getSourceColor: (sourceName, targetNode) => {
-      const parsedAccent = FluxKit.theme.parseColor('var(--omni-accent)', targetNode);
-      if (!parsedAccent) return 'var(--omni-accent)';
+      const parsedText = FluxKit.theme.parseColor('var(--omni-text)', targetNode);
+      if (!parsedText) return 'var(--omni-text)';
       
-      const palette = FluxKit.theme.getPalette(parsedAccent);
+      const palette = FluxKit.theme.getPalette(parsedText);
       const colors = [
         palette.complementary,
         palette.triadic1,
         palette.triadic2,
         palette.analogous1,
         palette.analogous2,
-        `rgb(${parsedAccent.r}, ${parsedAccent.g}, ${parsedAccent.b})`
+        `rgb(${parsedText.r}, ${parsedText.g}, ${parsedText.b})`
       ];
       
       let hash = 0;
@@ -204,7 +210,7 @@
       const { createHTMLElement } = FluxKit.utils;
       const color = DateUtils.getSourceColor(sourceName, targetNode);
       return createHTMLElement('div', {
-        icon: 'worldClock', title: `Source: ${sourceName}`,
+        icon: 'worldClock', fluxHubTooltip: `Source: ${sourceName}`,
         style: {
           display: 'inline-flex', alignItems: 'center', gap: '4px',
           fontSize: '9px', fontWeight: '800', letterSpacing: '0.5px', textTransform: 'uppercase',
@@ -248,13 +254,13 @@
       const getOrdinal = n => { const s = ["th","st","nd","rd"], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
       return [
         { group: 'today', muteKey: 'today', calc: d => getDaysBetween(d, now) === 0, getLabel: () => ({ icon: 'pin', label: 'Happening Today' }) },
-        { group: 'upcoming', muteKey: 'upcoming_standard', calc: d => { const diff = getDaysBetween(now, d); return diff > 0 && diff <= 14; }, getLabel: (d) => ({ label: `Upcoming (in ${getDaysBetween(now, d)}d)` })},
+        { group: 'upcoming', muteKey: 'upcoming_standard', calc: d => { const diff = getDaysBetween(now, d); return diff > 0 && diff <= 14; }, getLabel: (d) => ({ label: `Upcoming (in ${getDaysBetween(now, d)}d)`, date: DateUtils.getDisplayDate(d) })},
         { group: 'timehop', muteKey: '100_days', calc: d => getDaysBetween(d, now) === 100, getLabel: () => ({ label: '100 Days Ago' }) },
-        { group: 'upcoming', muteKey: '100_days', calc: d => { const diff = getDaysBetween(d, now); return diff >= 93 && diff < 100; }, getLabel: (d) => ({ label: `100 Days Approaching (in ${100 - getDaysBetween(d, now)}d)` })},
+        { group: 'upcoming', muteKey: '100_days', calc: d => { const diff = getDaysBetween(d, now); return diff >= 93 && diff < 100; }, getLabel: (d) => ({ label: `100 Days Approaching (in ${100 - getDaysBetween(d, now)}d)`, date: DateUtils.getDisplayDate(d) })},
         { group: 'upcoming', muteKey: 'yearly', calc: d => { if (d.getFullYear() >= now.getFullYear()) return false; let nextAnniv = new Date(now.getFullYear(), d.getMonth(), d.getDate()); if (nextAnniv.getTime() < now.getTime()) nextAnniv.setFullYear(now.getFullYear() + 1); const diff = getDaysBetween(now, nextAnniv); return diff > 0 && diff <= 14; }, getLabel: (d, evt) => { 
           let nextAnniv = new Date(now.getFullYear(), d.getMonth(), d.getDate()); let yrs = now.getFullYear() - d.getFullYear(); if (nextAnniv.getTime() < now.getTime()) { nextAnniv.setFullYear(now.getFullYear() + 1); yrs += 1; }
           const isPerson = evt && evt.type === 'person';
-          return { label: `Upcoming ${isPerson ? getOrdinal(yrs) + ' Birthday' : yrs + ' Yr Anniversary'} (in ${getDaysBetween(now, nextAnniv)}d)` }; 
+          return { label: `Upcoming ${isPerson ? getOrdinal(yrs) + ' Birthday' : yrs + ' Yr Anniversary'} (in ${getDaysBetween(now, nextAnniv)}d)`, date: DateUtils.getDisplayDate(d) }; 
         } },
         { group: 'timehop', muteKey: 'monthly', calc: d => d.getMonth() === (now.getMonth() - 6 + 12) % 12 && d.getFullYear() === (now.getMonth() < 6 ? now.getFullYear() - 1 : now.getFullYear()) && d.getDate() === now.getDate(), getLabel: () => ({ label: '6 Months Ago Today' }) },
         { group: 'timehop', muteKey: 'yearly', calc: d => d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() < now.getFullYear(), getLabel: (d, evt) => { 
@@ -1116,7 +1122,7 @@
         row.addEventListener('mouseenter', () => row.style.background = 'var(--omni-hover)');
         row.addEventListener('mouseleave', () => row.style.background = 'transparent');
 
-        const cb = createHTMLElement('input', { type: 'checkbox', value: opt.value, checked: selectedValues.includes(opt.value), style: { accentColor: 'var(--omni-accent)', cursor: 'pointer' } });
+        const cb = createHTMLElement('input', { type: 'checkbox', value: opt.value, checked: selectedValues.includes(opt.value), style: { accentcolor: 'var(--omni-muted)', cursor: 'pointer' } });
         checkboxes.push(cb);
 
         row.appendChild(cb);
@@ -1210,7 +1216,7 @@
       ])].filter(Boolean);
 
       const container = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '12px', padding: '4px' } });
-      container.appendChild(createHTMLElement('div', { textContent: 'Add New Event', style: { fontWeight: 'bold', fontSize: '14px', color: 'var(--omni-accent)' }}));
+      container.appendChild(createHTMLElement('div', { textContent: 'Add New Event', style: { fontWeight: 'bold', fontSize: '14px', color: 'var(--omni-muted)' }}));
 
       const dateObj = new Date(parsed.date);
       const tzOffset = dateObj.getTimezoneOffset() * 60000;
@@ -1293,7 +1299,7 @@
       }
 
       const container = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '12px', padding: '4px' } });
-      container.appendChild(createHTMLElement('div', { textContent: 'Edit Event', style: { fontWeight: 'bold', fontSize: '14px', color: 'var(--omni-accent)' }}));
+      container.appendChild(createHTMLElement('div', { textContent: 'Edit Event', style: { fontWeight: 'bold', fontSize: '14px', color: 'var(--omni-muted)' }}));
 
       const dateObj = new Date(evt.date);
       const tzOffset = dateObj.getTimezoneOffset() * 60000;
@@ -1327,7 +1333,7 @@
       evt.mutedGroups = evt.mutedGroups || [];
       const makeToggle = (icon, label, isChecked) => {
         const wrap = createHTMLElement('label', { style: { display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', background: 'var(--omni-hover)', padding: '6px 10px', borderRadius: '6px' } });
-        const cb = createHTMLElement('input', { type: 'checkbox', checked: isChecked, style: { accentColor: 'var(--omni-accent)', cursor: 'pointer' } });
+        const cb = createHTMLElement('input', { type: 'checkbox', checked: isChecked, style: { accentcolor: 'var(--omni-muted)', cursor: 'pointer' } });
         wrap.appendChild(cb);
         wrap.appendChild(createHTMLElement('span', { icon, textContent: label, style: { display: 'flex', gap: '4px', fontSize: '11px', color: 'var(--omni-text)' } }));
         return { wrap, cb };
@@ -1487,7 +1493,7 @@
         let durationStr;
         if ((evt.type === 'era' || evt.type === 'person') && !evt.endedOn) durationStr = DateUtils.getRelativeString(DateUtils.getNextOccurrence(evt.date), new Date());
         else durationStr = DateUtils.getRelativeString(evt.date, new Date());
-        row.appendChild(createHTMLElement('div', { style: { fontSize: '13px', fontWeight: 'bold', color: 'var(--omni-accent)' }, textContent: durationStr }));
+        row.appendChild(createHTMLElement('div', { style: { fontSize: '13px', fontWeight: 'bold', color: 'var(--omni-muted)' }, textContent: durationStr }));
 
         node.appendChild(row);
 
@@ -1550,9 +1556,6 @@
       
       const isPerson = evt.type === 'person';
       const dateObj = new Date(evt.date);
-      const displayDate = evt.hasSpecificTime
-        ? dateObj.toLocaleString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-        : dateObj.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
 
       let timeCurrency = DateUtils.getRelativeString(evt.date, new Date());
       if (evt.endedOn) {
@@ -1565,7 +1568,7 @@
       const gridData = {
         'Profile': `<span style="color: var(--omni-muted)">${currentProfile}</span>`,
         [isPerson ? 'Entity' : 'Event']: `<strong style="color: var(--omni-text)">${evt.title}</strong>`,
-        [isPerson ? 'Born' : 'Timeline']: `<span style="color: var(--omni-accent)">${displayDate}</span> <span style="font-size: 11px; color: var(--omni-muted);">(${timeCurrency})</span>`
+        [isPerson ? 'Born' : 'Timeline']: `<span style="color: var(--omni-text)">${DateUtils.getDisplayDate(dateObj, evt.hasSpecificTime)}</span> <span style="font-size: 11px; color: var(--omni-muted);">(${timeCurrency})</span>`
       };
       
       if (evt.isReadOnly) {
@@ -1594,7 +1597,7 @@
           const parentWrap = createHTMLElement('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '-4px' } });
           parentEvents.forEach(p => {
             parentWrap.appendChild(createHTMLElement('div', {
-              icon: p.type === 'person' ? 'user' : 'folder', textContent: `${p.title}`, title: 'Go to Parent Epic',
+              icon: p.type === 'person' ? 'user' : 'folder', textContent: `${p.title}`, fluxHubTooltip: 'Go to Parent Epic',
               style: { display: 'flex', gap: '4px', fontSize: '11px', padding: '4px 8px', borderRadius: '6px', background: 'var(--omni-hover)', color: 'var(--omni-text)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', border: '1px solid var(--omni-border)', fontWeight: '600', transition: 'all 0.15s ease' },
               eventListener: {
                 mouseenter: (e) => { e.currentTarget.style.borderColor = 'var(--omni-accent)'; e.currentTarget.style.color = 'var(--omni-accent)'; },
@@ -1686,7 +1689,7 @@
 
           if (grandChildren.length > 0) {
             const badge = createHTMLElement('div', {
-              style: { fontSize: '10px', fontWeight: 'bold', color: 'var(--omni-accent)', background: 'var(--omni-hover)', padding: '2px 6px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '3px' }
+              style: { fontSize: '10px', fontWeight: 'bold', color: 'var(--omni-muted)', background: 'var(--omni-hover)', padding: '2px 6px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '3px' }
             });
             badge.appendChild(createHTMLElement('span', { icon: 'layers', style: { fontSize: '10px' } }));
             badge.appendChild(createHTMLElement('span', { textContent: grandChildren.length }));
@@ -1694,7 +1697,7 @@
           }
 
           headWrap.appendChild(leftTitleWrap);
-          headWrap.appendChild(createHTMLElement('div', { style: { fontSize: '11px', color: 'var(--omni-accent)', fontWeight: '600', whiteSpace: 'nowrap', marginLeft: '12px' }, textContent: new Date(subEvt.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) }));
+          headWrap.appendChild(createHTMLElement('div', { style: { fontSize: '11px', color: 'var(--omni-muted)', fontWeight: '600', whiteSpace: 'nowrap', marginLeft: '12px' }, textContent: new Date(subEvt.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) }));
           row.appendChild(headWrap);
 
           if (subEvt.context) {
@@ -1874,9 +1877,9 @@
 
       if (subs.length > 0) {
         headerWrap.appendChild(createHTMLElement('button', {
-            textContent: 'Sync Feeds',
-            style: { background: 'transparent', border: 'none', color: 'var(--omni-accent)', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase' },
-            eventListener: { click: (e) => { e.stopPropagation(); ChronicleManager.syncSubscriptions(true); } }
+          textContent: 'Sync Feeds',
+          style: { background: 'transparent', border: 'none', color: 'var(--omni-muted)', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase' },
+          eventListener: { click: (e) => { e.stopPropagation(); ChronicleManager.syncSubscriptions(true); } }
         }));
       }
 
@@ -2010,7 +2013,7 @@
       let durationStr;
       if ((evt.type === 'era' || evt.type === 'person') && !evt.endedOn) durationStr = DateUtils.getRelativeString(DateUtils.getNextOccurrence(evt.date), new Date());
       else durationStr = DateUtils.getRelativeString(evt.date, new Date());
-      row.appendChild(createHTMLElement('div', { style: { fontSize: '13px', fontWeight: 'bold', color: 'var(--omni-accent)' }, textContent: durationStr }));
+      row.appendChild(createHTMLElement('div', { style: { fontSize: '13px', fontWeight: 'bold', color: 'var(--omni-muted)' }, textContent: durationStr }));
 
       node.appendChild(row);
 
@@ -2085,7 +2088,8 @@
           if (muted.includes(ms.muteKey)) continue;
           groupedEvents[ms.group === 'today' || ms.group === 'upcoming' ? ms.group : 'timehop'].push({
             ...evt,
-            milestoneLabel: ms.getLabel(evtDate, evt).label
+            milestoneLabel: ms.getLabel(evtDate, evt).label,
+            milestoneDate: ms.getLabel(evtDate, evt).date
           });
           break;
         }
@@ -2147,7 +2151,7 @@
           }
 
           if (!evt.milestoneLabel.includes('Happening Today')) {
-            titleWrap.appendChild(createHTMLElement('span', { style: { fontSize: '11px', color: 'var(--omni-accent)', fontWeight: 'bold', padding: '2px 6px', background: 'var(--omni-hover)', borderRadius: '4px' }, textContent: evt.milestoneLabel }));
+            titleWrap.appendChild(createHTMLElement('span', { style: { fontSize: '11px', color: 'var(--omni-muted)', fontWeight: 'bold', padding: '2px 6px', background: 'var(--omni-hover)', borderRadius: '4px' }, fluxHubTooltip: evt.milestoneDate, textContent: evt.milestoneLabel }));
           }
           titleWrap.appendChild(createHTMLElement('span', { style: { fontSize: '15px', fontWeight: 'bold', color: 'var(--omni-text)' }, textContent: evt.title }));
 
@@ -2157,7 +2161,7 @@
             ? new Date(evt.date).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
             : new Date(evt.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 
-          header.appendChild(createHTMLElement('div', { style: { fontSize: '12px', color: 'var(--omni-accent)', textAlign: 'right', whiteSpace: 'nowrap', marginLeft: '12px' }, textContent: dateStr }));
+          header.appendChild(createHTMLElement('div', { style: { fontSize: '12px', color: 'var(--omni-muted)', textAlign: 'right', whiteSpace: 'nowrap', marginLeft: '12px' }, textContent: dateStr }));
           row.appendChild(header);
 
           if (evt.context) row.appendChild(createHTMLElement('div', { style: { fontSize: '13px', color: 'var(--omni-muted)', fontStyle: 'italic', lineHeight: '1.4', marginTop: '4px' }, textContent: evt.context }));
@@ -2316,7 +2320,7 @@
       const baseDate = evt.endedOn ? new Date(evt.endedOn) : new Date();
       let durationStr = DateUtils.getRelativeString(evt.date, baseDate).replace(/( ago| from now)$/, '');
 
-      row.appendChild(createHTMLElement('div', { style: { fontSize: '15px', fontWeight: 'bold', color: 'var(--omni-accent)' }, textContent: durationStr }));
+      row.appendChild(createHTMLElement('div', { style: { fontSize: '15px', fontWeight: 'bold', color: 'var(--omni-muted)' }, textContent: durationStr }));
 
       node.appendChild(row);
 
@@ -2487,10 +2491,10 @@
       const baseDate = evt.endedOn ? new Date(evt.endedOn) : new Date();
       let durationStr = DateUtils.getRelativeString(evt.date, baseDate).replace(/( ago| from now)$/, '');
       
-      rightCol.appendChild(createHTMLElement('div', { style: { fontSize: '13px', fontWeight: 'bold', color: 'var(--omni-accent)' }, textContent: `Age: ${durationStr}` }));
+      rightCol.appendChild(createHTMLElement('div', { style: { fontSize: '13px', fontWeight: 'bold', color: 'var(--omni-muted)' }, textContent: `Age: ${durationStr}` }));
 
       const makeMiniBtn = (icon, color, onClick) => createHTMLElement('button', {
-        icon, title: icon === 'merge' ? 'Merge with another Person' : 'Quick Actions',
+        icon, fluxHubTooltip: icon === 'merge' ? 'Merge with another Person' : 'Quick Actions',
         style: { background: 'var(--omni-hover)', border: 'none', color: color, cursor: 'pointer', fontSize: '10px', padding: '4px 8px', borderRadius: '4px', textTransform: 'uppercase', fontWeight: 'bold' },
         eventListener: {
           mouseenter: e => { e.target.style.background = 'var(--omni-border)' },
@@ -2579,7 +2583,7 @@
       const evtDate = new Date(evt.date);
       for (const ms of milestones) {
         if (ms.calc(evtDate)) {
-          notableEvents.push({ ...evt, milestoneLabel: ms.getLabel(evtDate, evt).label });
+          notableEvents.push({ ...evt, milestoneLabel: ms.getLabel(evtDate, evt).label, milestoneDate: ms.getLabel(evtDate, evt).date });
           break;
         }
       }
@@ -2595,7 +2599,7 @@
     });
     headerWrap.appendChild(createHTMLElement('span', { icon: 'calendar', textContent: 'Today\'s Highlights', style: { display: 'flex', gap: '4px' } }));
     headerWrap.appendChild(createHTMLElement('span', {
-      style: { color: 'var(--omni-accent)' },
+      style: { color: 'var(--omni-muted)' },
       textContent: currentProfile
     }));
     container.appendChild(headerWrap);
@@ -2609,7 +2613,7 @@
 
       displayEvents.forEach(evt => {
         const row = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '2px', marginBottom: '8px' } });
-        row.appendChild(createHTMLElement('div', { style: { display: 'flex', gap: '4px', fontSize: '11px', color: 'var(--omni-accent)', fontWeight: 'bold' }, icon: evt.milestoneIcon || '', textContent: evt.milestoneLabel }));
+        row.appendChild(createHTMLElement('div', { style: { display: 'flex', gap: '4px', fontSize: '11px', color: 'var(--omni-muted)', fontWeight: 'bold' }, icon: evt.milestoneIcon || '', fluxHubTooltip: evt.milestoneDate, textContent: evt.milestoneLabel }));
         row.appendChild(createHTMLElement('div', { style: { fontSize: '14px', color: 'var(--omni-text)', fontWeight: '500' }, textContent: evt.title }));
         if (evt.context) row.appendChild(createHTMLElement('div', { style: { fontSize: '12px', color: 'var(--omni-muted)', display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical', overflow: 'hidden', marginTop: '2px' }, textContent: evt.context }));
         container.appendChild(row);
@@ -2617,7 +2621,7 @@
 
       if (overflowCount > 0) {
         container.appendChild(createHTMLElement('div', {
-          style: { fontSize: '11px', color: 'var(--omni-accent)', textAlign: 'center', marginTop: '4px', fontWeight: '600' },
+          style: { fontSize: '11px', color: 'var(--omni-muted)', textAlign: 'center', marginTop: '4px', fontWeight: '600' },
           textContent: `+ ${overflowCount} more today`
         }));
       }
@@ -2652,7 +2656,7 @@
       row.appendChild(createHTMLElement('div', { style: { fontSize: '13px', color: 'var(--omni-text)', fontWeight: '500' }, textContent: evt.title }));
 
       let durationStr = DateUtils.getRelativeString(evt.date, new Date()).replace(/( ago| from now)$/, '');
-      row.appendChild(createHTMLElement('div', { style: { fontSize: '13px', color: 'var(--omni-accent)', fontWeight: 'bold' }, textContent: durationStr }));
+      row.appendChild(createHTMLElement('div', { style: { fontSize: '13px', color: 'var(--omni-muted)', fontWeight: 'bold' }, textContent: durationStr }));
       container.appendChild(row);
     });
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Flux Notes
 // @namespace    https://github.com/JYashu/flux-suite
-// @version      8.4.0
+// @version      8.4.1
 // @description  A ubiquitous, theme-aware note-taking overlay. Features Markdown formatting, an HTML5 scratchpad, and cross-browser syncing via WebDAV/Github/Dropbox/OneDrive.
 // @author       JYashu
 // @license      Apache-2.0
@@ -3231,7 +3231,7 @@
 
           const rootContainer = getAppRoot();
           const defaultSub = currentProfileName || 'Default';
-          window.activeUnSyncWizard = new FluxKit.sync.Wizard(rootContainer, { namespace: 'FluxNotes', defaultSubFolder: defaultSub, theme: activeThemeBridge }, async (data) => {
+          window.activeUnSyncWizard = new FluxKit.sync.Wizard(rootContainer, { namespace: 'Flux/Notes', defaultSubFolder: defaultSub, theme: activeThemeBridge }, async (data) => {
             const newCaps = FluxKit.sync.getCapabilities({ provider: data.provider });
             const { usedMB } = calculateStorageUsage();
             if (usedMB * 1024 * 1024 > newCaps.totalQuota) {
@@ -3252,7 +3252,7 @@
               provider: data.provider || 'Local',
               gistId: data.gistId || '',
               token: data.token || '',
-              namespace: data.namespace || 'FluxNotes',
+              namespace: data.namespace || 'Flux/Notes',
               subFolder: data.subFolder || defaultSub,
               url: data.url || '', // WebDAV
               username: data.username || '', // WebDAV
@@ -3335,7 +3335,7 @@
       getAppRoot(),
       currentProfile,
       {
-        namespace: 'FluxNotes',
+        namespace: 'Flux/Notes',
         theme: activeThemeBridge,
         customElements: customFields
       },
