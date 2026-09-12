@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Flux Notes
 // @namespace    https://github.com/JYashu/flux-suite
-// @version      8.4.1
+// @version      8.5.0
 // @description  A ubiquitous, theme-aware note-taking overlay. Features Markdown formatting, an HTML5 scratchpad, and cross-browser syncing via WebDAV/Github/Dropbox/OneDrive.
 // @author       JYashu
 // @license      Apache-2.0
@@ -5852,6 +5852,31 @@
         }
       }
     });
+  });
+
+  FluxKit.ipc.listen('flxhub-request-completions', (payload) => {
+    const { requestId, prefix, query } = payload;
+    let completions = [];
+    
+    const q = (query || '').toLowerCase().trim();
+
+    if (prefix === '> note') {
+      const allNotes = getNotes();
+      
+      completions = allNotes
+        .filter(n => (n.title || '').toLowerCase().includes(q))
+        .slice(0, 10)
+        .map(n => ({
+          title: n.title || 'Untitled',
+          value: `> note ${n.title}`,
+          icon: 'document',
+          description: 'Open this note'
+        }));
+    }
+
+    if (completions.length > 0) {
+      FluxKit.ipc.broadcast('flxhub-provide-completions', { requestId, completions });
+    }
   });
 
   let shortcutActions = {

@@ -94,8 +94,10 @@
     calendarDay: `<svg ${ICON}><path d="M 20 15 V 5 A 2 2 0 0 0 18 3 M 14 3 H 10 M 6 3 A 2 2 0 0 0 4 5 V 19 A 2 2 0 0 0 6 21 H 14 M 16 1 V 4 M 8 1 V 4 M 4 8 H 20 M 10.5 13.5 L 12 12 V 17 M 10 17 H 14"/></svg>`,
     camera: `<svg ${ICON}><circle cx="12" cy="11.5" r="6"/><path d="M 17 7 H 20 A 2 2 0 0 1 22 9 V 18 A 2 2 0 0 1 20 20 H 4 A 2 2 0 0 1 2 18 V 9 A 2 2 0 0 1 4 7 H 7 M 3.5 4.5 H 5.5"/></svg>`,
     checkSquare: `<svg ${ICON}><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11M9 11l3 3 10-10" /></svg>`,
+    chevronDown: `<svg ${ICON}><path d="M 6 9 L 12 15 L 18 9"/></svg>`,
     chevronLeft: `<svg ${ICON}><path d="M 15 18 L 9 12 L 15 6"/></svg>`,
     chevronRight: `<svg ${ICON}><path d="M9 18l6-6-6-6" /></svg>`,
+    chevronUp: `<svg ${ICON}><path d="M 6 15 L 12 9 L 18 15"/></svg>`,
     circle: `<svg ${ICON}><circle cx="12" cy="12" r="10" /></svg>`,
     clock: `<svg ${ICON}><path d="M 12 3 A 9 9 0 1 0 21 12 M 12 17 V 12 L 20 4"/></svg>`,
     close: `<svg ${ICON}><path d="M18 6L6 18M6 6l12 12" /></svg>`,
@@ -148,13 +150,14 @@
     location: `<svg ${ICON}><path d="M 18 9 A 6 6 0 0 0 6 9 C 6 14 9 18 12 21 C 15 18 18 14 18 9 Z M 12 11 A 2 2 0 1 0 12 7 A 2 2 0 0 0 12 11 Z"/></svg>`,
     lock: `<svg ${ICON}><path d="M 7 11 V 7 A 5 5 0 0 1 17 7 V 11 M 5 11 H 19 A 2 2 0 0 1 21 13 V 19 A 2 2 0 0 1 19 21 H 5 A 2 2 0 0 1 3 19 V 13 A 2 2 0 0 1 5 11 Z M 12 15 v 2"/></svg>`,
     lyrics: `<svg ${ICON}><circle cx="15" cy="17" r="2"/><path d="M 4 8 H 11 M 4 12 H 13 M 4 16 H 9 M 17 15 V 6 Q 22 6 22 11"/></svg>`,
-    next: `<svg ${ICON}><path d="M 7 7 V 17 L 15 12 Z M 18 7 V 17"/></svg>`,
-    note: `<svg ${ICON}><circle cx="7" cy="17" r="2"/><circle cx="17" cy="14" r="2"/><path d="M 9 17 V 6 L 19 3 V 14 M 9 10 L 19 7"/></svg>`,
     maximize: `<svg ${ICON}><path d="M8 3H5a2 2 0 0 0-2 2v3 M16 3h3a2 2 0 0 1 2 2v3 M8 21H5a2 2 0 0 1-2-2v-3 M16 21h3a2 2 0 0 0 2-2v-3" /></svg>`,
     merge: `<svg ${ICON} style="transform: rotate(270deg);"><path d="M 7 3 V 9 A 5 5 0 0 0 12 14 V 21 L 8 17 M 12 21 L 16 17 M 17 3 V 9 A 5 5 0 0 1 15 13" /></svg>`,
     message: `<svg ${ICON}><path d="M 4 6 A 2 2 0 0 1 6 4 H 18 A 2 2 0 0 1 20 6 V 14 A 2 2 0 0 1 18 16 H 8 L 4 20 V 6 Z M 8 10 v .01 M 12 10 v .01 M 16 10 v .01"/></svg>`,
     mic: `<svg ${ICON}><path d="M 9 5 A 3 3 0 0 1 15 5 V 10 A 3 3 0 0 1 9 10 Z M 5 10 A 7 7 0 0 0 19 10 M 8 21 H 16 M 12 20 V 21"/></svg>`,
     minus: `<svg ${ICON}><path d="M5 12h14" /></svg>`,
+    next: `<svg ${ICON}><path d="M 7 7 V 17 L 15 12 Z M 18 7 V 17"/></svg>`,
+    note: `<svg ${ICON}><circle cx="7" cy="17" r="2"/><circle cx="17" cy="14" r="2"/><path d="M 9 17 V 6 L 19 3 V 14 M 9 10 L 19 7"/></svg>`,
+    osint: `<svg ${ICON}><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="4"></circle><path d="M12 2v6M12 16v6M2 12h6M16 12h6"></path></svg>`,
     palette: `<svg ${ICON}><path d="M 20 12 A 8 8 0 0 0 4 12 C 4 21 11 21 15 18 C 13 15 20 16 20 12 Z M 7 12 v .01 M 8.5 8.5 v .01 M 12 7 v .01 M 15.5 8.5 v .01 M 17 12 v .01"/></svg>`,
     paperclip: `<svg ${ICON}><path d="M 10 17 L 17 10 A 3.5 3.5 0 0 0 12 5 L 5 12 A 5.5 5.5 0 0 0 12.8 19.8 L 19.5 13" /></svg>`,
     pause: `<svg ${ICON}><path d="M 9 6 V 18 M 15 6 V 18"/></svg>`,
@@ -179,6 +182,7 @@
     scribble: `<svg ${ICON}><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>`,
     search: `<svg ${ICON}><path d="M 21 21 L 18 18 C 15 15 13 17 10 17 A 7 7 0 1 1 16.5 13" /></svg>`,
     settings: `<svg ${ICON}><path stroke-width="1.5" d="M 9.87 4.04 A 2.75 2.75 0 0 1 14.13 4.04 A 2.75 2.75 0 0 0 17.83 6.17 A 2.75 2.75 0 0 1 19.96 9.87 A 2.75 2.75 0 0 0 19.96 14.13 A 2.75 2.75 0 0 1 17.83 17.83 A 2.75 2.75 0 0 0 14.13 19.96 A 2.75 2.75 0 0 1 9.87 19.96 A 2.75 2.75 0 0 0 6.17 17.83 A 2.75 2.75 0 0 1 4.04 14.13 A 2.75 2.75 0 0 0 4.04 9.87 A 2.75 2.75 0 0 1 6.17 6.17 M 12 9.25 a 2.75 2.75 0 1 0 0 5.5 a 2.75 2.75 0 1 0 0 -5.5" /></svg>`,
+    shield: `<svg ${ICON}><path d="M 12 3 L 19 5 V 11 Q 19 17 12 21 Q 5 17 5 11 V 5 Z"/></svg>`,
     shine: `<svg ${ICON}><path d="M 9 3 Q 9 11 1 11 Q 9 11 9 19 Q 9 11 17 11 Q 9 11 9 3 Z M 19 2 Q 19 6 15 6 Q 19 6 19 10 Q 19 6 23 6 Q 19 6 19 2 Z M 17 14 Q 17 17 14 17 Q 17 17 17 20 Q 17 17 20 17 Q 17 17 17 14 Z"/></svg>`,
     shuffle: `<svg ${ICON}><path d="M 4 17 Q 10 17 12 12 Q 14 7 20 7 M 17 4 L 20 7 L 17 10 M 4 7 Q 8 7 10.2 9.5 M 13.8 14.5 Q 16 17 20 17 M 17 14 L 20 17 L 17 20"/></svg>`,
     snip: `<svg ${ICON}><path d="M 6 21 V 7 H 21 M 3 17 H 17 V 3"/></svg>`,
@@ -192,6 +196,7 @@
     swap: `<svg ${ICON}><path d="M 8 17 A 5 5 0 0 1 3 12 A 5 5 0 0 1 8 7 H 13 M 9 3 L 13 7 L 9 11 M 16 7 A 5 5 0 0 1 21 12 A 5 5 0 0 1 16 17 H 11 M 15 21 L 11 17 L 15 13"/></svg>`,
     sync: `<svg ${ICON}><path d="M21 4v6h-6m6 0-2.6-2.6a9 9 0 0 0-14.9 1.6M3 20v-6h6m-6 0 2.6 2.6a9 9 0 0 0 14.9-1.6" /></svg>`,
     table: `<svg ${ICON}><path d="M 17 21 H 5 A 2 2 0 0 1 3 19 V 5 A 2 2 0 0 1 5 3 H 19 A 2 2 0 0 1 21 5 V 17 M 9 3 V 21 M 3 9 H 21 M 3 15 H 21"/></svg>`,
+    target: `<svg ${ICON}><path d="M 12 12 v .01 M 12 9 A 3 3 0 1 1 12 15 A 3 3 0 1 1 12 9 M 12 3 V 6 M 12 18 V 21 M 3 12 H 6 M 18 12 H 21"/></svg>`,
     textCaret: `<svg ${ICON}><path d="M10 4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2" /><path d="M14 4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2" /></svg>`,
     timer: `<svg ${ICON}><path d="M 12 7 V 3 A 9 9 0 1 1 3 12 M 12 12 L 7 7"/></svg>`,
     translate: `<svg ${ICON}><path d="M 4 10 L 7 2 L 10 10 M 5 7 H 9 M 17 2 V 5 M 14 5 H 20 M 17 5 Q 15 9 13 10 M 16 7 Q 19 9 21 10 M 10 18 A 2 2 0 0 1 12 16 H 20 M 17 13 L 20 16 L 17 19 M 14 18 A 2 2 0 0 1 12 20 H 4 M 7 17 L 4 20 L 7 23"/></svg>`,
@@ -2013,13 +2018,47 @@
 
     parseColor: (colorStr, targetElement = null) => {
       let r = 0, g = 0, b = 0, a = 1;
-      const cleanStr = FluxKit.theme._probeForVarColor(colorStr.trim().toLowerCase(), targetElement);
+      let cleanStr = colorStr.trim().toLowerCase();
+
+      if (FluxKit.theme._colorDictionary && /^[a-z\s\'-]+$/.test(cleanStr)) {
+        const normalizedInput = cleanStr.replace(/[^a-z]/g, '').replace(/grey/g, 'gray');
+        const namedMatch = FluxKit.theme._colorDictionary.find(ref => 
+          ref.name.toLowerCase().replace(/[^a-z]/g, '').replace(/grey/g, 'gray') === normalizedInput
+        );
+        if (namedMatch) cleanStr = namedMatch.hex;
+      }
+
+      cleanStr = FluxKit.theme._probeForVarColor(cleanStr, targetElement);
 
       if (cleanStr.startsWith('rgb')) {
         const values = cleanStr.match(/\d+(\.\d+)?/g);
         if (values && values.length >= 3) {
           [r, g, b] = values.map(Number);
           if (values.length > 3) a = Number(values[3]);
+        }
+      } else if (cleanStr.startsWith('hsl')) {
+        const values = cleanStr.match(/\d+(\.\d+)?/g);
+        if (values && values.length >= 3) {
+          const h = Number(values[0]) % 360;
+          const s = Number(values[1]) / 100;
+          const l = Number(values[2]) / 100;
+          if (values.length > 3) a = Number(values[3]);
+          
+          const c = (1 - Math.abs(2 * l - 1)) * s;
+          const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+          const m = l - c / 2;
+          let r1 = 0, g1 = 0, b1 = 0;
+          
+          if (h >= 0 && h < 60) { r1 = c; g1 = x; }
+          else if (h >= 60 && h < 120) { r1 = x; g1 = c; }
+          else if (h >= 120 && h < 180) { g1 = c; b1 = x; }
+          else if (h >= 180 && h < 240) { g1 = x; b1 = c; }
+          else if (h >= 240 && h < 300) { r1 = x; b1 = c; }
+          else { r1 = c; b1 = x; }
+          
+          r = Math.round((r1 + m) * 255);
+          g = Math.round((g1 + m) * 255);
+          b = Math.round((b1 + m) * 255);
         }
       } else if (cleanStr.startsWith('#')) {
         let hex = cleanStr.replace('#', '');
@@ -2157,7 +2196,12 @@
      * to compute the raw RGB value of a CSS variable.
      */
     _probeForVarColor: (colorStr, targetElement = null) => {
-      if (typeof colorStr !== 'string' || !colorStr.includes('var(')) {
+      if (typeof colorStr !== 'string') return colorStr;
+
+      const isVar = colorStr.includes('var(');
+      const isNativeName = /^[a-z\s\'-]+$/i.test(colorStr);
+
+      if (!isVar && !isNativeName) {
         return colorStr;
       }
 
@@ -2205,6 +2249,121 @@
       }
     },
 
+    _themeCache: null,
+    _colorDictionary: null,
+    _curatedPalettes: null,
+
+    getColorDistance: (color1, color2) => {
+      const p1 = typeof color1 === 'string' ? FluxKit.theme.parseColor(color1) : color1;
+      const p2 = typeof color2 === 'string' ? FluxKit.theme.parseColor(color2) : color2;
+      if (!p1 || !p2) return Infinity;
+      
+      const rMean = (p1.r + p2.r) / 2;
+      const dr = p1.r - p2.r;
+      const dg = p1.g - p2.g;
+      const db = p1.b - p2.b;
+      
+      const weightR = 2 + (rMean / 256);
+      const weightG = 4.0;
+      const weightB = 2 + ((255 - rMean) / 256);
+      
+      return (weightR * dr * dr) + (weightG * dg * dg) + (weightB * db * db);
+    },
+
+    loadCuratedPalettes: async function() {
+      if (this._curatedPalettes && this._curatedPalettes.length > 0) return;
+      
+      if (!this._themeCache) {
+        this._themeCache = FluxKit.cache.register('fluxkit-theme-cache', { storage: 'gm', policy: 'lru', maxSize: 5 });
+      }
+
+      const cacheKey = 'colourlovers-palettes';
+      let palettes = await this._themeCache.get(cacheKey);
+
+      if (!palettes) {
+        try {
+          const res = await FluxKit.api.gmFetch('https://github.com/Experience-Monks/nice-color-palettes/blob/master/500.json');
+          if (res.ok) {
+            const raw = await res.json();
+            const list = Array.isArray(raw) ? raw : raw.palettes || raw.colors || raw.data || [];
+            palettes = list.map(p => {
+              const name = p.name || p.title || p.paletteName || 'Curated Palette';
+              const colors = Array.isArray(p) ? p : (p.colors || p.palette || p.hex || []);
+
+              const validColors = colors
+                .map(c => FluxKit.theme.parseColor(c))
+                .filter(Boolean)
+                .map(pObj => `#${pObj.r.toString(16).padStart(2,'0')}${pObj.g.toString(16).padStart(2,'0')}${pObj.b.toString(16).padStart(2,'0')}`);
+                
+              return { name, colors: validColors };
+            }).filter(p => p.colors.length >= 3);
+
+            await this._themeCache.set(cacheKey, palettes, { ttl: 30 * 24 * 60 * 60 * 1000 });
+          }
+        } catch (e) {
+          console.warn('[FluxKit.theme] Failed to load curated palettes:', e);
+          palettes = [];
+        }
+      }
+      this._curatedPalettes = palettes;
+    },
+
+    loadColorDictionary: async function() {
+      if (this._colorDictionary && this._colorDictionary.length > 0) return;
+      if (!this._themeCache) {
+        this._themeCache = FluxKit.cache.register('fluxkit-theme-cache', { 
+          storage: 'gm', 
+          policy: 'lru', 
+          maxSize: 5 
+        });
+      }
+      const cacheKey = 'xkcd-color-dict';
+      let dict = await this._themeCache.get(cacheKey);
+
+      if (!dict) {
+        try {
+          const [wikiRes, xkcdRes] = await Promise.all([
+            FluxKit.api.gmFetch('https://raw.githubusercontent.com/dariusk/corpora/master/data/colors/wikipedia.json'), // (~1017 colors)
+            FluxKit.api.gmFetch('https://raw.githubusercontent.com/dariusk/corpora/master/data/colors/xkcd.json'), // (~954 colors)
+          ]);
+
+          let rawWiki = [], rawXkcd = { colors: [] };
+
+          if (wikiRes.ok) rawWiki = JSON.parse(wikiRes);
+          if (rawXkcd.ok) rawXkcd = JSON.parse(xkcdRes);
+
+          if (rawWiki.length > 0 || rawXkcd.colors.length > 0) {
+            
+            let dictArray = [];
+
+            rawWiki.colors.map((item) => {
+              const p = FluxKit.theme.parseColor(item.hex);
+              if (!p) return;
+              const cleanName = item.name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+              dictArray.push({ name: cleanName, hex: item.color, r: p.r, g: p.g, b: p.b });
+            });
+
+            if (rawXkcd.colors) {
+              rawXkcd.colors.forEach((item) => {
+                const p = FluxKit.theme.parseColor(item.hex);
+                if (!p) return;
+                const cleanName = item.color.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                dictArray.push({ name: cleanName, hex: item.hex, r: p.r, g: p.g, b: p.b });
+              });
+            }
+
+            dict = dictArray;
+            
+            await this._themeCache.set(cacheKey, dict, { ttl: 30 * 24 * 60 * 60 * 1000 });
+          }
+        } catch (e) {
+          console.warn('[FluxKit] Failed to load color dictionary', e);
+          dict = [];
+        }
+      }
+      this._colorDictionary = dict;
+    },
+
     getColorName: (colorStr, colorMaps = {}, targetElement = null) => {
       if (typeof colorStr !== 'string') return 'Unknown Color';
 
@@ -2233,46 +2392,74 @@
       const COMMON_COLORS = { ...defaultColors, ...normalizedCustomMaps };
       let lookupHex = resolvedStr.toLowerCase();
 
-      if (lookupHex.startsWith('rgb')) {
-        lookupHex = FluxKit.theme.rgbToHex(lookupHex, true);
+      if (lookupHex.startsWith('rgb') || lookupHex.startsWith('hsl')) {
+        lookupHex = FluxKit.theme.getHexCode(lookupHex, true);
       } 
       else if (lookupHex.startsWith('#')) {
-        if (lookupHex.length === 4) {
-          lookupHex = '#' + lookupHex.split('').slice(1).map(x => x + x).join('');
-        } else if (lookupHex.length === 9) {
-          lookupHex = lookupHex.substring(0, 7);
-        }
+        if (lookupHex.length === 4) lookupHex = '#' + lookupHex.split('').slice(1).map(x => x + x).join('');
+        else if (lookupHex.length === 9) lookupHex = lookupHex.substring(0, 7);
       }
       
-      const fallback = lookupHex.startsWith('#') ? lookupHex.toUpperCase() : resolvedStr;
-      return COMMON_COLORS[lookupHex] || fallback;
+      const exactMatch = COMMON_COLORS[lookupHex];
+      if (exactMatch) return exactMatch;
+
+      // Perceptual Nearest Neighbor (Redmean Approximation)
+      if (FluxKit.theme._colorDictionary && FluxKit.theme._colorDictionary.length > 0) {
+        const target = FluxKit.theme.parseColor(lookupHex);
+        if (target) {
+          let minDistance = Infinity;
+          let closestName = lookupHex.toUpperCase();
+          
+          for (const ref of FluxKit.theme._colorDictionary) {
+            if (target.r === ref.r && target.g === ref.g && target.b === ref.b) {
+              return ref.name;
+            }
+            
+            const rMean = (target.r + ref.r) / 2;
+            const dr = target.r - ref.r;
+            const dg = target.g - ref.g;
+            const db = target.b - ref.b;
+            
+            const weightR = 2 + (rMean / 256);
+            const weightG = 4.0;
+            const weightB = 2 + ((255 - rMean) / 256);
+            
+            const dist = (weightR * dr * dr) + (weightG * dg * dg) + (weightB * db * db);
+            
+            if (dist < minDistance) {
+              minDistance = dist;
+              closestName = ref.name;
+            }
+          }
+          
+          return `~ ${closestName}`;
+        }
+      }
+
+      return lookupHex.startsWith('#') ? lookupHex.toUpperCase() : resolvedStr;
     },
 
-    rgbToHex: (rgbStr, dropAlpha = false) => {
-      if (typeof rgbStr !== 'string') return rgbStr;
-      const isValid = rgbStr.startsWith('rgb') && CSS.supports('color', rgbStr);
-      if (!isValid) {
-        console.warn(`[FluxKit] Invalid RGB value ("${rgbStr}").`);
-        return rgbStr;
+    getHexCode: (colorStr, dropAlpha = false) => {
+      if (typeof colorStr !== 'string') return colorStr;
+      
+      const parsed = FluxKit.theme.parseColor(colorStr);
+      
+      if (!parsed) {
+        console.warn(`[FluxKit] Invalid color value ("${colorStr}").`);
+        return colorStr;
       }
-      const rgbVals = rgbStr.match(/\d+(\.\d+)?/g);
-      if (rgbVals && rgbVals.length >= 3) {
-        let hex = '#' + [rgbVals[0], rgbVals[1], rgbVals[2]].map(x => {
-          const hexStr = parseInt(x, 10).toString(16);
-          return hexStr.length === 1 ? '0' + hexStr : hexStr;
-        }).join('');
-        if (!dropAlpha && rgbVals.length >= 4) {
-          let alpha = parseFloat(rgbVals[3]);
-          if (alpha > 1) alpha = alpha / 100;
-          alpha = Math.max(0, Math.min(1, alpha));
-          const alphaHex = Math.round(alpha * 255).toString(16);
-          hex += alphaHex.length === 1 ? '0' + alphaHex : alphaHex;
-        }
-        return hex;
-      } else {
-        console.warn(`[FluxKit] Could not parse RGB numbers from ("${rgbStr}").`);
-        return rgbStr;
+
+      let hex = '#' + [parsed.r, parsed.g, parsed.b].map(x => {
+        const hexStr = x.toString(16);
+        return hexStr.length === 1 ? '0' + hexStr : hexStr;
+      }).join('');
+
+      if (!dropAlpha && parsed.a < 1) {
+        const alphaHex = Math.round(parsed.a * 255).toString(16);
+        hex += alphaHex.length === 1 ? '0' + alphaHex : alphaHex;
       }
+
+      return hex;
     },
 
     createAlphaColor: (colorStr, alpha, targetElement = null) => {
@@ -2440,13 +2627,54 @@
       };
     },
 
+    getTintsAndShades: (rgbaObj) => {
+      let r = rgbaObj.r / 255, g = rgbaObj.g / 255, b = rgbaObj.b / 255;
+      const max = Math.max(r, g, b), min = Math.min(r, g, b);
+      let h, s, l = (max + min) / 2;
+
+      if (max !== min) {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+          case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+          case g: h = (b - r) / d + 2; break;
+          case b: h = (r - g) / d + 4; break;
+        }
+        h = h * 60;
+      } else { h = s = 0; }
+      
+      // l = target lightness, sMod = saturation multiplier, hShift = hue degree rotation
+      const steps = { 
+        50:  { l: 95, sMod: 0.90, hShift: -2 }, 
+        100: { l: 90, sMod: 0.95, hShift: -1 }, 
+        200: { l: 80, sMod: 0.98, hShift: -0.5 }, 
+        300: { l: 70, sMod: 1.00, hShift: 0 }, 
+        400: { l: 60, sMod: 1.00, hShift: 0 }, 
+        500: { l: 50, sMod: 1.00, hShift: 0 }, 
+        600: { l: 40, sMod: 1.00, hShift: 0.5 }, 
+        700: { l: 30, sMod: 0.98, hShift: 1 }, 
+        800: { l: 20, sMod: 0.95, hShift: 2 }, 
+        900: { l: 10, sMod: 0.90, hShift: 3 } 
+      };
+      
+      const scale = {};
+      
+      for (const [key, mods] of Object.entries(steps)) {
+        const stepH = (h + mods.hShift + 360) % 360; // Apply Hue shift and wrap around 360 degrees
+        
+        const stepS = Math.max(0, Math.min(1, s * mods.sMod)); // Apply Saturation modifier and clamp between 0 and 1
+        
+        scale[key] = `hsl(${Math.round(stepH)}, ${Math.round(stepS * 100)}%, ${mods.l}%)`;
+      }
+      return scale;
+    },
+
     getPalette: (rgbaObj) => {
       let r = rgbaObj.r / 255, g = rgbaObj.g / 255, b = rgbaObj.b / 255;
       const max = Math.max(r, g, b), min = Math.min(r, g, b);
       let h, s, l = (max + min) / 2;
 
-      if (max === min) h = s = 0;
-      else {
+      if (max !== min) {
         const d = max - min;
         s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
         switch (max) {
@@ -2455,17 +2683,16 @@
           case b: h = (r - g) / d + 4; break;
         }
         h = Math.round(h * 60);
-      }
+      } else { h = s = 0; }
       
       const sStr = Math.round(s * 100) + '%';
       const lStr = Math.round(l * 100) + '%';
       
       return {
-        complementary: `hsl(${(h + 180) % 360}, ${sStr}, ${lStr})`,
-        analogous1: `hsl(${(h + 30) % 360}, ${sStr}, ${lStr})`,
-        analogous2: `hsl(${(h + 330) % 360}, ${sStr}, ${lStr})`,
-        triadic1: `hsl(${(h + 120) % 360}, ${sStr}, ${lStr})`,
-        triadic2: `hsl(${(h + 240) % 360}, ${sStr}, ${lStr})`
+        complementary: [`hsl(${(h + 180) % 360}, ${sStr}, ${lStr})`],
+        analogous: [`hsl(${(h + 30) % 360}, ${sStr}, ${lStr})`, `hsl(${(h + 330) % 360}, ${sStr}, ${lStr})`],
+        split: [`hsl(${(h + 150) % 360}, ${sStr}, ${lStr})`, `hsl(${(h + 210) % 360}, ${sStr}, ${lStr})`],
+        triadic: [`hsl(${(h + 120) % 360}, ${sStr}, ${lStr})`, `hsl(${(h + 240) % 360}, ${sStr}, ${lStr})`]
       };
     },
   };
@@ -3527,7 +3754,9 @@
         const rootNode = activeConfig.rootElement;
 
         const isDark = activeConfig.autoDark ? FluxKit.theme.isSystemDark() : !!activeConfig.darkMode;
-        const theme = FluxKit.theme.get(isDark);
+
+        const resolvedThemeArg = activeConfig.themeKey ? activeConfig.themeKey : isDark;
+        const theme = FluxKit.theme.get(resolvedThemeArg);
 
         const renderTheme = {
           bg: activeConfig.bg || theme.bg,
@@ -3642,10 +3871,11 @@
           injectedRoots.add(rootNode);
         }
 
-        const ext = filename.split('.').pop().toLowerCase();
-        const category = getCategory(filename);
-        const isBlob = fileData instanceof Blob;
-        const renderUrl = isBlob ? URL.createObjectURL(fileData) : fileData;
+        const isDOMNode = fileData instanceof HTMLElement;
+        const ext = isDOMNode ? 'dom' : filename.split('.').pop().toLowerCase();
+        const category = isDOMNode ? 'custom' : getCategory(filename);
+        const isBlob = !isDOMNode && (fileData instanceof Blob);
+        const renderUrl = isBlob ? URL.createObjectURL(fileData) : (isDOMNode ? null : fileData);
 
         let isDestroyed = false;
         let backdrop = null;
@@ -3686,11 +3916,20 @@
         }
 
         if (!activeConfig.hideDefaultActions) {
-          headerActions.appendChild(FluxKit.utils.createHTMLElement('button', { class: 'flxkit-icon-action-btn', icon: customIcons.download, dataset: { [FluxKit.utils.toCamelCase(`flxkvw-${namespace}-tooltip`)]:'Download' }, eventListener: () => downloadFile(filename, fileData) }));
+          if (!isDOMNode) {
+            headerActions.appendChild(FluxKit.utils.createHTMLElement('button', { class: 'flxkit-icon-action-btn', icon: customIcons.download, dataset: { [FluxKit.utils.toCamelCase(`flxkvw-${namespace}-tooltip`)]:'Download' }, eventListener: () => downloadFile(filename, fileData) }));
+          }
           headerActions.appendChild(FluxKit.utils.createHTMLElement('button', { class: 'flxkit-icon-action-btn', icon: customIcons.close, dataset: { [FluxKit.utils.toCamelCase(`flxkvw-${namespace}-tooltip`)]:'Close' }, eventListener: closeViewer }));
         }
 
-        if (customRenderers[ext]) {
+        if (isDOMNode) {
+          contentElement = FluxKit.utils.createHTMLElement('div', {
+            class: 'flxkit-custom-render-wrapper',
+            style: 'display: flex; flex-direction: column; width: 100%; height: 100%; box-sizing: border-box; overflow: hidden; padding: 0; background: transparent; border: none;',
+            children: [fileData]
+          });
+        }
+        else if (customRenderers[ext]) {
           contentElement = FluxKit.utils.createHTMLElement('div', {
             class: 'flxkit-custom-render-wrapper',
             textContent: 'Loading preview...'
@@ -3819,7 +4058,9 @@
         viewerRegistry.set(namespace, activeConfig);
 
         const isDark = activeConfig.autoDark ? FluxKit.theme.isSystemDark() : !!activeConfig.darkMode;
-        const theme = FluxKit.theme.get(isDark);
+
+        const resolvedThemeArg = activeConfig.themeKey ? activeConfig.themeKey : isDark;
+        const theme = FluxKit.theme.get(resolvedThemeArg);
 
         const renderTheme = {
           bg: activeConfig.bg || theme.bg,
@@ -3858,6 +4099,33 @@
   })();
 
   FluxKit.api ??= {
+    gmFetch: function(url, options = {}) {
+      return new Promise((resolve, reject) => {
+        if (options.signal && options.signal.aborted) return reject({ name: 'AbortError' });
+        const req = GM_xmlhttpRequest({
+          method: options.method || 'GET',
+          url: url,
+          headers: options.headers || {},
+          data: options.body || undefined,
+          onload: (res) => {
+            resolve({
+              ok: res.status >= 200 && res.status < 300,
+              status: res.status,
+              text: async () => res.responseText,
+              json: async () => JSON.parse(res.responseText)
+            });
+          },
+          onerror: (err) => reject(err),
+          onabort: () => reject({ name: 'AbortError' })
+        });
+        if (options.signal) {
+          options.signal.addEventListener('abort', () => {
+            if (req && typeof req.abort === 'function') req.abort();
+          });
+        }
+      });
+    },
+    
     translate: {
       fetch: function (text, targetLang = 'en', sourceLang = 'auto', signal = null) {
         return new Promise((resolve, reject) => {
@@ -5704,8 +5972,8 @@
       _returns: 'String (Color Name or original string/variable if unknown)'
     },
 
-    rgbToHex: {
-      _command: 'FluxKit.theme.rgbToHex(rgbStr, dropAlpha?)',
+    getHexCode: {
+      _command: 'FluxKit.theme.getHexCode(rgbStr, dropAlpha?)',
       _summary: 'Converts an rgb() or rgba() string into a standard Hex string.',
       _arguments: {
         rgbStr: { Type: 'String', Required: 'Yes', Notes: 'The RGB(A) string to convert.' },

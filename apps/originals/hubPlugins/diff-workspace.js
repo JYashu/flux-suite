@@ -2,7 +2,7 @@
 // @name         FHP: Diff WorkSpace
 // @description  Multi-tab, persistent diff workspace for FluxHub — line and inline char-level diffs, JSON formatting, JWT/Base64/URL payload decoding, drag-and-drop file loading, and hunk-level merge controls. Workspaces are domain-scoped and synced via FluxKit.cache (IndexedDB).
 // @namespace    http://tampermonkey.net/
-// @version      1.0.0
+// @version      1.1.0
 // @author       JYashu
 // @license      Apache-2.0
 // @match        *://*/*
@@ -967,6 +967,30 @@
 
       if (filtered.length > 0) DiffWorkspace.open(filtered[0].id, activeThemeKey);
       else DiffWorkspace.open(null, activeThemeKey);
+    }
+  });
+
+  FluxKit.ipc.listen('flxhub-request-completions', (payload) => {
+    const { requestId, prefix, query } = payload;
+    let completions = [];
+    
+    const q = (query || '').toLowerCase().trim();
+
+    if (prefix === '> diff') {
+      const index = DiffStorage.getIndex();
+      
+      completions = index
+        .filter(ws => ws.title.toLowerCase().includes(q))
+        .map(ws => ({ 
+          title: ws.title, 
+          value: `> diff ${ws.title}`, 
+          icon: 'code', 
+          description: `Open ${ws.title}` 
+        }));
+    }
+
+    if (completions.length > 0) {
+      FluxKit.ipc.broadcast('flxhub-provide-completions', { requestId, completions });
     }
   });
 })();

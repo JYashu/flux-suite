@@ -2,7 +2,7 @@
 // @name         FHP: Chronicle
 // @description  Track events, eras, and people with automatic milestone/timehop detection, multi-profile cloud sync, and external ICS calendar subscriptions.
 // @namespace    http://tampermonkey.net/
-// @version      1.3.1
+// @version      1.4.0
 // @author       JYashu
 // @license      Apache-2.0
 // @match        *://*/*
@@ -1161,7 +1161,12 @@
         const syncProfile = hopState.get(STATE_KEYS.syncProfile, null);
         const onSyncComplete = async (updatedProfile) => {
           hopState.set(STATE_KEYS.syncProfile, updatedProfile);
+          
+          await ChronicleManager.pullRemote();
+          await ChronicleManager.pullJournal();
+          
           await ChronicleManager.pushRemote();
+          
           FluxKit.ipc.broadcast('flxhub-hide');
         };
 
@@ -2662,5 +2667,90 @@
 
     slot.innerHTML = safeHTML('');
     slot.appendChild(FluxKit.ui.omni.Widget(container));
+  });
+
+  FluxKit.ipc.listen('flxhub-request-completions', (payload) => {
+    const { requestId, prefix, query } = payload;
+    let completions = [];
+    
+    const q = (query || '').toLowerCase().trim();
+
+    if (prefix === '> date') {
+      const subCmds = [
+        { title: 'Add Event', value: '> date add ', icon: 'plus', description: 'Create a new event, era, or person' },
+        { title: 'Edit Events', value: '> date edit ', icon: 'edit', description: 'Search and edit existing timeline events' },
+        { title: 'Subscriptions', value: '> date sub ', icon: 'worldClock', description: 'Manage ICS calendar feeds' },
+        { title: 'Cloud Sync Settings', value: '> date sync', icon: 'sync', description: 'Configure multi-device backup' },
+        { title: 'Switch Profile', value: '> date profile ', icon: 'user', description: 'Change active tracking profile' },
+        { title: 'View Archives', value: '> date archive', icon: 'archive', description: 'View hidden/archived events' }
+      ];
+
+      const isSubCommandActive = subCmds.some(cmd => {
+        const triggerWord = cmd.value.replace('> date ', '').trim();
+        return q.startsWith(triggerWord);
+      });
+
+      if (!isSubCommandActive) {
+        const cmdMatches = subCmds.filter(c => 
+          c.title.toLowerCase().includes(q) || c.value.toLowerCase().includes(q)
+        );
+
+        const allEvents = ChronicleManager.getMergedEvents().filter(e => !e.isArchived);
+        const eventMatches = allEvents
+          .filter(e => e.title.toLowerCase().includes(q))
+          .map(e => ({
+            title: e.title,
+            value: `> date ${e.title}`,
+            icon: e.type === 'person' ? 'user' : (e.type === 'era' ? 'sync' : 'calendar'),
+            description: 'Filter timeline by this event'
+          }));
+
+        completions = [...cmdMatches, ...eventMatches];
+      } else if (q.startsWith('profile ')) {
+        const vault = ChronicleManager._getVault();
+        const profiles = Object.keys(vault.events || {});
+        const profileQuery = q.replace('profile ', '').trim();
+        
+        completions = profiles
+          .filter(p => p.toLowerCase().includes(profileQuery))
+          .map(p => ({ 
+            title: `Switch to ${p}`, 
+            value: `> date profile ${p}`, 
+            icon: 'user', 
+            description: 'Profile switch' 
+          }));
+      }
+    } 
+    else if (prefix === '> eras') {
+      const eras = ChronicleManager.getEvents().filter(e => e.type === 'era' && !e.isArchived);
+      completions = eras
+        .filter(e => e.title.toLowerCase().includes(q))
+        .map(e => ({ 
+          title: e.title, 
+          value: `> eras ${e.title}`, 
+          icon: 'clock', 
+          description: 'Filter timeline by this era' 
+        }));
+    } 
+    else if (prefix === '> people') {
+      if (!q.startsWith('merge-mode')) {
+        const people = ChronicleManager.getEvents().filter(e => e.type === 'person' && !e.isArchived);
+        completions = people
+          .filter(e => 
+            e.title.toLowerCase().includes(q) || 
+            (e.aliases && e.aliases.some(a => a.toLowerCase().includes(q)))
+          )
+          .map(p => ({ 
+            title: p.title, 
+            value: `> people ${p.title}`, 
+            icon: 'user', 
+            description: 'Filter timeline by this person' 
+          }));
+      }
+    }
+
+    if (completions.length > 0) {
+      FluxKit.ipc.broadcast('flxhub-provide-completions', { requestId, completions });
+    }
   });
 })();

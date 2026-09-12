@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Flux Hub
 // @namespace    https://github.com/JYashu/flux-suite
-// @version      1.1.2
+// @version      2.0.0
 // @description  Universal Command Palette and Search Engine. Press a hotkey to calculate, translate, convert, search the web, or control other Flux scripts instantly.
 // @icon         https://logo-bits.s3.us-east-2.amazonaws.com/flux-hub.svg
 // @author       JYashu
@@ -18,7 +18,6 @@
 // @require      https://flux-suite.vercel.app/libs/flux-kit/core.js
 // @require      https://flux-suite.vercel.app/libs/flux-kit/capture.js
 // @require      https://flux-suite.vercel.app/libs/flux-kit/sync.js
-// @require      https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js
 // @connect      api.github.com
 // @connect      raw.githubusercontent.com
 // @connect      graph.microsoft.com
@@ -47,9 +46,10 @@
 // @connect      itunes.apple.com
 // @connect      audius.co
 // @connect      lrclib.net
+// @connect      newton.vercel.app
 // @connect      *
 // ==/UserScript==
-/* global FluxKit, math */
+/* global FluxKit */
 
 (function () {
   /*
@@ -132,7 +132,9 @@
     MUSIC_STATS: 'hub:music_stats',
     MUSIC_HISTORY: 'hub:music_history',
     MUSIC_DISCOVERIES: 'hub:music_discoveries',
-    RAPIDAPI_KEY: 'hub:rapid_api_key'
+    RAPIDAPI_KEY: 'hub:rapid_api_key',
+    BOOKMARKS: 'hub:bookmarks',
+    BOOKMARK_TOMBSTONES: 'hub:bookmarks_tombstones',
   };
 
   const FluxHubState = FluxKit.state.register('flux-hub');
@@ -249,8 +251,65 @@
     },
   };
 
+  const BookmarksState = {
+    getAll: () => FluxHubState.get(STATE_KEYS.BOOKMARKS, {}),
+    
+    getTombstones: () => FluxHubState.get(STATE_KEYS.BOOKMARK_TOMBSTONES, {}),
+    
+    getActive: () => {
+      const all = BookmarksState.getAll();
+      const tombs = BookmarksState.getTombstones();
+      return Object.values(all).filter(b => !b.deletedAt && !tombs[b.id]);
+    },
+
+    save: (bookmark) => {
+      const all = BookmarksState.getAll();
+      const tombs = BookmarksState.getTombstones();
+      const id = bookmark.id || ('bm_' + FluxKit.utils.getUniqueId());
+      const now = Date.now();
+
+      const record = {
+        id,
+        type: bookmark.type || 'text',
+        title: bookmark.title || 'Untitled Bookmark',
+        url: bookmark.url || null,
+        payload: bookmark.payload || '',
+        notes: bookmark.notes || '',
+        tags: Array.isArray(bookmark.tags) ? bookmark.tags : [],
+        createdAt: bookmark.createdAt || now,
+        updatedAt: now,
+        deletedAt: null
+      };
+
+      all[id] = record;
+      delete tombs[id];
+
+      FluxHubState.set(STATE_KEYS.BOOKMARKS, all);
+      FluxHubState.set(STATE_KEYS.BOOKMARK_TOMBSTONES, tombs);
+
+      if (FluxKit.sync?.auto) AutoSync.notifyLocalChange();
+      return record;
+    },
+
+    remove: (id) => {
+      const all = BookmarksState.getAll();
+      const tombs = BookmarksState.getTombstones();
+      const now = Date.now();
+
+      if (all[id]) {
+        all[id] = { ...all[id], deletedAt: now, updatedAt: now };
+      }
+      tombs[id] = now;
+
+      FluxHubState.set(STATE_KEYS.BOOKMARKS, all);
+      FluxHubState.set(STATE_KEYS.BOOKMARK_TOMBSTONES, tombs);
+
+      if (FluxKit.sync?.auto) AutoSync.notifyLocalChange();
+    }
+  };
+
   const MergeEngine = (function() {
-    const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // GC old tombstones after 30 days
+    const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
     function mergeKeyedCollection({ baseline = {}, local = {}, remote = {}, localTombstones = {}, remoteTombstones = {} }) {
       const merged = {};
@@ -417,10 +476,13 @@
     const localBangTombs = BangsState.getTombstones();
     const localWidgets = keyBy(FluxHubState.get(STATE_KEYS.PINNED_WIDGETS, []), 'id');
     const localWidgetTombs = FluxHubState.get(STATE_KEYS.PINNED_WIDGET_TOMBSTONES, {});
+    const localBookmarks = BookmarksState.getAll();
+    const localBookmarkTombs = BookmarksState.getTombstones();
 
     const pl = MergeEngine.mergeKeyedCollection({ baseline: baseline.playlists, local: localPlaylists, remote: remote.playlists, localTombstones: localPlaylistTombs, remoteTombstones: remote.playlistTombstones });
     const bg = MergeEngine.mergeKeyedCollection({ baseline: baseline.bangs, local: localBangs, remote: remote.bangs, localTombstones: localBangTombs, remoteTombstones: remote.bangTombstones });
     const wg = MergeEngine.mergeKeyedCollection({ baseline: baseline.widgets, local: localWidgets, remote: keyBy(remote.widgets, 'id'), localTombstones: localWidgetTombs, remoteTombstones: remote.widgetTombstones });
+    const bm = MergeEngine.mergeKeyedCollection({ baseline: baseline.bookmarks || {}, local: localBookmarks, remote: remote.bookmarks || {}, localTombstones: localBookmarkTombs, remoteTombstones: remote.bookmarkTombstones || {} });
 
     const localSettings = SettingsState.getAll();
     const localSettingsAt = FluxHubState.get(STATE_KEYS.SEARCH_CONFIG_UPDATED_AT, 0);
@@ -449,13 +511,16 @@
     FluxHubState.set(STATE_KEYS.SEARCH_CONFIG, mergedSettings);
     FluxHubState.set(STATE_KEYS.SEARCH_CONFIG_UPDATED_AT, mergedSettingsAt);
     FluxHubState.set(STATE_KEYS.CLIP_HISTORY, mergedClips);
+    FluxHubState.set(STATE_KEYS.BOOKMARKS, bm.merged);
+    FluxHubState.set(STATE_KEYS.BOOKMARK_TOMBSTONES, bm.tombstones);
 
     const payload = {
       playlists: pl.merged, playlistTombstones: pl.tombstones,
       bangs: bg.merged, bangTombstones: bg.tombstones,
       widgets: Object.values(wg.merged), widgetTombstones: wg.tombstones,
       clipHistory: mergedClips, settings: mergedSettings, settingsUpdatedAt: mergedSettingsAt,
-      musicStats: finalMusicStats, musicHistory: finalMusicHistory, musicDiscoveries: finalMusicDiscoveries
+      musicStats: finalMusicStats, musicHistory: finalMusicHistory, musicDiscoveries: finalMusicDiscoveries,
+      bookmarks: bm.merged, bookmarkTombstones: bm.tombstones
     };
 
     await FluxKit.sync.upload(profile, { [BACKUP_FILE]: { content: JSON.stringify(payload, null, 2) } }, BACKUP_FILE);
@@ -498,13 +563,63 @@
     return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
   }
 
+  function createVirtualList(items, rowHeight, containerHeight, renderRowFn, onSelectIdx) {
+    const { createHTMLElement } = FluxKit.utils;
+    const container = createHTMLElement('div', {
+      style: { height: `${containerHeight}px`, overflowY: 'auto', position: 'relative' }
+    });
+
+    const totalHeight = items.length * rowHeight;
+    const ghost = createHTMLElement('div', { style: { height: `${totalHeight}px`, width: '1px' } });
+    container.appendChild(ghost);
+
+    const visibleCount = Math.ceil(containerHeight / rowHeight) + 2;
+    const physicalNodes = [];
+
+    for (let i = 0; i < visibleCount; i++) {
+      const node = createHTMLElement('div', { style: { position: 'absolute', left: 0, right: 0, top: 0, display: 'none' } });
+      physicalNodes.push(node);
+      container.appendChild(node);
+    }
+
+    let currentStartIndex = -1;
+
+    const render = () => {
+      const scrollTop = container.scrollTop;
+      let startIndex = Math.floor(scrollTop / rowHeight);
+      startIndex = Math.max(0, Math.min(startIndex, items.length - visibleCount));
+
+      if (startIndex !== currentStartIndex) {
+        currentStartIndex = startIndex;
+
+        physicalNodes.forEach((node, i) => {
+          const itemIndex = startIndex + i;
+          if (itemIndex < items.length) {
+            node.style.display = 'block';
+            node.style.transform = `translateY(${itemIndex * rowHeight}px)`;
+            renderRowFn(node, items[itemIndex], itemIndex);
+          } else {
+            node.style.display = 'none';
+          }
+        });
+      }
+    };
+
+    container.addEventListener('scroll', () => requestAnimationFrame(render), { passive: true });
+
+    render();
+
+    return { container, physicalNodes, getStartIndex: () => currentStartIndex };
+  }
+
   class BaseView {
     constructor(query, context = null) { this.query = query; this.context = context; }
 
     static isAvailable = true;
     static groupWidgets = false;
-
     static commandRegistry = [];
+
+    static async getSuggestions(query) { return []; }
 
     static matchConfidence(query) { return 0; }
 
@@ -514,9 +629,9 @@
 
     renderExpandedCard(data) { throw new Error(`[Flux Search] ${this.constructor.name} must implement renderExpandedCard()`); }
 
-    execute() {} // Default no-op
+    execute() {}
 
-    destroy() {} // Default no-op
+    destroy() {}
   }
 
   class HubStage {
@@ -524,6 +639,8 @@
       this.selectedIndex = -1; this.currentViews = []; this.isVisible = false; this.router = null;
       this.activeContext = null; this.host = null; this.shadow = null; this.container = null;
       this.input = null; this.resultsList = null; this.themeStyle = null;
+      this.ACState = { isActive: false, originalQuery: '', matches: [], currentIndex: 0 };
+      this._skipAutocomplete = false;
       this.onClickAway = this.onClickAway.bind(this);
       this.onGlobalKeydown = this.onGlobalKeydown.bind(this);
     }
@@ -539,13 +656,13 @@
     _initTouchAndMouseTriggers() {
 
       const getMenuOptions = () => [
-        { label: 'Search Web', icon: 'search', action: () => this.show('', null, null, false) },
+        { label: 'Open Hub', icon: 'search', action: () => this.show('', null, null, false) },
         { separator: true },
         { label: 'Music Player', icon: 'play', action: () => this.show('> play ', null, null, false) },
         { label: 'Translate', icon: 'translate', action: () => this.show('> tr ', null, null, false) },
         { label: 'Dictionary', icon: 'book', action: () => this.show('> dict ', null, null, false) },
         { separator: true },
-        { label: 'Close Omni', icon: 'close', action: () => this.hide() }
+        { label: 'Close Hub', icon: 'close', action: () => this.hide() }
       ];
 
       document.addEventListener('contextmenu', (e) => {
@@ -621,14 +738,40 @@
 
       this.debouncedHandleInput = debounce((query, context) => { this.router.handleInput(query, context); }, 200);
 
+      this.ghostInput = createHTMLElement('input', {
+        class: 'flx-omni-input', type: 'text', disabled: true,
+        style: { 
+          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, 
+          color: 'var(--omni-muted)', zIndex: 1, pointerEvents: 'none',
+          borderColor: 'transparent', background: 'var(--omni-input-bg)'
+        }
+      });
+
       this.input = createHTMLElement('input', {
         class: 'flx-omni-input', type: 'text',
         placeholder: 'Search, calculate, or type a command...',
+        style: { position: 'relative', zIndex: 2, background: 'transparent', color: 'var(--omni-text)' },
         eventListener: {
-          input: e => {
-            const query = e.target.value.trim();
+          click: e => {
+            if (this.ACState && this.ACState.isActive) {
+              this.ACState.isActive = false;
+              this.ghostInput.value = '';
+              this.input.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+          },
+          scroll: e => { this.ghostInput.scrollLeft = this.input.scrollLeft; },
+          input: async e => {
+            const rawVal = e.target.value;
+            const query = rawVal.trim();
+
+            if (this.ghostInput.value && this.ghostInput.value.toLowerCase().startsWith(rawVal.toLowerCase())) {
+              this.ghostInput.value = rawVal + this.ghostInput.value.slice(rawVal.length);
+            } else {
+              this.ghostInput.value = '';
+            }
 
             if (!query) {
+              this.ACState.isActive = false;
               if (this.debouncedHandleInput.cancel) this.debouncedHandleInput.cancel();
               this.resultsList.innerHTML = safeHTML('');
               if (this.widgetEngine) this.widgetEngine.renderDashboard(this.resultsList);
@@ -644,15 +787,51 @@
             if (this.widgetEngine) this.widgetEngine.destroy();
 
             this.debouncedHandleInput(query, this.activeContext);
+
+            if (!this.router || this._skipAutocomplete) {
+              this._skipAutocomplete = false;
+              return;
+            }
+
+            if (e.inputType && e.inputType.startsWith('delete')) {
+              this.ACState.isActive = false;
+              return;
+            }
+            
+            if (this.input.selectionStart !== rawVal.length) {
+              this.ACState.isActive = false;
+              return;
+            }
+
+            const completions = await this.router.getCompletions(rawVal);
+
+            if (this.input.value !== rawVal) return;
+
+            if (completions && completions.length > 0) {
+              this.ACState.isActive = true;
+              this.ACState.originalQuery = rawVal;
+              this.ACState.matches = completions;
+              this.ACState.currentIndex = 0;
+
+              const match = completions[0];
+              this.ghostInput.value = rawVal + match.slice(rawVal.length);
+            } else {
+              this.ACState.isActive = false;
+              this.ghostInput.value = '';
+            }
           },
         },
       });
 
-      this.resultsList = createHTMLElement('div', { class: 'flx-omni-results' });
+      const inputWrapper = createHTMLElement('div', {
+        style: { position: 'relative', width: '100%' },
+        children: [this.ghostInput, this.input]
+      });
 
+      this.resultsList = createHTMLElement('div', { class: 'flx-omni-results' });
       const dragHandle = createHTMLElement('div', { class: 'flx-omni-drag-handle', children: createHTMLElement('div', { class: 'flx-omni-drag-pill' }) });
 
-      this.container = createHTMLElement('div', { class: 'flx-omni-container', children: [dragHandle, this.input, this.resultsList] });
+      this.container = createHTMLElement('div', { class: 'flx-omni-container', children: [dragHandle, inputWrapper, this.resultsList] });
 
       FluxKit.utils.trapTabFocus(this.container, this.input);
 
@@ -836,6 +1015,55 @@
     onGlobalKeydown(e) {
       if (!this.isVisible) return;
 
+      if (this.ACState.isActive && this.isTypingTarget()) {
+        
+        // Accept the ghost suggestion
+        if (e.key === 'Tab' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          if (this.ghostInput.value) {
+            this.input.value = this.ghostInput.value;
+            this.ghostInput.value = '';
+            this.ACState.isActive = false;
+            this.setInputVal(this.input.value); 
+          }
+          return;
+        }
+
+        // Cycle through suggestions
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          if (this.ACState.matches.length > 1) {
+            this.ACState.currentIndex = e.key === 'ArrowDown'
+              ? (this.ACState.currentIndex + 1) % this.ACState.matches.length
+              : (this.ACState.currentIndex - 1 + this.ACState.matches.length) % this.ACState.matches.length;
+            
+            const match = this.ACState.matches[this.ACState.currentIndex];
+            const orig = this.ACState.originalQuery;
+            
+            this.ghostInput.value = orig + match.slice(orig.length);
+          }
+          return;
+        }
+
+        // Cancel suggestions
+        if (e.key === 'Escape') {
+          e.preventDefault(); e.stopPropagation();
+          
+          this.ghostInput.value = '';
+          this.ACState.isActive = false;
+          
+          this._skipAutocomplete = true;
+          this.input.dispatchEvent(new Event('input', { bubbles: true }));
+          return;
+        }
+
+        if (e.key === 'Backspace') {
+          this.ghostInput.value = '';
+          this.ACState.isActive = false;
+          return; 
+        }
+      }
+
       if (e.key === 'Escape') {
         e.preventDefault(); e.stopPropagation();
         if (this.input.value.length > 0) { this.setInputVal(); return; }
@@ -864,12 +1092,12 @@
       }
     }
 
-    renderList(views) {
+    renderList(views, q) {
       this.clearResults();
       this.currentViews = views;
       this.selectedIndex = views.length > 0 ? 0 : -1;
       views.forEach((view, index) => {
-        const row = view.renderListRow();
+        const row = view.renderListRow(q);
         row.dataset.index = index;
         row.addEventListener('click', () => {
           this.selectedIndex = index;
@@ -998,31 +1226,50 @@
       this.host.style.top = `${safeCoords.y}px`;
 
       this.activeContext = context;
-
       this.input.value = initialQuery;
+      this.ghostInput.value = '';
+      this.ACState = { isActive: false, originalQuery: '', matches: [], currentIndex: 0 };
 
-      setTimeout(() => { 
-        this.input.focus(); 
+      setTimeout(() => {
+        this.input.focus();
         if (preSelect && this.input.value.length > 0) {
           this.input.select();
         } else {
           this.input.setSelectionRange(this.input.value.length, this.input.value.length);
         }
+        
+        this.input.dispatchEvent(new Event('input', { bubbles: true }));
       }, 10);
 
       setTimeout(() => document.addEventListener('mousedown', this.onClickAway), 10);
-
       document.addEventListener('keydown', this.onGlobalKeydown, true);
-
-      this.input.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
     hide() {
       this.isVisible = false;
       this.host.style.display = 'none';
-      FluxHubState.set(STATE_KEYS.LAST_QUERY, this.input.value);
+      const finalVal = this.input.value.trim();
+      FluxHubState.set(STATE_KEYS.LAST_QUERY, finalVal);
+      
+      if (finalVal) {
+        const history = FluxHubState.get('COMMAND_HISTORY', []);
+        const updatedHistory = [finalVal, ...history.filter(h => h !== finalVal)].slice(0, 50);
+        FluxHubState.set('COMMAND_HISTORY', updatedHistory);
+
+        const lowerVal = finalVal.toLowerCase();
+        const freqs = FluxHubState.get('COMMAND_FREQ', {});
+        freqs[lowerVal] = (freqs[lowerVal] || 0) + 1;
+        
+        const keys = Object.keys(freqs);
+        if (keys.length > 200) {
+          keys.sort((a, b) => freqs[b] - freqs[a]).slice(150).forEach(k => delete freqs[k]);
+        }
+        FluxHubState.set('COMMAND_FREQ', freqs);
+      }
+      
       this.clearResults();
       this.input.value = '';
+      this.ghostInput.value = '';
       document.removeEventListener('mousedown', this.onClickAway);
       document.removeEventListener('keydown', this.onGlobalKeydown, true);
     }
@@ -1046,6 +1293,7 @@
       this.remoteCommands = new Map();
       this.remoteWidgets = new Map();
       this.currentAbortController = null;
+      this.pendingCompletions = new Map(); 
     }
 
     registerAction(actionCmd) { this.localActions.push({ acceptsArgs: false, ...actionCmd }); }
@@ -1063,17 +1311,27 @@
         }
         this.remoteCommands.set(pluginCmd.id, { acceptsArgs: false, type: 'action', ...pluginCmd });
       });
+      
       FluxKit.ipc.listen('register-widget', widgetData => {
         if (!widgetData.id || !widgetData.pluginId) return;
         this.remoteWidgets.set(widgetData.id, widgetData);
       });
+
+      FluxKit.ipc.listen('flxhub-provide-completions', (payload) => {
+        const { requestId, completions } = payload;
+        if (this.pendingCompletions.has(requestId)) {
+          this.pendingCompletions.get(requestId)(completions);
+        }
+      });
+
       FluxKit.ipc.listen('flxhub-hide', () => { if (FluxHub.ui) FluxHub.ui.hide(); });
+      
       FluxKit.ipc.listen('flxhub-set-input', (payload) => {
         const host = document.getElementById('flx-hub-host');
         if (!host || !host.shadowRoot) return;
-
         if (payload && typeof payload.value === 'string') FluxHub.ui.setInputVal(payload.value);
       });
+      
       this.refreshPlugins();
     }
 
@@ -1082,21 +1340,135 @@
       FluxKit.ipc.broadcast('search-bar-ready');
     }
 
+    getRemoteCompletions(rawQuery) {
+      return new Promise(resolve => {
+        const match = rawQuery.match(/^(>\s*[a-z0-9-]+)(.*)/i);
+        if (!match) return resolve([]);
+
+        const prefix = match[1].trim().toLowerCase();
+        const query = match[2]; 
+        const requestId = FluxKit.utils.getUniqueId();
+
+        let handled = false;
+        
+        const timer = setTimeout(() => {
+          if (!handled) { handled = true; this.pendingCompletions.delete(requestId); resolve([]); }
+        }, 100);
+
+        this.pendingCompletions.set(requestId, (completions) => {
+          if (!handled) {
+            handled = true;
+            clearTimeout(timer);
+            this.pendingCompletions.delete(requestId);
+            resolve(completions || []);
+          }
+        });
+
+        FluxKit.ipc.broadcast('flxhub-request-completions', { requestId, prefix, query });
+      });
+    }
+
+    async getCompletions(rawQuery) {
+      const q = rawQuery.toLowerCase();
+      if (!q) return [];
+
+      const suggestions = [];
+      const staticCmds = [];
+      const addPrefixes = (cmd) => {
+        if (Array.isArray(cmd.prefix)) cmd.prefix.forEach(p => staticCmds.push(p.toLowerCase()));
+        else if (cmd.prefix) staticCmds.push(cmd.prefix.toLowerCase());
+      };
+      
+      for (const cmd of this.remoteCommands.values()) addPrefixes(cmd);
+      for (const cmd of this.localActions) addPrefixes(cmd);
+      for (const ViewClass of this.localViews) {
+        if (ViewClass.isAvailable && ViewClass.commandRegistry) {
+          ViewClass.commandRegistry.forEach(addPrefixes);
+        }
+      }
+      
+      const exactStatic = staticCmds.filter(cmd => cmd.startsWith(q));
+      suggestions.push(...exactStatic.sort());
+
+      const history = FluxHubState.get('COMMAND_HISTORY', []);
+      const histMatches = history.filter(h => typeof h === 'string' && h.toLowerCase().startsWith(q));
+      suggestions.push(...histMatches);
+
+      for (const ViewClass of this.localViews) {
+        if (ViewClass.isAvailable && typeof ViewClass.getSuggestions === 'function') {
+          try {
+            const viewSugs = await ViewClass.getSuggestions(rawQuery);
+            if (Array.isArray(viewSugs)) {
+              suggestions.push(...viewSugs.filter(s => s.toLowerCase().startsWith(q)));
+            }
+          } catch (e) {
+            logWarning(`[Flux Search] Error fetching suggestions for ${ViewClass.name}`, e);
+          }
+        }
+      }
+
+      const remoteComps = await this.getRemoteCompletions(rawQuery);
+      remoteComps.forEach(c => {
+        if (c.value && c.value.toLowerCase().startsWith(q)) {
+          suggestions.push(c.value);
+        }
+      });
+
+      const seen = new Set();
+      const uniqueSuggestions = suggestions.filter(s => {
+        const lower = s.toLowerCase();
+        if (seen.has(lower) || lower === q) return false;
+        seen.add(lower);
+        return true;
+      });
+
+      const freqs = FluxHubState.get('COMMAND_FREQ', {});
+      
+      const getScore = (s) => {
+        const lower = s.toLowerCase();
+        let score = freqs[lower] || 0;
+        
+        for (const [cmd, count] of Object.entries(freqs)) {
+          if (cmd.startsWith(lower + ' ')) score += count;
+        }
+        return score;
+      };
+
+      return uniqueSuggestions.sort((a, b) => {
+        const scoreA = getScore(a);
+        const scoreB = getScore(b);
+        if (scoreA !== scoreB) return scoreB - scoreA;
+        if (a.length !== b.length) return a.length - b.length;
+        return a.localeCompare(b);
+      });
+    }
+
     evaluateCommandConfidence(cmd, rawQuery) {
       const q = rawQuery.trim().toLowerCase();
-      const prefix = (cmd.prefix || '').trim().toLowerCase();
+      const prefixes = Array.isArray(cmd.prefix) ? cmd.prefix : [cmd.prefix || ''];
+      
+      let bestScore = 0;
       const title = (cmd.title || '').trim().toLowerCase();
-      if (!prefix) return 0;
-      if (q === prefix) return 100;
-      if (q.startsWith(prefix + ' ')) return cmd.acceptsArgs ? 99 : 50;
-      if (prefix.startsWith(q) && q.length > 1) return 70;
-      const cleanPrefix = prefix.replace(/^[>@!]/, '').trim();
-      if (cleanPrefix && cleanPrefix.length > 1) {
-        if (q === cleanPrefix) return 60;
-        if (q.startsWith(cleanPrefix) || cleanPrefix.startsWith(q)) return 40;
+
+      for (let p of prefixes) {
+        const prefix = p.trim().toLowerCase();
+        if (!prefix) continue;
+        if (q === prefix) return 100;
+        if (q.startsWith(prefix + ' ')) return cmd.acceptsArgs ? 99 : 50;
+        
+        let score = 0;
+        if (prefix.startsWith(q) && q.length > 1) score = 70;
+        
+        const cleanPrefix = prefix.replace(/^[>@!]/, '').trim();
+        if (cleanPrefix && cleanPrefix.length > 1) {
+          if (q === cleanPrefix) score = Math.max(score, 60);
+          if (q.startsWith(cleanPrefix) || cleanPrefix.startsWith(q)) score = Math.max(score, 40);
+        }
+        bestScore = Math.max(bestScore, score);
       }
-      if (title && title.includes(q) && q.length > 2) return 35;
-      return 0;
+
+      if (title && title.includes(q) && q.length > 2) bestScore = Math.max(bestScore, 35);
+      return bestScore;
     }
 
     async handleInput(rawQuery, context = null) {
@@ -1115,7 +1487,6 @@
 
       for (const ViewClass of this.localViews) {
         if (!ViewClass.isAvailable) continue;
-
         const confidence = ViewClass.matchConfidence(query);
         if (confidence > 0) {
           const instance = new ViewClass(query, context);
@@ -1140,11 +1511,13 @@
         const topScore = activeIntents[0].confidence;
         filteredIntents = activeIntents.filter(intent => intent.confidence === topScore);
       }
-      if (activeIntents.length > 0 && activeIntents[0].confidence === 100) filteredIntents = activeIntents.filter(intent => intent.confidence === 100);
+      if (activeIntents.length > 0 && activeIntents[0].confidence === 100) {
+        filteredIntents = activeIntents.filter(intent => intent.confidence === 100);
+      }
 
       const sortedViews = filteredIntents.map(intent => intent.instance);
 
-      FluxHub.ui.renderList(sortedViews);
+      FluxHub.ui.renderList(sortedViews, query);
 
       for (const view of sortedViews) {
         const intent = filteredIntents.find(i => i.instance === view);
@@ -1166,23 +1539,33 @@
             }
           }
           try {
-            const data = await view.fetchData(signal);
+            const data = await view.fetchData(signal, query);
             if (data !== null && !signal.aborted) {
               FluxHub.ui.expandListItem(view, data);
               break;
             } else if (row && !signal.aborted) {
               const subtitle = row.querySelector('.flx-omni-subtitle');
               const iconNode = row.querySelector('.flx-omni-icon');
-              if (subtitle) { subtitle.textContent = ogSubtitle; subtitle.style.color = 'var(--omni-muted)'; }
-              if (iconNode) iconNode.innerHTML = safeHTML(ogIcon);
+              if (subtitle) { 
+                subtitle.textContent = 'Fetch failed (No data returned)'; 
+                subtitle.style.color = 'var(--omni-danger)'; 
+              }
+              if (iconNode) {
+                iconNode.innerHTML = safeHTML(FluxKit.ui.getIcon('warning'));
+              }
             }
           } catch (error) {
             if (error.name !== 'AbortError' && (!signal || !signal.aborted)) {
               logError('[Flux Search] Background fetch failed:', error);
               const subtitle = row?.querySelector('.flx-omni-subtitle');
               const iconNode = row?.querySelector('.flx-omni-icon');
-              if (subtitle) { subtitle.textContent = ogSubtitle; subtitle.style.color = 'var(--omni-muted)'; }
-              if (iconNode) iconNode.innerHTML = safeHTML(ogIcon);
+              if (subtitle) { 
+                subtitle.textContent = `Fetch failed: ${error.message}`; 
+                subtitle.style.color = 'var(--omni-danger)'; 
+              }
+              if (iconNode) {
+                iconNode.innerHTML = safeHTML(FluxKit.ui.getIcon('warning'));
+              }
             }
           }
         } else { break; }
@@ -1216,11 +1599,8 @@
           }
           FluxKit.ipc.broadcast('flxhub-unmount-view', { pluginId: cmd.id, targetId: slotId }, true);
         },
-
         fetchData: async () => ({ slotId, queryParams }),
-
         renderListRow: () => FluxKit.ui.omni.ListRow(cmd.title, cmd.icon || 'document', `Search Plugin: ${cmd.prefix}`, 'to view'),
-
         renderExpandedCard: (data) => {
           const slotContainer = createHTMLElement('div', {
             id: data.slotId,
@@ -1243,7 +1623,6 @@
 
           return slotContainer;
         },
-
         handleKeydown: (e) => {
           const existingSlot = FluxHub.ui.shadow ? FluxHub.ui.shadow.getElementById(slotId) : null;
           if (!existingSlot) return false;
@@ -1254,15 +1633,12 @@
           });
 
           existingSlot.dispatchEvent(remoteEvent);
-
           if (remoteEvent.defaultPrevented) {
             e.preventDefault(); e.stopPropagation();
             return true;
           }
-
           return false;
         },
-
         execute: () => {
           FluxKit.ipc.broadcast('flxhub-execute-view', { pluginId: cmd.id, targetId: slotId }, true);
           FluxHub.ui.hide();
@@ -1392,9 +1768,12 @@
         plugins.push({ prefix: cmd.prefix, description: cmd.title || `Plugin: ${cmd.id}`, icon: cmd.icon || 'code', isRemote: true });
       });
 
-      const sortFn = (a, b) => a.prefix.localeCompare(b.prefix);
+      const sortFn = (a, b) => {
+        const pA = Array.isArray(a.prefix) ? a.prefix[0] : a.prefix;
+        const pB = Array.isArray(b.prefix) ? b.prefix[0] : b.prefix;
+        return pA.localeCompare(pB);
+      };
       
-      // Return structured data instead of a flat array
       return {
         native: native.sort(sortFn),
         plugins: plugins.sort(sortFn)
@@ -1406,6 +1785,10 @@
     }
 
     renderExpandedCard({ native, plugins }) {
+      this.commandNodes = [];
+      this.selectedIndex = 0;
+      let flatIndex = 0;
+
       const container = createHTMLElement('div', { 
         style: { display: 'flex', flexDirection: 'column', gap: '20px', maxHeight: '350px', overflowY: 'auto', padding: '12px' } 
       });
@@ -1424,16 +1807,17 @@
         });
 
         commands.forEach(cmd => {
+          const currentIndex = flatIndex++;
+          const displayPrefix = Array.isArray(cmd.prefix) ? cmd.prefix[0] : cmd.prefix;
           const row = createHTMLElement('div', {
             style: {
               display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px',
               background: 'var(--omni-input-bg)', border: '1px solid var(--omni-border)',
               borderRadius: '6px', cursor: 'pointer', transition: 'background 0.15s ease',
-              overflow: 'hidden' // Trap floating children
+              overflow: 'hidden'
             },
             eventListener: {
-              mouseenter: e => { e.currentTarget.style.background = 'var(--omni-hover)' },
-              mouseleave: e => { e.currentTarget.style.background = 'var(--omni-input-bg)' },
+              mouseenter: () => { this.selectedIndex = currentIndex; this.updateSelection(); },
               click: (e) => { e.stopPropagation(); FluxHub.ui.setInputVal(`${cmd.prefix} `); }
             }
           });
@@ -1443,7 +1827,6 @@
             style: { color: cmd.isRemote ? 'var(--omni-success)' : 'var(--omni-accent)', fontSize: '16px', display: 'flex', justifyContent: 'center', minWidth: '20px' }
           });
 
-          // minWidth: '0' is structurally critical here to prevent flex children from blowing out CSS grid cells
           const textWrap = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', flexGrow: '1', minWidth: '0' } });
           
           const titleRow = createHTMLElement('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'space-between' } });
@@ -1468,6 +1851,8 @@
           row.appendChild(iconWrap);
           row.appendChild(textWrap);
           grid.appendChild(row);
+
+          this.commandNodes.push({ el: row, cmd });
         });
 
         section.appendChild(heading);
@@ -1481,7 +1866,62 @@
       const pluginSection = buildSection('Plugins', plugins);
       if (pluginSection) container.appendChild(pluginSection);
 
+      if (this.commandNodes.length > 0) this.updateSelection();
+
       return FluxKit.ui.omni.DetailCard(container, []);
+    }
+
+    updateSelection() {
+      this.commandNodes.forEach((node, idx) => {
+        if (idx === this.selectedIndex) {
+          node.el.style.background = 'var(--omni-hover)';
+          node.el.style.border = 'var(--omni-border)';
+          node.el.scrollIntoView({ block: 'nearest' });
+        } else {
+          node.el.style.background = 'var(--omni-input-bg)';
+          node.el.style.border = 'none';
+        }
+      });
+    }
+
+    handleKeydown(e) {
+      if (!this.commandNodes || this.commandNodes.length === 0) return false;
+
+      const cols = 2;
+      const max = this.commandNodes.length - 1;
+
+      if (e.key === 'ArrowRight') {
+        e.preventDefault(); e.stopPropagation();
+        this.selectedIndex = Math.min(this.selectedIndex + 1, max);
+        this.updateSelection();
+        return true;
+      } 
+      else if (e.key === 'ArrowLeft') {
+        e.preventDefault(); e.stopPropagation();
+        this.selectedIndex = Math.max(this.selectedIndex - 1, 0);
+        this.updateSelection();
+        return true;
+      } 
+      else if (e.key === 'ArrowDown') {
+        e.preventDefault(); e.stopPropagation();
+        this.selectedIndex = Math.min(this.selectedIndex + cols, max);
+        this.updateSelection();
+        return true;
+      } 
+      else if (e.key === 'ArrowUp') {
+        e.preventDefault(); e.stopPropagation();
+        this.selectedIndex = Math.max(this.selectedIndex - cols, 0);
+        this.updateSelection();
+        return true;
+      } 
+      else if (e.key === 'Enter') {
+        e.preventDefault(); e.stopPropagation();
+        const target = this.commandNodes[this.selectedIndex];
+        if (target) FluxHub.ui.setInputVal(`${target.cmd.prefix} `);
+        return true;
+      }
+
+      return false;
     }
 
     async execute() { 
@@ -1668,69 +2108,827 @@
 
   class CalculatorView extends BaseView {
     static isAvailable = true;
-    static commandRegistry = [{ prefix: '=', description: 'Evaluate mathematical expressions natively', icon: 'calculator' }];
+    static commandRegistry = [
+      { prefix: '=', description: 'Evaluate equations natively (e.g., = quad(1,-3,2))', icon: 'calculator' },
+      { prefix: '= plot', description: 'Graph mathematical functions (e.g., = plot sin(x))', icon: 'trending' },
+      { prefix: '= derive', description: 'CAS: Compute derivatives (e.g., = derive x^2 + 2x)', icon: `f'(x)` },
+      { prefix: '= integrate', description: 'CAS: Compute integrals (e.g., = integrate x^2)', icon: 'f(x)' },
+      { prefix: '= simplify', description: 'CAS: Simplify expressions (e.g., = simplify 2x + 3x)', icon: 'fn' }
+    ];
 
-    static matchConfidence(query) {
+    static _mathContext = (function() {
+      const ctx = {
+        pi: Math.PI, e: Math.E, phi: 1.61803398875,
+        round: Math.round, ceil: Math.ceil, floor: Math.floor,
+        sin: Math.sin, cos: Math.cos, tan: Math.tan,
+        asin: Math.asin, acos: Math.acos, atan: Math.atan,
+        sinh: Math.sinh, cosh: Math.cosh, tanh: Math.tanh,
+        sqrt: Math.sqrt, cbrt: Math.cbrt, 
+        abs: Math.abs, modulus: Math.abs,
+        log: (x, base = 10) => Math.log(x) / Math.log(base),
+        ln: Math.log, log2: Math.log2,
+        mod: (n, m) => ((n % m) + m) % m,
+        fact: (n) => { let res = 1; for (let i = 2; i <= Math.floor(n); i++) res *= i; return res; }
+      };
+      
+      ctx.quad = (a, b, c) => {
+        if (a === 0) return b !== 0 ? `x = ${(-c / b).toFixed(4)}` : "No solution";
+        const d = b * b - 4 * a * c;
+        if (d < 0) {
+          const real = (-b / (2 * a)).toFixed(4);
+          const img = (Math.sqrt(-d) / (2 * a)).toFixed(4);
+          return `${real} ± ${img}i`;
+        }
+        return `x₁: ${((-b + Math.sqrt(d)) / (2 * a)).toFixed(4)}, x₂: ${((-b - Math.sqrt(d)) / (2 * a)).toFixed(4)}`;
+      };
+
+      ctx.cubic = (a, b, c, d) => {
+        if (a === 0) return ctx.quad(b, c, d);
+        // Depressed cubic t^3 + pt + q = 0 (Cardano's method)
+        const p = (3 * a * c - b * b) / (3 * a * a);
+        const q = (2 * b * b * b - 9 * a * b * c + 27 * a * a * d) / (27 * a * a * a);
+        const disc = (q * q / 4) + (p * p * p / 27);
+        const shift = -b / (3 * a);
+        
+        if (Math.abs(disc) < 1e-10) {
+          const r = q < 0 ? Math.sqrt(-p/3) : -Math.sqrt(-p/3);
+          return `x₁: ${(2*r + shift).toFixed(4)}, x₂/₃: ${(-r + shift).toFixed(4)}`;
+        } else if (disc > 0) {
+          const u = Math.cbrt(-q / 2 + Math.sqrt(disc));
+          const v = Math.cbrt(-q / 2 - Math.sqrt(disc));
+          return `x₁: ${(u + v + shift).toFixed(4)} (1 real root)`;
+        } else {
+          const r = Math.sqrt(-(p * p * p) / 27);
+          const phi = Math.acos(-q / (2 * r));
+          const r3 = 2 * Math.cbrt(r);
+          return `x₁: ${(r3 * Math.cos(phi / 3) + shift).toFixed(4)}, x₂: ${(r3 * Math.cos((phi + 2 * Math.PI) / 3) + shift).toFixed(4)}, x₃: ${(r3 * Math.cos((phi + 4 * Math.PI) / 3) + shift).toFixed(4)}`;
+        }
+      };
+      
+      return ctx;
+    })();
+
+    static _sanitizeExpression(expr) {
+      let safe = expr.toLowerCase();
+      
+      safe = safe.replace(/\bmod\b/g, '%');
+      safe = safe.replace(/\s+/g, '');
+      
+      safe = safe.replace(/(\d)([a-z\(])/g, '$1*$2'); // 2x -> 2*x
+      safe = safe.replace(/[xy]([0-9a-z\(])/g, (m, p1) => (m[0] === p1) ? m : `${m[0]}*${p1}`); // x2 -> x*2
+      safe = safe.replace(/\)([0-9a-z\(])/g, ')*$1'); // )( -> )*(
+      safe = safe.replace(/([a-wy-z])x/g, '$1*x'); // pix -> pi*x
+      safe = safe.replace(/([a-vx-z])y/g, '$1*y'); // piy -> pi*y
+
+      while (safe.includes('|')) {
+        const match = /\|([^|]+)\|/.exec(safe);
+        if (!match) break;
+        safe = safe.replace(`|${match[1]}|`, `abs(${match[1]})`);
+      }
+      
+      const terms = Object.keys(this._mathContext);
+      
+      terms.forEach(term => {
+        safe = safe.replace(new RegExp(`\\b${term}\\b`, 'g'), `M.${term}`);
+      });
+      safe = safe.replace(/\^/g, '**');
+      
+      safe = safe.replace(/(\d+(?:\.\d+)?|M\.[a-z0-9_]+)!/g, 'M.fact($1)');
+      
+      while (safe.includes(')!')) {
+        let bangIdx = safe.indexOf(')!');
+        let openIdx = -1;
+        let depth = 0;
+        
+        for (let i = bangIdx; i >= 0; i--) {
+          if (safe[i] === ')') depth++;
+          if (safe[i] === '(') depth--;
+          if (depth === 0) { openIdx = i; break; }
+        }
+        
+        if (openIdx !== -1) {
+          const inner = safe.slice(openIdx, bangIdx + 1);
+          safe = safe.slice(0, openIdx) + `M.fact(${inner})` + safe.slice(bangIdx + 2);
+        } else {
+          break;
+        }
+      }
+
+      // If any letters remain that aren't part of the 'M.' namespace, abort. Allow x & y for graphs
+      const alphaCheck = safe.replace(/M\.[a-z0-9_]+/g, '').replace(/[xy]/g, '');
+      if (/[a-wy-z]/i.test(alphaCheck)) return null; 
+      
+      return safe;
+    }
+
+    static _parseQuery(query) {
       const clean = query.trim();
-      if (!clean) return 0;
-
       const isExplicit = clean.startsWith('=');
       const expr = isExplicit ? clean.slice(1).trim() : clean;
 
-      const hasMathChars = /^[%\d\s\+\-\*\/\(\)\.\^\,a-zA-Z]+$/.test(expr) && /\d/.test(expr);
+      if (isExplicit) {
+        const casMatch = expr.match(/^(simplify|factor|derive|integrate|zeroes|tangent|area)\s+(.+)$/i);
+        if (casMatch) return { mode: 'cas', operation: casMatch[1].toLowerCase(), expr: casMatch[2], isExplicit };
+
+        const graphMatch = expr.match(/^(plot|graph)\s+(.+)$/i);
+        if (graphMatch) {
+          const rawExprs = graphMatch[2].split(/[,;]/).map(e => e.trim()).filter(e => e.length > 0);
+          return { mode: 'graph', expr: graphMatch[2], exprs: rawExprs, isExplicit };
+        }
+      }
+
+      return { mode: 'scientific', expr, isExplicit };
+    }
+
+    static matchConfidence(query) {
+      const parsed = this._parseQuery(query);
+      if (parsed.mode === 'cas' || parsed.mode === 'graph') return parsed.expr.length > 0 ? 100 : 80;
+
+      const hasMathChars = /^[%\d\s\+\-\*\/\(\)\.\^\,a-z!|]+$/.test(parsed.expr) && /\d/.test(parsed.expr);
       if (!hasMathChars) return 0;
 
-      let isValid = false;
-      try {
-        if (typeof math !== 'undefined') {
-          const res = math.evaluate(expr);
-          isValid = typeof res === 'number' || (res && res.isComplex) || (res && res.isBigNumber);
-        } else {
-          const safeExpr = expr.replace(/[^0-9\+\-\*\/\(\)\.\%]/g, '');
-          const res = new Function(`return (${safeExpr})`)();
-          isValid = typeof res === 'number' && !isNaN(res) && isFinite(res);
-        }
-      } catch (e) { isValid = false; }
+      const hasOperator = /[\+\-\*\/\%\^|!]/.test(parsed.expr);
+      const hasFunction = /[a-z]{2,}\s*\(/.test(parsed.expr);
+      if (!parsed.isExplicit && !hasOperator && !hasFunction) return 0;
 
-      if (isExplicit) return isValid ? 100 : 60;
-      return isValid && /[\+\-\*\/\%\^]/.test(expr) ? 80 : 0;
+      try {
+        let testExpr = parsed.expr;
+        if (testExpr.includes('=')) {
+          const parts = testExpr.split('=');
+          testExpr = `(${parts[0]}) - (${parts.slice(1).join('=')})`;
+        }
+        const safeExpr = this._sanitizeExpression(testExpr);
+        if (!safeExpr) return 0;
+        
+        const res = new Function('M', 'x', 'y', `return (${safeExpr})`)(this._mathContext, 1, 1);
+        const isValid = (typeof res === 'number' && !isNaN(res) && isFinite(res)) || typeof res === 'string';
+        
+        if (!isValid) return 0;
+        return parsed.isExplicit ? 100 : 80;
+      } catch (e) { return 0; }
     }
 
     async fetchData(signal) {
-      let expr = this.query.replace('=', '').trim();
-      if (!expr) return null;
-      try {
-        let resultVal, formattedResult;
+      const parsed = this.constructor._parseQuery(this.query);
+      
+      if (parsed.mode === 'cas') {
+        try {
+          const encodedExpr = encodeURIComponent(parsed.expr.replace(/\s+/g, ''));
+          const res = await FluxKit.api.gmFetch(`https://newton.vercel.app/api/v2/${parsed.operation}/${encodedExpr}`, { signal });
+          if (!res.ok) return null;
+          
+          const data = await res.json();
+          this.lastResult = data.result;
+          return { mode: 'cas', expr: parsed.expr, operation: parsed.operation, result: data.result };
+        } catch (e) { return null; }
+      }
+      
+      if (parsed.mode === 'graph') {
+        const parsedExprs = parsed.exprs.map(e => {
+          let isImplicit = false;
+          let evalStr = e;
+          if (e.includes('=')) {
+            const parts = e.split('=');
+            evalStr = `(${parts[0]}) - (${parts.slice(1).join('=')})`;
+            isImplicit = true;
+          } else if (e.includes('y')) {
+            isImplicit = true;
+          }
+          const safeExpr = this.constructor._sanitizeExpression(evalStr);
+          return safeExpr ? { original: e, safeExpr, isImplicit } : null;
+        }).filter(e => e !== null);
 
-        if (typeof math !== 'undefined') {
-          resultVal = math.evaluate(expr);
-          formattedResult = math.format(resultVal, { precision: 10 });
-        } else {
-          expr = expr.replace(/[^0-9\+\-\*\/\(\)\.\%]/g, '');
-          const res = new Function(`return (${expr})`)();
-          if (typeof res !== 'number' || isNaN(res) || !isFinite(res)) return null;
-          formattedResult = String(Math.round(res * 10000) / 10000);
+        if (parsedExprs.length === 0) return null;
+        return { mode: 'graph', expr: parsed.expr, exprs: parsed.exprs, parsedExprs };
+      }
+
+      try {
+        let testExpr = parsed.expr;
+        if (testExpr.includes('=')) {
+          const parts = testExpr.split('=');
+          testExpr = `(${parts[0]}) - (${parts.slice(1).join('=')})`;
         }
+        const safeExpr = this.constructor._sanitizeExpression(testExpr);
+        if (!safeExpr) return null;
+        
+        const res = new Function('M', 'x', 'y', `return (${safeExpr})`)(this.constructor._mathContext, 0, 0);
+        
+        let formattedResult;
+        if (typeof res === 'number') {
+          if (isNaN(res) || !isFinite(res)) return null;
+          formattedResult = String(Math.round(res * 1e10) / 1e10);
+        } else if (typeof res === 'string') {
+          formattedResult = res;
+        } else return null;
 
         this.lastResult = formattedResult;
-        return { expr, result: formattedResult };
+        return { mode: 'scientific', expr: parsed.expr, result: formattedResult };
       } catch (e) { return null; }
     }
 
-    renderListRow() { return FluxKit.ui.omni.ListRow(this.lastResult !== undefined ? `= ${this.lastResult}` : 'Calculate Expression', 'calculator', this.query, 'to Copy'); }
+    renderListRow() { 
+      const { mode, operation, expr } = this.constructor._parseQuery(this.query);
+      if (mode === 'cas') return FluxKit.ui.omni.ListRow(`CAS: ${operation} ${expr}`, 'function', 'Computer Algebra System', 'Fetching...');
+      if (mode === 'graph') return FluxKit.ui.omni.ListRow(`Plot Function: f(x) = ${expr}`, 'trending', 'Graphing Engine', 'to View');
+      return FluxKit.ui.omni.ListRow(this.lastResult !== undefined ? `= ${this.lastResult}` : 'Calculate Expression', 'calculator', this.query, 'to Copy'); 
+    }
 
     renderExpandedCard(data) {
-      const exprNode = createHTMLElement('div', { textContent: data.expr, style: { textAlign: 'center', color: 'var(--omni-muted)', fontSize: '16px', marginBottom: '8px', fontFamily: 'monospace' } });
+      if (data.mode === 'graph') return this._renderGraphCard(data);
+      
+      const exprPrefix = data.mode === 'cas' ? `${data.operation}( ` : '';
+      const exprSuffix = data.mode === 'cas' ? ` )` : '';
+      const displayExpr = `${exprPrefix}${data.expr}${exprSuffix}`;
 
-      const resultNode = createHTMLElement('div', { textContent: data.result, style: { fontSize: '48px', fontWeight: 'bold', textAlign: 'center', padding: '10px 0', fontFamily: 'monospace', color: 'var(--omni-text)', overflowX: 'auto', whiteSpace: 'nowrap' } });
+      const exprNode = FluxKit.utils.createHTMLElement('div', { textContent: displayExpr, style: { textAlign: 'center', color: 'var(--omni-muted)', fontSize: '16px', marginBottom: '8px', fontFamily: 'monospace' } });
+      
+      const isEquationResult = typeof data.result === 'string' && /[a-zA-Z]/.test(data.result);
+      const resultNode = FluxKit.utils.createHTMLElement('div', { 
+        textContent: data.result, 
+        style: { fontSize: isEquationResult ? '24px' : '48px', fontWeight: 'bold', textAlign: 'center', padding: '10px 0', fontFamily: 'monospace', color: 'var(--omni-text)', overflowX: 'auto', whiteSpace: 'nowrap' } 
+      });
 
       const copyBtn = FluxKit.ui.omni.Button('copy', 'Copy to Clipboard', (e) => { e.stopPropagation(); this.execute(); });
-
       copyBtn.setAttribute('tabindex', '0');
       copyBtn.addEventListener('focus', () => { copyBtn.style.boxShadow = '0 0 0 2px var(--omni-muted)' });
       copyBtn.addEventListener('blur', () => { copyBtn.style.boxShadow = 'none' });
 
-      return FluxKit.ui.omni.DetailCard(createHTMLElement('div', { children: [exprNode, resultNode] }), [copyBtn]);
+      return FluxKit.ui.omni.DetailCard(FluxKit.utils.createHTMLElement('div', { children: [exprNode, resultNode] }), [copyBtn]);
+    }
+
+    _renderGraphCard(data) {
+      const container = FluxKit.utils.createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', position: 'relative', width: '100%' } });
+      
+      const canvasWrap = FluxKit.utils.createHTMLElement('div', { style: { position: 'relative', width: '100%', height: '300px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--omni-border)', background: 'var(--omni-input-bg)' } });
+      const canvas = FluxKit.utils.createHTMLElement('canvas', { width: 600, height: 300, style: { width: '100%', height: '100%', cursor: 'crosshair', touchAction: 'none' } });
+      
+      const hud = FluxKit.utils.createHTMLElement('div', { style: { position: 'absolute', top: '8px', left: '8px', pointerEvents: 'none', fontSize: '12px', fontWeight: '500', color: 'var(--omni-text)', background: 'var(--omni-bg-solid)', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--omni-border)', display: 'none', boxShadow: 'var(--omni-shadow)', zIndex: '2', fontFamily: 'monospace', lineHeight: '1.5', minWidth: '150px' }});
+
+      let currentGridStep = 1;
+      let isGridLocked = false;
+
+      const unitControlWrap = FluxKit.utils.createHTMLElement('div', { 
+        style: { position: 'absolute', bottom: '8px', right: '8px', display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--omni-bg-solid)', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--omni-border)', boxShadow: 'var(--omni-shadow)', zIndex: '2', fontFamily: 'monospace', fontSize: '12px', color: 'var(--omni-text)' }
+      });
+
+      unitControlWrap.appendChild(FluxKit.utils.createHTMLElement('span', { textContent: 'Grid:', style: { color: 'var(--omni-muted)', fontWeight: 'bold' } }));
+
+      const unitValue = FluxKit.utils.createHTMLElement('div', {
+        contenteditable: true, spellcheck: false, textContent: '1',
+        style: { minWidth: '20px', textAlign: 'center', outline: 'none', borderBottom: '1px dashed var(--omni-muted)', fontWeight: 'bold', color: 'var(--omni-accent-text)', whiteSpace: 'nowrap' },
+        eventListener: {
+          keydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } },
+          blur: (e) => {
+            const parsed = parseFloat(e.target.textContent);
+            if (!isNaN(parsed) && parsed > 0) {
+              currentGridStep = parsed;
+              isGridLocked = true;
+              unitLockBtn.style.color = 'var(--omni-accent)';
+              const lockIcon = FluxKit.ui.icons ? FluxKit.ui.icons.lock : '🔒';
+              unitLockBtn.innerHTML = FluxKit.utils.safeHTML(lockIcon);
+            } else {
+              e.target.textContent = Number.isInteger(currentGridStep) ? currentGridStep.toString() : parseFloat(currentGridStep.toPrecision(4)).toString();
+            }
+            requestAnimationFrame(() => draw());
+          }
+        }
+      });
+      
+      const unitLockBtn = FluxKit.utils.createHTMLElement('button', {
+        fluxHubTooltip: 'Lock grid scale',
+        style: { background: 'transparent', border: 'none', color: 'var(--omni-muted)', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center', fontSize: '12px' },
+        eventListener: {
+          click: (e) => {
+            e.stopPropagation();
+            isGridLocked = !isGridLocked;
+            unitLockBtn.style.color = isGridLocked ? 'var(--omni-accent)' : 'var(--omni-muted)';
+            const iconStr = FluxKit.ui.icons ? (isGridLocked ? FluxKit.ui.icons.lock : FluxKit.ui.icons.unlock) : (isGridLocked ? '🔒' : '🔓');
+            unitLockBtn.innerHTML = FluxKit.utils.safeHTML(iconStr);
+            requestAnimationFrame(() => draw());
+          }
+        }
+      });
+
+      unitLockBtn.innerHTML = FluxKit.utils.safeHTML(FluxKit.ui.icons ? FluxKit.ui.icons.unlock : '🔓');
+
+      unitControlWrap.appendChild(unitValue);
+      unitControlWrap.appendChild(unitLockBtn);
+
+      // Coordinate Navigation UI (Jump to X, Y)
+      const navControlWrap = FluxKit.utils.createHTMLElement('div', { 
+        style: { position: 'absolute', bottom: '8px', left: '8px', display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--omni-bg-solid)', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--omni-border)', boxShadow: 'var(--omni-shadow)', zIndex: '2', fontFamily: 'monospace', fontSize: '12px', color: 'var(--omni-text)' }
+      });
+
+      const createCoordInput = (label, defaultVal) => {
+        const wrap = FluxKit.utils.createHTMLElement('div', { style: { display: 'flex', alignItems: 'center', gap: '4px' } });
+        wrap.appendChild(FluxKit.utils.createHTMLElement('span', { textContent: label, style: { color: 'var(--omni-muted)', fontWeight: 'bold' } }));
+        const input = FluxKit.utils.createHTMLElement('div', {
+          contenteditable: true, spellcheck: false, textContent: defaultVal,
+          style: { minWidth: '24px', textAlign: 'center', outline: 'none', borderBottom: '1px dashed var(--omni-muted)', fontWeight: 'bold', color: 'var(--omni-accent-text)', whiteSpace: 'nowrap' },
+          eventListener: {
+            keydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); jumpToCoord(); } },
+            focus: () => { document.execCommand('selectAll', false, null); }
+          }
+        });
+        wrap.appendChild(input);
+        return { wrap, input };
+      };
+
+      const inputX = createCoordInput('X:', '0');
+      const inputY = createCoordInput('Y:', '0');
+
+      const jumpToCoord = () => {
+        const targetX = parseFloat(inputX.input.textContent);
+        const targetY = parseFloat(inputY.input.textContent);
+        if (!isNaN(targetX) && !isNaN(targetY)) {
+          offsetX = (width / 2) - (targetX * scale);
+          offsetY = (height / 2) + (targetY * scale);
+          hoverData = null;
+          requestAnimationFrame(draw);
+        }
+      };
+
+      const jumpBtn = FluxKit.utils.createHTMLElement('button', {
+        fluxHubTooltip: 'Jump to Coordinates', icon: 'target',
+        style: { background: 'transparent', border: 'none', color: 'var(--omni-muted)', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center', fontSize: '14px', transition: 'color 0.2s' },
+        eventListener: {
+          click: (e) => { e.stopPropagation(); jumpToCoord(); },
+          mouseenter: (e) => { e.target.style.color = 'var(--omni-accent)' },
+          mouseleave: (e) => { e.target.style.color = 'var(--omni-muted)' }
+        }
+      });
+      
+      navControlWrap.appendChild(inputX.wrap);
+      navControlWrap.appendChild(inputY.wrap);
+      navControlWrap.appendChild(jumpBtn);
+
+      canvasWrap.appendChild(canvas);
+      canvasWrap.appendChild(hud);
+      canvasWrap.appendChild(unitControlWrap);
+      canvasWrap.appendChild(navControlWrap);
+      container.appendChild(canvasWrap);
+
+      const ctx = canvas.getContext('2d');
+      const width = canvas.width, height = canvas.height;
+      
+      const styles = getComputedStyle(FluxHub.ui.container || document.documentElement);
+      const gridColor = styles.getPropertyValue('--omni-separator').trim() || '#333';
+      const axisColor = styles.getPropertyValue('--omni-muted').trim() || '#666';
+      
+      const colors = [
+        styles.getPropertyValue('--omni-text'),
+        styles.getPropertyValue('--omni-danger'),
+        styles.getPropertyValue('--omni-success'),
+        styles.getPropertyValue('--omni-warning'),
+        styles.getPropertyValue('--omni-info')
+      ];
+
+      let scale = 40, offsetX = width / 2, offsetY = height / 2;
+      let isDragging = false, hasMoved = false;
+      let dragStart = { x: 0, y: 0 }, offsetStart = { x: 0, y: 0 };
+      let hoverData = null, pins = []; 
+
+      const M = this.constructor._mathContext;
+      const fns = data.parsedExprs.map((obj, idx) => ({
+        ...obj, fIdx: idx,
+        fn: new Function('M', 'x', 'y', `return (${obj.safeExpr})`)
+      }));
+      
+      const evaluate = (fObj, x, y = 0) => { try { const r = fObj.fn(M, x, y); return (isNaN(r) || !isFinite(r)) ? NaN : r; } catch(e) { return NaN; } };
+      
+      const getDerivative = (fObj, x) => {
+        if (fObj.isImplicit) return null;
+        const h = 1e-5;
+        const y1 = evaluate(fObj, x - h), y2 = evaluate(fObj, x + h);
+        return (!isNaN(y1) && !isNaN(y2)) ? (y2 - y1) / (2 * h) : null;
+      };
+
+      const findRoot = (f1, f2, x0, x1) => {
+        if (f1.isImplicit || f2.isImplicit) return null;
+        let a = x0, b = x1;
+        for(let k = 0; k < 20; k++) {
+          let mid = (a + b) / 2;
+          let val = evaluate(f1, mid) - evaluate(f2, mid);
+          if (val === 0) return mid;
+          if (Math.sign(val) === Math.sign(evaluate(f1, a) - evaluate(f2, a))) a = mid;
+          else b = mid;
+        }
+        const rootX = (a + b) / 2;
+        const y1 = evaluate(f1, rootX), y2 = evaluate(f2, rootX);
+        if (isNaN(y1) || isNaN(y2) || Math.abs(y1 - y2) > 0.1) return null;
+        return rootX;
+      };
+
+      const getIntegral = (x1, x2) => {
+        let a = Math.min(x1, x2), b = Math.max(x1, x2), n = 500, h = (b - a) / n, sum = 0;
+        const exFns = fns.filter(f => !f.isImplicit);
+        if (exFns.length === 0) return null;
+        for(let i=0; i<=n; i++) {
+          let y;
+          if (exFns.length >= 2) {
+            const y1 = evaluate(exFns[0], a + i*h), y2 = evaluate(exFns[1], a + i*h);
+            if (isNaN(y1) || isNaN(y2)) return null;
+            y = Math.abs(y1 - y2);
+          } else {
+            const y1 = evaluate(exFns[0], a + i*h);
+            if (isNaN(y1)) return null;
+            y = y1;
+          }
+          sum += (i === 0 || i === n) ? y : (i % 2 === 0 ? 2 * y : 4 * y);
+        }
+        return (h / 3) * sum;
+      };
+
+      let visibleIntersections = [];
+
+      const draw = () => {
+        ctx.clearRect(0, 0, width, height);
+        
+        if (!isGridLocked) {
+          const idealSpacing = 60; 
+          const idealStep = idealSpacing / scale;
+          const mag = Math.pow(10, Math.floor(Math.log10(idealStep)));
+          const norm = idealStep / mag;
+          
+          if (norm > 5) currentGridStep = 5 * mag;
+          else if (norm > 2) currentGridStep = 2 * mag;
+          else currentGridStep = mag;
+
+          if (document.activeElement !== unitValue) {
+            unitValue.textContent = Number.isInteger(currentGridStep) ? currentGridStep.toString() : parseFloat(currentGridStep.toPrecision(4)).toString();
+          }
+        }
+
+        ctx.beginPath(); ctx.strokeStyle = gridColor; ctx.lineWidth = 1;
+        const minX = -offsetX / scale;
+        const firstX = Math.floor(minX / currentGridStep) * currentGridStep;
+        for (let mathX = firstX; ; mathX += currentGridStep) {
+          const px = offsetX + mathX * scale;
+          if (px > width) break;
+          ctx.moveTo(px, 0); ctx.lineTo(px, height);
+        }
+
+        const minY = (offsetY - height) / scale;
+        const firstY = Math.floor(minY / currentGridStep) * currentGridStep;
+        for (let mathY = firstY; ; mathY += currentGridStep) {
+          const py = offsetY - mathY * scale;
+          if (py < 0) break;
+          ctx.moveTo(0, py); ctx.lineTo(width, py);
+        }
+        ctx.stroke();
+
+        ctx.beginPath(); ctx.strokeStyle = axisColor; ctx.lineWidth = 2;
+        ctx.moveTo(0, offsetY); ctx.lineTo(width, offsetY);
+        ctx.moveTo(offsetX, 0); ctx.lineTo(offsetX, height);
+        ctx.stroke();
+
+        const explicitFns = fns.filter(f => !f.isImplicit);
+        const implicitFns = fns.filter(f => f.isImplicit);
+
+        if (explicitFns.length > 0) {
+          let paths = explicitFns.map(() => new Path2D());
+          let hasPlotted = new Array(explicitFns.length).fill(false);
+          let prevY = new Array(explicitFns.length).fill(null);
+          visibleIntersections = [];
+
+          const pxStep = 0.5; 
+          const mathStep = pxStep / scale;
+          const startMathX = Math.floor((-offsetX / scale) / mathStep) * mathStep;
+          const endMathX = (width - offsetX) / scale;
+          let prevMathX = startMathX - mathStep;
+
+          for (let mathX = startMathX; mathX <= endMathX; mathX += mathStep) {
+            const px = offsetX + mathX * scale;
+            const currentY = explicitFns.map(fObj => evaluate(fObj, mathX));
+            
+            explicitFns.forEach((fObj, i) => {
+              const mathY = currentY[i];
+              if (isNaN(mathY)) { hasPlotted[i] = false; return; }
+              
+              const py = offsetY - (mathY * scale);
+              if (!hasPlotted[i] || Math.abs(mathY - prevY[i]) > (height / scale) * 2) {
+                paths[i].moveTo(px, py); hasPlotted[i] = true;
+              } else {
+                paths[i].lineTo(px, py);
+              }
+            });
+
+            if (mathX > startMathX && explicitFns.length > 1) {
+              for (let i = 0; i < explicitFns.length; i++) {
+                for (let j = i + 1; j < explicitFns.length; j++) {
+                  if (prevY[i] !== null && prevY[j] !== null && currentY[i] !== null && currentY[j] !== null) {
+                    if (Math.sign(prevY[i] - prevY[j]) !== Math.sign(currentY[i] - currentY[j])) {
+                      const ixX = findRoot(explicitFns[i], explicitFns[j], prevMathX, mathX);
+                      if (ixX !== null && !visibleIntersections.some(ix => Math.abs(ix.x - ixX) < 1e-4)) {
+                        visibleIntersections.push({ x: ixX, y: evaluate(explicitFns[i], ixX), f1: i, f2: j });
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            prevY = currentY; prevMathX = mathX;
+          }
+          explicitFns.forEach((fObj, i) => { 
+            ctx.strokeStyle = colors[fObj.fIdx % colors.length]; 
+            ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke(paths[i]); 
+          });
+        }
+
+        if (implicitFns.length > 0) {
+          const resPx = 2; 
+          const cols = Math.ceil(width / resPx);
+          const rows = Math.ceil(height / resPx);
+
+          implicitFns.forEach(fObj => {
+            ctx.beginPath();
+            ctx.strokeStyle = colors[fObj.fIdx % colors.length];
+            ctx.lineWidth = 2; ctx.lineJoin = 'round';
+
+            let prevRow = new Float32Array(cols + 1);
+            for (let c = 0; c <= cols; c++) {
+              const px = c * resPx;
+              prevRow[c] = evaluate(fObj, (px - offsetX) / scale, (offsetY - 0) / scale) || 0;
+            }
+
+            for (let r = 0; r < rows; r++) {
+              const pyTop = r * resPx, pyBot = pyTop + resPx;
+              const mathYBot = (offsetY - pyBot) / scale;
+
+              let currRow = new Float32Array(cols + 1);
+              currRow[0] = evaluate(fObj, (0 - offsetX) / scale, mathYBot) || 0;
+
+              for (let c = 0; c < cols; c++) {
+                const pxLeft = c * resPx, pxRight = pxLeft + resPx;
+                currRow[c + 1] = evaluate(fObj, (pxRight - offsetX) / scale, mathYBot) || 0;
+
+                const v0 = prevRow[c], v1 = prevRow[c + 1], v2 = currRow[c + 1], v3 = currRow[c];
+                
+                if (isNaN(v0) || isNaN(v1) || isNaN(v2) || isNaN(v3)) continue;
+
+                let state = 0;
+                if (v0 > 0) state |= 8; if (v1 > 0) state |= 4;
+                if (v2 > 0) state |= 2; if (v3 > 0) state |= 1;
+
+                if (state === 0 || state === 15) continue;
+
+                const interp = (val1, val2) => (Math.abs(val1 - val2) < 1e-10) ? 0.5 : val1 / (val1 - val2);
+                const topX = pxLeft + resPx * interp(v0, v1), botX = pxLeft + resPx * interp(v3, v2);
+                const leftY = pyTop + resPx * interp(v0, v3), rightY = pyTop + resPx * interp(v1, v2);
+
+                switch (state) {
+                  case 1: case 14: ctx.moveTo(botX, pyBot); ctx.lineTo(pxLeft, leftY); break;
+                  case 2: case 13: ctx.moveTo(pxRight, rightY); ctx.lineTo(botX, pyBot); break;
+                  case 3: case 12: ctx.moveTo(pxRight, rightY); ctx.lineTo(pxLeft, leftY); break;
+                  case 4: case 11: ctx.moveTo(topX, pyTop); ctx.lineTo(pxRight, rightY); break;
+                  case 5: ctx.moveTo(topX, pyTop); ctx.lineTo(pxLeft, leftY); ctx.moveTo(botX, pyBot); ctx.lineTo(pxRight, rightY); break;
+                  case 6: case 9: ctx.moveTo(topX, pyTop); ctx.lineTo(botX, pyBot); break;
+                  case 7: case 8: ctx.moveTo(topX, pyTop); ctx.lineTo(pxLeft, leftY); break;
+                  case 10: ctx.moveTo(topX, pyTop); ctx.lineTo(pxRight, rightY); ctx.moveTo(botX, pyBot); ctx.lineTo(pxLeft, leftY); break;
+                }
+              }
+              prevRow = currRow;
+            }
+            ctx.stroke();
+          });
+        }
+
+        // Draw Shaded Pin Area (Explicit only)
+        if (pins.length === 2 && explicitFns.length > 0) {
+          const startX = Math.min(pins[0].x, pins[1].x), endX = Math.max(pins[0].x, pins[1].x);
+          ctx.beginPath();
+          ctx.fillStyle = `color-mix(in srgb, ${colors[0]} 20%, transparent)`;
+          
+          if (explicitFns.length >= 2) {
+            for (let px = offsetX + startX * scale; px <= offsetX + endX * scale; px++) {
+              const x = (px - offsetX) / scale;
+              const y = evaluate(explicitFns[0], x);
+              if (!isNaN(y)) px === offsetX + startX * scale ? ctx.moveTo(px, offsetY - y * scale) : ctx.lineTo(px, offsetY - y * scale);
+            }
+            for (let px = offsetX + endX * scale; px >= offsetX + startX * scale; px--) {
+              const x = (px - offsetX) / scale;
+              const y = evaluate(explicitFns[1], x);
+              if (!isNaN(y)) ctx.lineTo(px, offsetY - y * scale);
+            }
+          } else {
+            ctx.moveTo(offsetX + startX * scale, offsetY);
+            for (let px = offsetX + startX * scale; px <= offsetX + endX * scale; px++) {
+              const x = (px - offsetX) / scale;
+              const y = evaluate(explicitFns[0], x);
+              if (!isNaN(y)) ctx.lineTo(px, offsetY - y * scale);
+            }
+            ctx.lineTo(offsetX + endX * scale, offsetY);
+          }
+          ctx.closePath(); ctx.fill();
+        }
+
+        visibleIntersections.forEach(ix => {
+          ctx.beginPath(); ctx.arc(offsetX + ix.x * scale, offsetY - ix.y * scale, 4, 0, Math.PI * 2);
+          ctx.fillStyle = 'var(--omni-warning)'; ctx.fill();
+        });
+
+        pins.forEach(pin => {
+          ctx.beginPath();
+          ctx.moveTo(offsetX + pin.x * scale, 0); ctx.lineTo(offsetX + pin.x * scale, height);
+          ctx.strokeStyle = 'color-mix(in srgb, var(--omni-danger) 40%, transparent)'; ctx.lineWidth = 2; ctx.stroke();
+          
+          if (explicitFns.length > 0) {
+            ctx.beginPath(); ctx.arc(offsetX + pin.x * scale, offsetY - evaluate(explicitFns[0], pin.x) * scale, 5, 0, Math.PI * 2);
+            ctx.fillStyle = 'var(--omni-danger)'; ctx.fill();
+          }
+        });
+
+        let hudText = [];
+        const fmt = (v) => Number.isInteger(v) ? v.toString() : (Math.abs(v) < 1e-10 ? "0" : v.toFixed(3));
+
+        if (hoverData) {
+          ctx.beginPath();
+          ctx.strokeStyle = 'color-mix(in srgb, var(--omni-text) 30%, transparent)';
+          ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+          ctx.moveTo(hoverData.px, 0); ctx.lineTo(hoverData.px, height);
+          ctx.stroke(); ctx.setLineDash([]);
+
+          hudText.push(`<div style="border-bottom: 1px solid var(--omni-separator); padding-bottom: 4px; margin-bottom: 4px; color: var(--omni-text);"><b>x = ${fmt(hoverData.x)}</b></div>`);
+          if (hoverData.isIntersection) hudText.push(`<div style="color: var(--omni-warning); margin-bottom: 4px; font-weight: bold;">Intersection Point</div>`);
+
+          const groupedPoints = {};
+          hoverData.points.forEach(pt => {
+            if (!groupedPoints[pt.fIdx]) groupedPoints[pt.fIdx] = [];
+            groupedPoints[pt.fIdx].push(pt);
+          });
+
+          Object.keys(groupedPoints).forEach(fIdxStr => {
+            const fIdx = parseInt(fIdxStr);
+            const pts = groupedPoints[fIdx];
+            const fObj = fns[fIdx];
+            const color = colors[fIdx % colors.length];
+            
+            pts.forEach(pt => {
+              if (pt.m !== null) {
+                const tX1 = pt.x - 1000/scale, tY1 = pt.y - pt.m * (1000/scale);
+                const tX2 = pt.x + 1000/scale, tY2 = pt.y + pt.m * (1000/scale);
+                ctx.beginPath();
+                ctx.strokeStyle = `color-mix(in srgb, ${color} 40%, transparent)`;
+                ctx.moveTo(offsetX + tX1 * scale, offsetY - tY1 * scale);
+                ctx.lineTo(offsetX + tX2 * scale, offsetY - tY2 * scale);
+                ctx.stroke();
+              }
+              ctx.beginPath(); ctx.arc(hoverData.px, pt.py, 5, 0, Math.PI * 2);
+              ctx.fillStyle = color; ctx.fill();
+            });
+
+            const colorSpan = `<span style="color: ${color}; font-size: 14px; vertical-align: middle;">■</span>`;
+            const prefix = fObj.isImplicit ? '' : 'f(x) = ';
+            hudText.push(`<div style="margin-top: 6px;">${colorSpan} <span style="color: var(--omni-text); font-weight: bold;">${prefix}${fObj.original}</span></div>`);
+            
+            pts.forEach(pt => {
+              let slopeTxt = pt.m !== null ? ` <span style="color: var(--omni-muted);">(dy/dx: ${fmt(pt.m)})</span>` : '';
+              hudText.push(`<div style="margin-left: 18px; color: var(--omni-text);">y = ${fmt(pt.y)}${slopeTxt}</div>`);
+            });
+          });
+
+          hudText.push(`<div style="color: var(--omni-muted); font-size: 10px; padding-top: 6px; margin-top: 4px; border-top: 1px dashed var(--omni-separator);">Hold SHIFT for free-aim X</div>`);
+        }
+
+        if (pins.length === 1) {
+          hudText.push(`<div style="margin-top: 4px;">Pin 1: x = ${fmt(pins[0].x)}<br>Click another X to calc area.</div>`);
+        } else if (pins.length === 2) {
+          const area = getIntegral(pins[0].x, pins[1].x);
+          const lbl = explicitFns.length >= 2 ? 'Area Between' : 'Area';
+          hudText.push(`<div style="margin-top: 4px;">${lbl} [${fmt(pins[0].x)} to ${fmt(pins[1].x)}] = ${area !== null ? area.toFixed(4) : 'N/A (Implicit)'}<br>Click to clear.</div>`);
+        }
+
+        if (hudText.length) { hud.style.display = 'block'; hud.innerHTML = FluxKit.utils.safeHTML(hudText.join('')); }
+        else { hud.style.display = 'none'; }
+      };
+
+      canvas.addEventListener('pointerdown', e => {
+        isDragging = true; hasMoved = false;
+        dragStart = { x: e.clientX, y: e.clientY };
+        offsetStart = { x: offsetX, y: offsetY };
+        canvas.setPointerCapture(e.pointerId);
+        canvas.style.cursor = 'grabbing';
+      });
+
+      canvas.addEventListener('pointermove', e => {
+        const rect = canvas.getBoundingClientRect();
+        const pxRaw = (e.clientX - rect.left) * (canvas.width / rect.width);
+        const pyRaw = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+        if (isDragging) {
+          const dx = (e.clientX - dragStart.x) * (canvas.width / rect.width);
+          const dy = (e.clientY - dragStart.y) * (canvas.height / rect.height);
+          if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasMoved = true;
+          offsetX = offsetStart.x + dx; offsetY = offsetStart.y + dy;
+        }
+
+        let mathX = (pxRaw - offsetX) / scale;
+
+        if (!isDragging) {
+          let snapped = false;
+          let isIntersection = false;
+
+          if (!e.shiftKey) {
+            const snapThreshold = 15 / scale; 
+
+            for (let ix of visibleIntersections) {
+              if (Math.abs(mathX - ix.x) < snapThreshold) {
+                mathX = ix.x; isIntersection = true; snapped = true; break;
+              }
+            }
+
+            if (!snapped) {
+               for (let i = 0; i < fns.length; i++) {
+                 let nx = mathX;
+                 for (let k = 0; k < 4; k++) {
+                  const y = evaluate(fns[i], nx);
+                  const dy = getDerivative(fns[i], nx);
+                  if (dy === null || dy === 0 || y === null) break;
+                  nx -= y / dy;
+                 }
+                 if (Math.abs(nx - mathX) < snapThreshold && Math.abs(evaluate(fns[i], nx)) < 1e-4) {
+                  mathX = nx; snapped = true; break;
+                 }
+               }
+            }
+
+            const snappedGridX = Math.round(mathX / currentGridStep) * currentGridStep;
+            if (!snapped && Math.abs(mathX - snappedGridX) < snapThreshold) {
+              mathX = snappedGridX;
+              snapped = true;
+            }
+          }
+
+          let points = [];
+          fns.forEach((fObj) => {
+            if (!fObj.isImplicit) {
+              const y = evaluate(fObj, mathX);
+              if (!isNaN(y)) points.push({ x: mathX, y: y, py: offsetY - y * scale, m: getDerivative(fObj, mathX), fIdx: fObj.fIdx });
+            } else {
+              let prevSign = null;
+              let prevY = null;
+              for (let py = 0; py <= height; py += 2) {
+                const my = (offsetY - py) / scale;
+                const val = evaluate(fObj, mathX, my);
+                if (isNaN(val)) { prevSign = null; continue; }
+                const sign = Math.sign(val);
+                if (prevSign !== null && sign !== prevSign && sign !== 0) {
+                  let a = prevY, b = my;
+                  for(let k=0; k<6; k++) {
+                    let mid = (a+b)/2;
+                    if (Math.sign(evaluate(fObj, mathX, mid)) === prevSign) a = mid;
+                    else b = mid;
+                  }
+                  const exactY = (a+b)/2;
+                  points.push({ x: mathX, y: exactY, py: offsetY - exactY * scale, m: null, fIdx: fObj.fIdx });
+                }
+                prevSign = sign;
+                prevY = my;
+              }
+            }
+          });
+
+          if (points.length > 0) {
+            hoverData = { x: mathX, px: offsetX + mathX * scale, points, isIntersection };
+          } else { hoverData = null; }
+          
+        } else { hoverData = null; }
+        
+        requestAnimationFrame(draw);
+      });
+
+      canvas.addEventListener('pointerup', e => {
+        isDragging = false; canvas.releasePointerCapture(e.pointerId); canvas.style.cursor = 'crosshair';
+
+        if (!hasMoved && hoverData) {
+          if (pins.length >= 2) pins = [];
+          pins.push({ x: hoverData.x });
+          requestAnimationFrame(draw);
+        } else if (!hasMoved && !hoverData && pins.length > 0) {
+          pins = []; requestAnimationFrame(draw);
+        }
+      });
+
+      canvas.addEventListener('wheel', e => {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const px = (e.clientX - rect.left) * (canvas.width / rect.width);
+        const py = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+        const mathX = (px - offsetX) / scale;
+        const mathY = (offsetY - py) / scale;
+        
+        let newScale = scale * (e.deltaY < 0 ? 1.15 : 0.85);
+        scale = Math.max(0.5, Math.min(10000, newScale));
+
+        offsetX = px - mathX * scale; 
+        offsetY = py + mathY * scale;
+        
+        requestAnimationFrame(draw);
+      }, { passive: false });
+
+      setTimeout(() => requestAnimationFrame(draw), 0);
+      return FluxKit.ui.omni.DetailCard(container, []);
     }
 
     handleKeydown(e) {
@@ -1742,165 +2940,528 @@
       return false;
     }
 
-    execute() { if (this.lastResult !== undefined) { navigator.clipboard.writeText(this.lastResult.toString()); FluxHub.ui.hide(); } }
+    execute() { 
+      if (this.lastResult !== undefined) { 
+        navigator.clipboard.writeText(this.lastResult.toString()); 
+        FluxHub.ui.hide(); 
+      } 
+    }
   }
 
   class ColorView extends BaseView {
     static isAvailable = true;
-    static commandRegistry = [{ prefix: '> color', description: 'Inspect HEX/RGB/HSL, pick colors, check contrast', icon: 'palette' }];
+    static commandRegistry = [
+      { prefix: '> color', description: 'Inspect HEX/RGB/HSL, tones, and check contrast', icon: 'palette' },
+      { prefix: '> palette', description: 'Interactive color palette builder', icon: 'palette' }
+    ];
 
     constructor(query) {
-      super(query); this.rawQuery = query.trim();
-      const extracted = this.rawQuery.replace(/^>\s*color\s*/i, '').trim();
-      this.colorInput = extracted || 'var(--omni-accent)';
+      super(query); 
+      const extracted = query.trim().replace(/^>\s*(color|palette)\s*/i, '').trim();
+      this.colorInput = extracted;
+      this.activeMode = 'curated';
+      
+      this._updatePaletteUI = debounce(this._renderAdvancedMetrics.bind(this), 60);
     }
 
     static matchConfidence(query) {
       const q = query.trim().toLowerCase();
-
-      if (q === '> color') return 100;
-      if (q.startsWith('> color ')) return 100;
-
+      if (/^>\s*(color|palette)(\s+|$)/i.test(q)) return 100;
       if (/^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(q)) return 95;
       if (/^(rgb|hsl)a?\(/i.test(q)) return 95;
-
       return 0;
     }
 
-    async fetchData() {
+    async fetchData(signal, query) {
       try {
-        const parsedColor = FluxKit.theme.parseColor(this.colorInput, FluxHub.ui.getRoot());
-        if (!parsedColor) return null;
-        return { parsedColor };
+        await Promise.all([
+          FluxKit.theme.loadColorDictionary(),
+          FluxKit.theme.loadCuratedPalettes()
+        ]);
+        const mode = (/^>\s*palette(\s+|$)/i.test(query)) ? 'palette': 'color';
+        let parsedColor = null, searchQuery = '';
+        if (this.colorInput) {
+          parsedColor = FluxKit.theme.parseColor(this.colorInput, FluxHub.ui.getRoot());
+          if (!parsedColor) searchQuery = this.inputArg.toLowerCase();
+        }
+
+        if (!parsedColor) {
+          parsedColor = FluxKit.theme.parseColor('var(--omni-accent)', FluxHub.ui.getRoot());
+        }
+
+        return { mode, parsedColor, searchQuery };
       } catch (e) { return null; }
     }
 
-    renderListRow() {
+    renderListRow(query) {
       const colorName = FluxKit.theme.getColorName(this.colorInput) || 'Custom Color';
-      return FluxKit.ui.omni.ListRow('Color Inspector', 'palette', `${colorName} (${this.colorInput})`, 'to copy HEX');
+      if ((/^>\s*palette(\s+|$)/i.test(query))) {
+        return FluxKit.ui.omni.ListRow('Palette Builder', 'palette', `Base: ${colorName} (${this.colorInput})`, 'to configure');
+      }
+      const isVar = this.colorInput.includes('var(');
+      const subtitle = isVar ? `${this.colorInput} (${colorName})` : `${colorName} (${this.colorInput})`;
+      return FluxKit.ui.omni.ListRow('Color Inspector', 'palette', subtitle, 'to open tools');
+    }
+
+    renderPaletteCard(data) {
+      let c = data.parsedColor; 
+      c.a = 1;
+      
+      const container = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '12px', padding: '12px' } });
+
+      const baseControlRow = createHTMLElement('div', { 
+        style: { display: 'flex', alignItems: 'center', gap: '12px', paddingBottom: '12px', borderBottom: '1px solid var(--omni-separator)' } 
+      });
+
+      const baseSwatchWrap = createHTMLElement('div', {
+        style: { width: '36px', height: '36px', borderRadius: '6px', position: 'relative', overflow: 'hidden', border: '1px solid var(--omni-border)', flexShrink: '0', boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.1)' }
+      });
+
+      const colorPicker = createHTMLElement('input', {
+        type: 'color', style: { position: 'absolute', width: '200%', height: '200%', top: '-50%', left: '-50%', opacity: 0, cursor: 'pointer' },
+        eventListener: {
+          input: (e) => {
+            const newC = FluxKit.theme.parseColor(e.target.value, FluxHub.ui.getRoot());
+            if (newC) {
+              c = newC;
+              c.a = 1; // Strip alpha to preserve palette integrity
+              updateBaseUI();
+              renderPalette();
+            }
+          }
+        }
+      });
+      baseSwatchWrap.appendChild(colorPicker);
+      baseControlRow.appendChild(baseSwatchWrap);
+
+      const baseLabelWrap = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', justifyContent: 'center' } });
+      baseLabelWrap.appendChild(createHTMLElement('span', { textContent: 'Base Color (Click Swatch to Edit)', style: { fontSize: '10px', color: 'var(--omni-muted)', textTransform: 'uppercase', fontWeight: 'bold' } }));
+      
+      const baseHexNode = createHTMLElement('span', {
+        style: { fontSize: '14px', fontWeight: 'bold', color: 'var(--omni-text)', fontFamily: 'monospace', cursor: 'pointer', display: 'inline-block', marginTop: '2px', width: 'fit-content' },
+        dataset: { fluxHubTooltip: 'Copy HEX' },
+        eventListener: (e) => {
+          navigator.clipboard.writeText(e.target.textContent);
+          FluxKit.ui.showNotification(`Copied ${e.target.textContent}`, { icon: 'success' });
+        }
+      });
+      baseLabelWrap.appendChild(baseHexNode);
+      baseControlRow.appendChild(baseLabelWrap);
+      container.appendChild(baseControlRow);
+
+      const updateBaseUI = () => {
+        const hex = `#${c.r.toString(16).padStart(2, '0')}${c.g.toString(16).padStart(2, '0')}${c.b.toString(16).padStart(2, '0')}`;
+        baseSwatchWrap.style.backgroundColor = `rgb(${c.r}, ${c.g}, ${c.b})`;
+        baseSwatchWrap.dataset.fluxHubTooltip = FluxKit.theme.getColorName(hex);
+        colorPicker.value = hex;
+        baseHexNode.textContent = hex.toUpperCase();
+      };
+      
+      updateBaseUI();
+
+      const modes = ['curated', 'analogous', 'split', 'triadic', 'tonal'];
+      const modeTabs = createHTMLElement('div', { style: { display: 'flex', background: 'var(--omni-input-bg)', borderRadius: '6px', padding: '4px', gap: '4px' } });
+      
+      let renderPalette;
+
+      modes.forEach(m => {
+        const btn = createHTMLElement('button', {
+          textContent: m.charAt(0).toUpperCase() + m.slice(1),
+          style: { flex: 1, padding: '6px', border: 'none', background: this.activeMode === m ? 'var(--omni-hover)' : 'transparent', color: this.activeMode === m ? 'var(--omni-text)' : 'var(--omni-muted)', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' },
+          eventListener: () => {
+            this.activeMode = m;
+            Array.from(modeTabs.children).forEach(child => {
+              child.style.background = 'transparent';
+              child.style.color = 'var(--omni-muted)';
+            });
+            btn.style.background = 'var(--omni-hover)';
+            btn.style.color = 'var(--omni-text)';
+            if (renderPalette) renderPalette();
+          }
+        });
+        modeTabs.appendChild(btn);
+      });
+      container.appendChild(modeTabs);
+
+      const swatchesWrap = createHTMLElement('div', { style: { display: 'flex', height: '140px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--omni-border)' } });
+      container.appendChild(swatchesWrap);
+
+      const exportWrap = createHTMLElement('div', { style: { display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '4px' } });
+      container.appendChild(exportWrap);
+
+      renderPalette = () => {
+        swatchesWrap.innerHTML = '';
+        exportWrap.innerHTML = '';
+        
+        let r = c.r / 255, g = c.g / 255, b = c.b / 255;
+        const max = Math.max(r, g, b), min = Math.min(r, g, b);
+        let h, s, l = (max + min) / 2;
+        if (max !== min) {
+          const d = max - min;
+          s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+          switch (max) {
+            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+            case g: h = (b - r) / d + 2; break;
+            case b: h = (r - g) / d + 4; break;
+          }
+          h = h * 60;
+        } else { h = s = 0; }
+        
+        const sStr = Math.round(s * 100) + '%';
+        const lStr = Math.round(l * 100) + '%';
+        
+        let currentColors = [];
+        
+        if (this.activeMode === 'curated') {
+           if (!this._sortedPalettes || this._lastBaseHex !== baseHexNode.textContent) {
+              this._lastBaseHex = baseHexNode.textContent;
+              this._curatedIndex = 0;
+              
+              const scored = (FluxKit.theme._curatedPalettes || []).map(pal => {
+                let minDistance = Infinity;
+                pal.colors.forEach(colHex => {
+                  const dist = FluxKit.theme.getColorDistance(c, colHex);
+                  if (dist < minDistance) minDistance = dist;
+                });
+                return { ...pal, score: minDistance };
+              });
+              
+              this._sortedPalettes = scored.sort((a, b) => a.score - b.score);
+           }
+           
+           if (this._sortedPalettes.length > 0) {
+              const activePal = this._sortedPalettes[this._curatedIndex % this._sortedPalettes.length];
+              currentColors = activePal.colors;
+              
+              const nameLabel = createHTMLElement('div', {
+                textContent: activePal.name,
+                style: { position: 'absolute', top: '-18px', left: '0', fontSize: '10px', color: 'var(--omni-muted)', fontWeight: 'bold', textTransform: 'uppercase' }
+              });
+              swatchesWrap.style.marginTop = '18px';
+              swatchesWrap.style.overflow = 'visible';
+              swatchesWrap.appendChild(nameLabel);
+
+              const nextBtn = createHTMLElement('button', {
+                textContent: `Next Match (${(this._curatedIndex % this._sortedPalettes.length) + 1}/${this._sortedPalettes.length})`, icon: 'sync',
+                style: { background: 'var(--omni-input-bg)', color: 'var(--omni-text)', border: '1px solid var(--omni-border)', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' },
+                eventListener: {
+                  click: () => { this._curatedIndex++; renderPalette(); },
+                  mouseenter: (e) => e.target.style.background = 'var(--omni-hover)',
+                  mouseleave: (e) => e.target.style.background = 'var(--omni-input-bg)'
+                }
+              });
+              exportWrap.appendChild(nextBtn);
+           }
+        } else if (this.activeMode === 'tonal') {
+          const tones = FluxKit.theme.getTintsAndShades(c);
+          currentColors = [tones[200], tones[400], tones[500], tones[600], tones[800]];
+        } else if (this.activeMode === 'analogous') {
+          currentColors = [-60, -30, 0, 30, 60].map(deg => `hsl(${Math.round((h + deg + 360) % 360)}, ${sStr}, ${lStr})`);
+        } else if (this.activeMode === 'split') {
+          currentColors = [0, 150, 210, 150, 210].map((deg, i) => {
+            const lMod = i > 2 ? Math.round(l * 80) + '%' : lStr; // darken the duplicates slightly
+            return `hsl(${Math.round((h + deg + 360) % 360)}, ${sStr}, ${lMod})`;
+          });
+        } else if (this.activeMode === 'triadic') {
+          currentColors = [0, 120, 240, 120, 240].map((deg, i) => {
+            const lMod = i > 2 ? Math.round(l * 120 > 100 ? 90 : l * 120) + '%' : lStr; // lighten the duplicates
+            return `hsl(${Math.round((h + deg + 360) % 360)}, ${sStr}, ${lMod})`;
+          });
+        }
+
+        currentColors.forEach(col => {
+          const parsed = FluxKit.theme.parseColor(col);
+          const hex = `#${parsed.r.toString(16).padStart(2, '0')}${parsed.g.toString(16).padStart(2, '0')}${parsed.b.toString(16).padStart(2, '0')}`;
+          const isDark = FluxKit.theme.getLuminance(parsed) < 0.5;
+
+          const block = createHTMLElement('div', {
+            style: { flex: 1, backgroundColor: col, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative', transition: 'flex 0.2s ease' },
+            dataset: { fluxHubTooltip: 'Copy HEX' },
+            eventListener: {
+              mouseenter: (e) => e.currentTarget.style.flex = 1.3,
+              mouseleave: (e) => e.currentTarget.style.flex = 1,
+              click: () => {
+                navigator.clipboard.writeText(hex);
+                FluxKit.ui.showNotification(`Copied ${hex}`, { icon: 'success' });
+              }
+            }
+          });
+          
+          const textColor = isDark ? '#ffffff' : '#000000';
+          
+          const textWrap = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }});
+          textWrap.appendChild(createHTMLElement('span', { textContent: hex.toUpperCase(), style: { color: textColor, fontSize: '13px', fontWeight: 'bold', fontFamily: 'monospace' } }));
+          textWrap.appendChild(createHTMLElement('span', { textContent: FluxKit.theme.getColorName(col), style: { color: textColor, fontSize: '10px', opacity: '0.8', textAlign: 'center', padding: '0 4px', lineHeight: '1.1' } }));
+          
+          block.appendChild(textWrap);
+          swatchesWrap.appendChild(block);
+        });
+
+        const copyJsonBtn = createHTMLElement('button', {
+           textContent: 'Export JSON', icon: 'code',
+           style: { background: 'var(--omni-hover)', color: 'var(--omni-text)', border: '1px solid var(--omni-border)', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' },
+           eventListener: () => {
+            const payload = {};
+            currentColors.forEach((col, i) => {
+              const p = FluxKit.theme.parseColor(col);
+              payload[`color-${i+1}`] = `#${p.r.toString(16).padStart(2,'0')}${p.g.toString(16).padStart(2,'0')}${p.b.toString(16).padStart(2,'0')}`;
+            });
+            navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+            FluxKit.ui.showNotification('JSON copied!', { icon: 'success' });
+            FluxHub.ui.hide();
+          }
+        });
+        exportWrap.appendChild(copyJsonBtn);
+      };
+
+      renderPalette();
+      return FluxKit.ui.omni.DetailCard(container, []);
     }
 
     renderExpandedCard(data) {
       let currentParsedColor = data.parsedColor;
 
-      const container = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '12px', padding: '8px' } });
-
-      const swatch = createHTMLElement('div', {
-        style: {
-          width: '100%', height: '80px', borderRadius: '8px', position: 'relative', overflow: 'hidden',
-          border: '1px solid var(--omni-border)', boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.1)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center'
-        }
+      if (data.mode === 'palette') return this.renderPaletteCard(data);
+      
+      const container = createHTMLElement('div', { 
+        style: { display: 'flex', flexDirection: 'column', gap: '12px', padding: '12px' } 
       });
 
-      const colorPicker = createHTMLElement('input', {
-        type: 'color', style: { position: 'absolute', width: '200%', height: '200%', opacity: 0, cursor: 'pointer' },
-        eventListener: { input: (e) => updateUI(e.target.value) }
+      const topRow = createHTMLElement('div', { style: { display: 'flex', gap: '12px', alignItems: 'stretch' } });
+      
+      const swatchWrap = createHTMLElement('div', {
+        style: { width: '70px', height: '70px', borderRadius: '8px', position: 'relative', overflow: 'hidden', border: '1px solid var(--omni-border)', flexShrink: '0', boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.1)' }
       });
-      swatch.appendChild(colorPicker);
+      
+      this.colorPicker = createHTMLElement('input', {
+        type: 'color', style: { position: 'absolute', width: '200%', height: '200%', top: '-50%', left: '-50%', opacity: 0, cursor: 'pointer' },
+        eventListener: { input: (e) => this._handleLiveInput(e.target.value) }
+      });
+      swatchWrap.appendChild(this.colorPicker);
+      topRow.appendChild(swatchWrap);
 
-      const swatchHint = createHTMLElement('span', { style: { color: 'rgba(255,255,255,0.7)', fontSize: '12px', fontWeight: 'bold', pointerEvents: 'none', mixBlendMode: 'difference' } });
-      swatch.appendChild(swatchHint);
-      container.appendChild(swatch);
+      const formatsWrap = createHTMLElement('div', { style: { flex: '1', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '6px' } });
+      this.hexNode = this._createFormatRow('HEX');
+      this.rgbNode = this._createFormatRow('RGB');
+      this.hslNode = this._createFormatRow('HSL');
+      
+      formatsWrap.appendChild(this.hexNode.row);
+      formatsWrap.appendChild(this.rgbNode.row);
+      formatsWrap.appendChild(this.hslNode.row);
+      topRow.appendChild(formatsWrap);
+      container.appendChild(topRow);
 
-      const alphaControl = createHTMLElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--omni-muted)' } });
-      const slider = createHTMLElement('input', {
-        type: 'range', min: '0', max: '100',
-        style: { flex: '1', cursor: 'pointer', accentColor: 'var(--omni-accent)' },
+      const alphaControl = createHTMLElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--omni-muted)', background: 'var(--omni-input-bg)', padding: '6px 10px', borderRadius: '6px' } });
+      this.opacitySlider = createHTMLElement('input', {
+        type: 'range', min: '0', max: '100', style: { flex: '1', cursor: 'pointer', accentColor: 'var(--omni-accent)' },
         eventListener: {
           input: (e) => {
             currentParsedColor.a = e.target.value / 100;
-            updateUI(currentParsedColor, true);
+            this._handleLiveInput(currentParsedColor, true);
           }
         }
       });
-      alphaControl.appendChild(createHTMLElement('span', { textContent: 'Opacity', style: { width: '50px' } }));
-      alphaControl.appendChild(slider);
+      alphaControl.appendChild(createHTMLElement('span', { textContent: 'Opacity', style: { width: '50px', fontWeight: 'bold' } }));
+      alphaControl.appendChild(this.opacitySlider);
+      this.opacityValNode = createHTMLElement('span', { textContent: '100%', style: { width: '35px', textAlign: 'right', fontFamily: 'monospace' } });
+      alphaControl.appendChild(this.opacityValNode);
       container.appendChild(alphaControl);
 
-      const formatsContainer = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } });
-      const hexRow = createHTMLElement('div', { innerHTML: `<span>HEX</span> <span style="cursor:pointer; color:var(--omni-accent);"></span>` });
-      const rgbRow = createHTMLElement('div', { innerHTML: `<span>RGB</span> <span style="cursor:pointer; color:var(--omni-accent);"></span>` });
-      const hslRow = createHTMLElement('div', { innerHTML: `<span>HSL</span> <span style="cursor:pointer; color:var(--omni-accent);"></span>` });
-      [hexRow, rgbRow, hslRow].forEach(row => {
-        row.style.display = 'flex'; row.style.justifyContent = 'space-between';
-        row.style.fontSize = '12px'; row.style.fontWeight = '500';
-        formatsContainer.appendChild(row);
-      });
-      container.appendChild(formatsContainer);
+      this.metricsContainer = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '12px' } });
+      container.appendChild(this.metricsContainer);
 
-      const paletteContainer = createHTMLElement('div', { style: { display: 'flex', gap: '4px', height: '30px', marginTop: '4px' } });
-      const paletteSwatches = Array(5).fill(0).map(() => createHTMLElement('div', { style: { flex: 1, borderRadius: '4px', cursor: 'pointer', border: '1px solid var(--omni-border)' } }));
-      paletteSwatches.forEach(ps => paletteContainer.appendChild(ps));
-      container.appendChild(paletteContainer);
-
-      const contrastFooter = createHTMLElement('div', { style: { fontSize: '12px', color: 'var(--omni-muted)', borderTop: '1px solid var(--omni-border)', paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '6px' } });
-      const whiteContrast = createHTMLElement('div', { style: { display: 'flex', justifyContent: 'space-between' } });
-      const darkContrast = createHTMLElement('div', { style: { display: 'flex', justifyContent: 'space-between' } });
-      contrastFooter.appendChild(whiteContrast);
-      contrastFooter.appendChild(darkContrast);
-      container.appendChild(contrastFooter);
-
-      const updateUI = (colorInput, isAlphaChange = false) => {
-        const c = typeof colorInput === 'string' ? FluxKit.theme.parseColor(colorInput, FluxHub.ui.getRoot()) : colorInput;
-        if (!c) return;
-        currentParsedColor = c;
-
-        const isAlpha = c.a < 1;
-        const rgbStr = isAlpha ? `rgba(${c.r}, ${c.g}, ${c.b}, ${c.a})` : `rgb(${c.r}, ${c.g}, ${c.b})`;
-        const hexStr = `#${c.r.toString(16).padStart(2, '0')}${c.g.toString(16).padStart(2, '0')}${c.b.toString(16).padStart(2, '0')}${isAlpha ? Math.round(c.a * 255).toString(16).padStart(2, '0') : ''}`;
-        const hslStr = FluxKit.theme.toHsl(c);
-
-        swatch.style.backgroundColor = rgbStr;
-        if (!isAlphaChange) {
-          colorPicker.value = hexStr.substring(0, 7);
-          slider.value = c.a * 100;
+      const footer = createHTMLElement('div', { style: { marginTop: '4px', display: 'flex', justifyContent: 'space-between', paddingTop: '10px', borderTop: '1px solid var(--omni-separator)' } });
+      
+      const paletteBtn = createHTMLElement('button', {
+        textContent: 'Open Palette Builder', icon: 'palette',
+        style: { background: 'var(--omni-input-bg)', color: 'var(--omni-text)', border: '1px solid var(--omni-border)', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' },
+        eventListener: {
+          click: (e) => { 
+            e.stopPropagation(); 
+            const rHex = currentParsedColor.r.toString(16).padStart(2, '0');
+            const gHex = currentParsedColor.g.toString(16).padStart(2, '0');
+            const bHex = currentParsedColor.b.toString(16).padStart(2, '0');
+            FluxHub.ui.setInputVal(`> palette #${rHex}${gHex}${bHex}`);
+          },
+          mouseenter: (e) => { e.target.style.background = 'var(--omni-hover)' },
+          mouseleave: (e) => { e.target.style.background = 'var(--omni-input-bg)' }
         }
+      });
+      footer.appendChild(paletteBtn);
 
-        hexRow.lastElementChild.textContent = hexStr;
-        rgbRow.lastElementChild.textContent = rgbStr;
-        hslRow.lastElementChild.textContent = hslStr;
+      const exportBtn = createHTMLElement('button', {
+        textContent: 'Export CSS Vars', icon: 'code',
+        style: { background: 'var(--omni-hover)', color: 'var(--omni-text)', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' },
+        eventListener: {
+          click: (e) => { e.stopPropagation(); this._exportTonalScaleToClipboard(); },
+          mouseenter: (e) => { e.target.style.background = 'var(--omni-separator)' },
+          mouseleave: (e) => { e.target.style.background = 'var(--omni-hover)' }
+        }
+      });
+      footer.appendChild(exportBtn);
+      container.appendChild(footer);
 
-        const palettes = FluxKit.theme.getPalette(c);
-        const paletteValues = [palettes.complementary, palettes.analogous1, palettes.analogous2, palettes.triadic1, palettes.triadic2];
-        paletteSwatches.forEach((ps, idx) => {
-          ps.style.backgroundColor = paletteValues[idx];
-          ps.dataset.fluxHubTooltip = paletteValues[idx];
-          ps.onclick = () => navigator.clipboard.writeText(paletteValues[idx]);
-        });
+      this.swatchWrap = swatchWrap;
+      this.currentParsedColor = currentParsedColor;
 
-        const cW = FluxKit.theme.getContrastRatio(c, '#ffffff', FluxHub.ui.getRoot());
-        const cD = FluxKit.theme.getContrastRatio(c, '#121212', FluxHub.ui.getRoot());
-        const pW = cW >= 4.5;
-        const pD = cD >= 4.5;
-
-        whiteContrast.innerHTML = safeHTML(`<span>Contrast on White:</span> <strong style="color: var(--omni-${pW ? 'success' : 'danger'})">${cW.toFixed(2)} ${pW ? '✅ AA' : '❌ Fail'}</strong>`);
-        darkContrast.innerHTML = safeHTML(`<span>Contrast on Dark:</span> <strong style="color: var(--omni-${pD ? 'success' : 'danger'})">${cD.toFixed(2)} ${pD ? '✅ AA' : '❌ Fail'}</strong>`);
-      };
-
-      updateUI(currentParsedColor);
+      this._handleLiveInput(currentParsedColor, false, true);
 
       return FluxKit.ui.omni.DetailCard(container, []);
     }
 
+    _createFormatRow(label) {
+      const row = createHTMLElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', fontFamily: 'monospace' } });
+      row.appendChild(createHTMLElement('span', { textContent: label, style: { color: 'var(--omni-muted)', fontWeight: 'bold', fontSize: '10px' } }));
+      const valNode = createHTMLElement('span', { 
+        style: { cursor: 'pointer', color: 'var(--omni-text)', background: 'var(--omni-hover)', padding: '2px 6px', borderRadius: '4px' },
+        eventListener: (e) => { 
+          navigator.clipboard.writeText(e.target.textContent);
+          FluxKit.ui.showNotification(`${label} copied!`, { icon: 'success' });
+        }
+      });
+      row.appendChild(valNode);
+      return { row, valNode };
+    }
+
+    _handleLiveInput(colorInput, isAlphaChange = false, forceFullRender = false) {
+      const c = typeof colorInput === 'string' ? FluxKit.theme.parseColor(colorInput, FluxHub.ui.getRoot()) : colorInput;
+      if (!c) return;
+      this.currentParsedColor = c;
+
+      const isAlpha = c.a < 1;
+      const rgbStr = isAlpha ? `rgba(${c.r}, ${c.g}, ${c.b}, ${c.a.toFixed(2)})` : `rgb(${c.r}, ${c.g}, ${c.b})`;
+      const hexStr = `#${c.r.toString(16).padStart(2, '0')}${c.g.toString(16).padStart(2, '0')}${c.b.toString(16).padStart(2, '0')}${isAlpha ? Math.round(c.a * 255).toString(16).padStart(2, '0') : ''}`;
+      const hslStr = FluxKit.theme.toHsl(c);
+
+      this.swatchWrap.style.backgroundColor = rgbStr;
+      this.swatchWrap.dataset.fluxHubTooltip = FluxKit.theme.getColorName(rgbStr);
+      
+      if (!isAlphaChange) {
+        this.colorPicker.value = hexStr.substring(0, 7);
+        this.opacitySlider.value = c.a * 100;
+      }
+      this.opacityValNode.textContent = `${Math.round(c.a * 100)}%`;
+      
+      this.hexNode.valNode.textContent = hexStr;
+      this.rgbNode.valNode.textContent = rgbStr;
+      this.hslNode.valNode.textContent = hslStr;
+
+      if (forceFullRender) this._renderAdvancedMetrics();
+      else this._updatePaletteUI();
+    }
+
+    _renderAdvancedMetrics() {
+      this.metricsContainer.innerHTML = safeHTML('');
+      const root = FluxHub.ui.getRoot();
+      const c = this.currentParsedColor;
+
+      // --- WCAG Contrast ---
+      const bgTest = FluxKit.theme.parseColor('var(--omni-bg)', root) || {r: 255, g: 255, b: 255};
+      const textTest = FluxKit.theme.parseColor('var(--omni-text)', root) || {r: 18, g: 18, b: 18};
+      
+      const cBg = FluxKit.theme.getContrastRatio(c, bgTest, root);
+      const cText = FluxKit.theme.getContrastRatio(c, textTest, root);
+      
+      const contrastWrap = createHTMLElement('div', { style: { display: 'flex', gap: '8px', fontSize: '11px' } });
+      const makePill = (label, ratio) => {
+        const pass = ratio >= 4.5;
+        return createHTMLElement('div', {
+          style: { flex: '1', display: 'flex', justifyContent: 'space-between', padding: '4px 8px', borderRadius: '4px', background: 'var(--omni-input-bg)', color: 'var(--omni-text)' },
+          innerHTML: `<span>${label}</span> <strong style="color: var(--omni-${pass ? 'success' : 'danger'})">${ratio.toFixed(2)} ${pass ? 'AA' : 'Fail'}</strong>`
+        });
+      };
+      contrastWrap.appendChild(makePill('vs Bg', cBg));
+      contrastWrap.appendChild(makePill('vs Text', cText));
+      this.metricsContainer.appendChild(contrastWrap);
+
+      // --- Tonal Scale (High Density 100-900) ---
+      const scaleWrap = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px' } });
+      scaleWrap.appendChild(createHTMLElement('span', { textContent: 'Tonal Scale (50-900)', style: { fontSize: '10px', color: 'var(--omni-muted)', textTransform: 'uppercase', fontWeight: 'bold' } }));
+      
+      const scaleBlocks = createHTMLElement('div', { style: { display: 'flex', height: '28px', borderRadius: '4px', overflow: 'hidden', border: '1px solid var(--omni-border)' } });
+      this.currentTones = FluxKit.theme.getTintsAndShades(c);
+      
+      Object.entries(this.currentTones).forEach(([step, hslVal]) => {
+        const block = createHTMLElement('div', {
+          style: { flex: '1', backgroundColor: hslVal, cursor: 'pointer' },
+          dataset: { fluxHubTooltip: `${step}: ${FluxKit.theme.getColorName(hslVal)}` },
+          eventListener: {
+            click: () => {
+              const hex = FluxKit.theme.getHexCode(hslVal);
+              navigator.clipboard.writeText(hex);
+              FluxKit.ui.showNotification(`Copied ${hex}`, { icon: 'success' });
+            }
+          }
+        });
+        scaleBlocks.appendChild(block);
+      });
+      scaleWrap.appendChild(scaleBlocks);
+      this.metricsContainer.appendChild(scaleWrap);
+
+      // --- Harmonies ---
+      const harmonyWrap = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px' } });
+      harmonyWrap.appendChild(createHTMLElement('span', { textContent: 'Color Harmonies', style: { fontSize: '10px', color: 'var(--omni-muted)', textTransform: 'uppercase', fontWeight: 'bold' } }));
+      
+      const palettes = FluxKit.theme.getPalette(c);
+      const harmoniesRow = createHTMLElement('div', { style: { display: 'flex', gap: '6px' } });
+      
+      const buildMiniPalette = (colors, labelName) => {
+        const wrap = createHTMLElement('div', { 
+          dataset: { fluxHubTooltip: labelName },
+          style: { flex: '1', display: 'flex', height: '24px', borderRadius: '4px', overflow: 'hidden', border: '1px solid var(--omni-border)' } 
+        });
+        
+        const solidBaseColor = FluxKit.theme.toHsl({ ...c, a: 1 });
+        
+        [solidBaseColor, ...colors].forEach(col => {
+          wrap.appendChild(createHTMLElement('div', {
+            fluxHubTooltip: FluxKit.theme.getColorName(col),
+            style: { flex: '1', backgroundColor: col, cursor: 'pointer' },
+            eventListener: () => {
+              const parsed = FluxKit.theme.parseColor(col);
+              const hex = `#${parsed.r.toString(16).padStart(2, '0')}${parsed.g.toString(16).padStart(2, '0')}${parsed.b.toString(16).padStart(2, '0')}`;
+              navigator.clipboard.writeText(hex);
+              FluxKit.ui.showNotification(`Copied ${hex}`, { icon: 'success' });
+            }
+          }));
+        });
+        return wrap;
+      };
+
+      harmoniesRow.appendChild(buildMiniPalette(palettes.analogous, 'Analogous'));
+      harmoniesRow.appendChild(buildMiniPalette(palettes.split, 'Split Complementary'));
+      harmoniesRow.appendChild(buildMiniPalette(palettes.triadic, 'Triadic'));
+      
+      harmonyWrap.appendChild(harmoniesRow);
+      this.metricsContainer.appendChild(harmonyWrap);
+    }
+
+    _exportTonalScaleToClipboard() {
+      if (!this.currentTones) return;
+      let cssPayload = `:root {\n`;
+      const baseName = FluxKit.theme.getColorName(this.colorInput).toLowerCase().replace(/\s+/g, '-');
+      
+      Object.entries(this.currentTones).forEach(([step, val]) => {
+        cssPayload += `  --color-${baseName}-${step}: ${FluxKit.theme.getHexCode(val)};\n`;
+      });
+      cssPayload += `}`;
+      
+      navigator.clipboard.writeText(cssPayload);
+      FluxKit.ui.showNotification('CSS Variables copied!', { icon: 'success' });
+      FluxHub.ui.hide();
+    }
+
     execute() {
-      const parsedColor = FluxKit.theme.parseColor(this.colorInput, FluxHub.ui.getRoot());
-      if (parsedColor) {
-        const rHex = parsedColor.r.toString(16).padStart(2, '0');
-        const gHex = parsedColor.g.toString(16).padStart(2, '0');
-        const bHex = parsedColor.b.toString(16).padStart(2, '0');
-        navigator.clipboard.writeText(`#${rHex}${gHex}${bHex}`);
-        if (FluxHub.ui) FluxHub.ui.hide();
+      if (this.currentParsedColor) {
+        const r = this.currentParsedColor.r.toString(16).padStart(2, '0');
+        const g = this.currentParsedColor.g.toString(16).padStart(2, '0');
+        const b = this.currentParsedColor.b.toString(16).padStart(2, '0');
+        navigator.clipboard.writeText(`#${r}${g}${b}`);
+        FluxHub.ui.hide();
       }
     }
   }
 
-  /**
-   * ============================================================================
-   * VIEW: Generative Hub (Tier 2)
-   * Consolidates all random generation and static payload creation tools.
-   * ============================================================================
-   */
   class GenerativeHubView extends BaseView {
     constructor(query) {
       super(query);
@@ -1909,13 +3470,66 @@
     }
 
     static isAvailable = true;
-
     static commandRegistry = [
       { prefix: '> pass', description: 'Generate a secure, randomized password', icon: 'lock' },
       { prefix: '> name', description: 'Generate character names (fantasy, sci-fi)', icon: 'user' },
-      { prefix: '> qr', description: 'Generate QR code for URLs or text', icon: 'link' },
-      { prefix: '> uuid', description: 'Generate a universally unique identifier', icon: 'code' }
+      { prefix: ['> qr', '> share'], description: 'Generate QR code for URLs or text', icon: 'link' },
+      { prefix: '> uuid', description: 'Generate a universally unique identifier', icon: 'code' },
+      { prefix: '> icons', description: 'Search and copy UI icons', icon: 'zap' }
     ];
+
+    static async getSuggestions(rawQuery) {
+      const q = rawQuery.toLowerCase();
+      const suggestions = [];
+
+      if (q.startsWith('> pass ')) {
+        const match = rawQuery.match(/^>\s*pass\s+/i);
+        if (match) {
+          const prefix = match[0];
+          ['8', '12', '16', '24', '32', '64'].forEach(len => suggestions.push(`${prefix}${len}`));
+        }
+      }
+
+      if (q.startsWith('> name ')) {
+        const nameData = await GenerativeHubView._getNameData();
+        const typedStr = rawQuery.replace(/^>\s*name\s*/i, '');
+        const parts = typedStr.split('/');
+        const term = parts.pop().toLowerCase();
+
+        let current = nameData;
+        let isValid = true;
+
+        for (const p of parts) {
+           const key = Object.keys(current).find(k => k.toLowerCase() === p.toLowerCase());
+           if (key && typeof current[key] === 'object' && !Array.isArray(current[key])) {
+              current = current[key];
+           } else {
+              isValid = false; break;
+           }
+        }
+
+        if (isValid) {
+           const prefix = `> name ` + (parts.length > 0 ? parts.join('/') + '/' : '');
+           Object.keys(current).forEach(k => {
+              if (typeof current[k] === 'object' && !Array.isArray(current[k]) && k.toLowerCase().startsWith(term)) {
+                suggestions.push(`${prefix}${k}`);
+              }
+           });
+        }
+      }
+
+      if (q.startsWith('> icon') && /\s/.test(rawQuery)) {
+        const match = rawQuery.match(/^>\s*icons?\s+/i);
+        if (match && typeof FluxKit !== 'undefined' && FluxKit.ui && FluxKit.ui.icons) {
+          const prefix = match[0];
+          Object.keys(FluxKit.ui.icons).forEach(iconName => {
+            suggestions.push(`${prefix}${iconName}`);
+          });
+        }
+      }
+
+      return suggestions.filter(s => s.toLowerCase().startsWith(q)).slice(0, 10);
+    }
 
     static matchConfidence(query) {
       const q = query.trim().toLowerCase();
@@ -1925,7 +3539,64 @@
       return 0;
     }
 
-    async fetchData() {
+    static async _getNameData(signal = null) {
+      let localData = {
+        fantasy: {
+          human: {
+            male: { first: ['Aelion', 'Kaelen', 'Thorne', 'Dorian', 'Zephyr', 'Orion', 'Gideon'] },
+            female: { first: ['Aurelia', 'Lyra', 'Vespera', 'Isolde', 'Elysia', 'Nyx'] },
+            last: ['Nightshade', 'Starwhisper', 'Vance', 'Ironwood', 'Shadowmere', 'Dawnseeker', 'Blackwood', 'Silverleaf']
+          }
+        },
+        scifi: {
+          first: ['Nova', 'Nyx', 'Vex', 'Axel'],
+          male: { first: ['Caleb', 'Orion', 'Jax', 'Talon'] },
+          female: { first: ['Lyra', 'Rhea', 'Zoe'] },
+          last: ['Vance', 'Stellar', 'Cross', 'Sterling', 'Kovalev', 'Nexus', 'Prime', 'Holloway']
+        },
+        modern: {
+          male: { first: ['Noah', 'Lucas', 'Ethan', 'Liam', 'Mason', 'Caleb', 'Oliver', 'Elijah'] },
+          female: { first: ['Elena', 'Maya', 'Evelyn', 'Chloe', 'Zoe', 'Aria', 'Harper', 'Mia'] },
+          last: ['Sinclair', 'Hayes', 'Mercer', 'Vance', 'Brooks', 'Sterling', 'Cole', 'Keller']
+        }
+      };
+
+      try {
+        const cacheKey = 'flux-names-dict';
+        let cached = await FluxHub.cache.get(cacheKey); 
+        
+        if (!cached) {
+          const targetUrl = 'https://raw.githubusercontent.com/FyefoxxM/fantasy-name-generator/main/name_data.json'; 
+          const rawText = await FluxKit.api.gmFetch(targetUrl, { signal });
+          
+          if (rawText) {
+            const remoteParsed = await rawText.json();
+            if (remoteParsed && typeof remoteParsed === 'object') {
+              const deepMerge = (target, source) => {
+                for (const key of Object.keys(source)) {
+                  if (Array.isArray(source[key])) {
+                    target[key] = [...new Set([...(target[key] || []), ...source[key]])];
+                  } else if (typeof source[key] === 'object' && source[key] !== null) {
+                    target[key] = target[key] || {};
+                    deepMerge(target[key], source[key]);
+                  }
+                }
+              };
+              deepMerge(localData, { fantasy: remoteParsed });
+              
+              cached = localData;
+              await FluxHub.cache.set(cacheKey, cached, { ttl: 30 * 24 * 60 * 60 * 1000 }); 
+            }
+          }
+        }
+        if (cached) return cached;
+      } catch (e) {
+        logDebug('Name generator using local fallback data.', e);
+      }
+      return localData;
+    }
+
+    async fetchData(signal) {
       let tool = 'unknown';
       let payload = '';
 
@@ -1939,7 +3610,9 @@
       }
       else if (this.query.startsWith('> name')) {
         tool = 'name';
-        payload = this.rawQuery.replace(/^>\s*name\s*/i, '').trim().toLowerCase() || 'fantasy';
+        const requestedPath = this.rawQuery.replace(/^>\s*name\s*/i, '').trim();
+        const nameData = await GenerativeHubView._getNameData(signal);
+        payload = { requestedPath, nameData };
       }
       else if (this.query.startsWith('> uuid')) {
         tool = 'uuid';
@@ -1995,7 +3668,10 @@
     }
 
     renderPasswordTool(data) {
-      const state = { length: data.payload, upper: true, lower: true, numbers: true, symbols: true, currentPassword: '' };
+      const state = { 
+        length: data.payload, upper: true, lower: true, numbers: true, symbols: true, 
+        symbolChars: '!@#$%^&*()_+~`|}{[]:;?><,./-=', currentPassword: '' 
+      };
 
       const container = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '16px', padding: '12px' } });
 
@@ -2022,7 +3698,6 @@
       });
 
       const passText = createHTMLElement('span', { style: { fontSize: '20px', fontFamily: 'monospace', fontWeight: 'bold', color: 'var(--omni-text)', wordBreak: 'break-all' } });
-
       const copyIcon = createHTMLElement('span', { icon: 'copy', style: { color: 'var(--omni-muted)', fontSize: '18px' } });
 
       displayWrapper.appendChild(passText);
@@ -2062,22 +3737,65 @@
 
       const togglesGrid = createHTMLElement('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' } });
 
-      const createToggle = (label, key) => {
-        const lbl = createHTMLElement('label', { style: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--omni-muted)', cursor: 'pointer', userSelect: 'none' } });
+      const createToggle = (labelContent, key) => {
+        const lbl = createHTMLElement('label', { style: { display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '13px', color: 'var(--omni-muted)', cursor: 'pointer', userSelect: 'none' } });
         const cb = createHTMLElement('input', {
           type: 'checkbox', checked: state[key],
-          style: { accentColor: 'var(--omni-accent)', cursor: 'pointer', width: '16px', height: '16px' },
+          style: { accentColor: 'var(--omni-accent)', cursor: 'pointer', width: '16px', height: '16px', flexShrink: '0', marginTop: '2px' },
           eventListener: { change: (e) => { state[key] = e.target.checked; updateUI(); } }
         });
+        
         lbl.appendChild(cb);
-        lbl.appendChild(document.createTextNode(label));
+        
+        if (typeof labelContent === 'string') {
+          lbl.appendChild(document.createTextNode(labelContent));
+        } else {
+          lbl.appendChild(labelContent);
+        }
         return lbl;
       };
+
+      const symbolLabel = createHTMLElement('span', { style: { display: 'inline-flex', flexWrap: 'wrap', alignItems: 'center', gap: '2px' } });
+      symbolLabel.appendChild(document.createTextNode('Symbols ('));
+      
+      const editableSymbols = createHTMLElement('span', {
+        textContent: state.symbolChars,
+        style: { 
+          display: 'inline-block', borderBottom: '1px dashed var(--omni-muted)', 
+          cursor: 'text', outline: 'none', wordBreak: 'break-all', 
+          color: 'var(--omni-text)', minWidth: '10px'
+        },
+        eventListener: {
+          click: (e) => {
+            e.preventDefault(); e.stopPropagation();
+            e.target.contentEditable = 'true';
+            e.target.focus();
+          },
+          input: (e) => {
+            state.symbolChars = e.target.textContent;
+            updateUI();
+          },
+          blur: (e) => {
+            e.target.contentEditable = 'false';
+            if (!state.symbolChars) {
+              state.symbolChars = '!@#$';
+              e.target.textContent = state.symbolChars;
+              updateUI();
+            }
+          },
+          keydown: (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
+          }
+        }
+      });
+
+      symbolLabel.appendChild(editableSymbols);
+      symbolLabel.appendChild(document.createTextNode(')'));
 
       togglesGrid.appendChild(createToggle('Uppercase (A-Z)', 'upper'));
       togglesGrid.appendChild(createToggle('Lowercase (a-z)', 'lower'));
       togglesGrid.appendChild(createToggle('Numbers (0-9)', 'numbers'));
-      togglesGrid.appendChild(createToggle('Symbols (!@#$)', 'symbols'));
+      togglesGrid.appendChild(createToggle(symbolLabel, 'symbols'));
       controls.appendChild(togglesGrid);
 
       container.appendChild(controls);
@@ -2087,7 +3805,7 @@
         if (state.upper) charset += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
         if (state.lower) charset += 'abcdefghijklmnopqrstuvwxyz';
         if (state.numbers) charset += '0123456789';
-        if (state.symbols) charset += '!@#$%^&*()_+~`|}{[]:;?><,./-=';
+        if (state.symbols) charset += state.symbolChars;
 
         if (charset === '') { charset = 'abcdefghijklmnopqrstuvwxyz'; state.lower = true; }
 
@@ -2112,21 +3830,13 @@
         let strengthColor, strengthLabel, fillWidth;
 
         if (entropy < 40) {
-          strengthColor = 'var(--omni-danger, #dc2626)';
-          strengthLabel = 'Weak';
-          fillWidth = '25%';
+          strengthColor = 'var(--omni-danger, #dc2626)'; strengthLabel = 'Weak'; fillWidth = '25%';
         } else if (entropy < 60) {
-          strengthColor = 'var(--omni-warning, #f59e0b)';
-          strengthLabel = 'Good';
-          fillWidth = '50%';
+          strengthColor = 'var(--omni-warning, #f59e0b)'; strengthLabel = 'Good'; fillWidth = '50%';
         } else if (entropy < 80) {
-          strengthColor = 'var(--omni-success, #16a34a)';
-          strengthLabel = 'Strong';
-          fillWidth = '75%';
+          strengthColor = 'var(--omni-success, #16a34a)'; strengthLabel = 'Strong'; fillWidth = '75%';
         } else {
-          strengthColor = 'var(--omni-accent, #3b82f6)';
-          strengthLabel = 'Unbreakable';
-          fillWidth = '100%';
+          strengthColor = 'var(--omni-accent, #3b82f6)'; strengthLabel = 'Unbreakable'; fillWidth = '100%';
         }
 
         strengthText.textContent = strengthLabel;
@@ -2150,55 +3860,204 @@
     }
 
     renderNameTool(data) {
-      const namePools = {
-        fantasy: {
-          first: ['Aelion', 'Lyra', 'Kaelen', 'Vespera', 'Thorne', 'Isolde', 'Dorian', 'Nyx', 'Zephyr', 'Orion', 'Elysia', 'Gideon'],
-          last: ['Nightshade', 'Starwhisper', 'Vance', 'Ironwood', 'Shadowmere', 'Dawnseeker', 'Blackwood', 'Silverleaf']
-        },
-        scifi: {
-          first: ['Jax', 'Nova', 'Caleb', 'Zoe', 'Orion', 'Nyx', 'Talon', 'Vex', 'Kiran', 'Lyra', 'Axel', 'Rhea'],
-          last: ['Vance', 'Stellar', 'Cross', 'Sterling', 'Kovalev', 'Nexus', 'Prime', 'Holloway']
-        },
-        modern: {
-          first: ['Elena', 'Noah', 'Maya', 'Lucas', 'Chloe', 'Ethan', 'Zoe', 'Liam', 'Aria', 'Mason', 'Harper', 'Caleb'],
-          last: ['Sinclair', 'Hayes', 'Mercer', 'Vance', 'Brooks', 'Sterling', 'Cole', 'Keller']
+      const { requestedPath, nameData } = data.payload;
+
+      const getCategories = (path, dataTree) => {
+        let current = dataTree;
+        for (const step of path) {
+          if (current[step]) current = current[step];
+          else return [];
         }
+        return Object.keys(current).filter(k => !Array.isArray(current[k]) && typeof current[k] === 'object' && current[k] !== null);
       };
 
-      const activeGenre = namePools[data.payload] ? data.payload : 'fantasy';
-      this.genre = activeGenre;
+      // Best effort path resolution based on what user typed
+      const parts = requestedPath.split('/').map(p => p.trim()).filter(Boolean);
+      this.currentPath = [];
+      let currentLevel = nameData;
+
+      for (const p of parts) {
+        const keys = Object.keys(currentLevel).filter(k => typeof currentLevel[k] === 'object' && !Array.isArray(currentLevel[k]));
+        const matchedKey = keys.find(k => k.toLowerCase() === p.toLowerCase());
+        if (matchedKey) {
+          this.currentPath.push(matchedKey);
+          currentLevel = currentLevel[matchedKey];
+        } else {
+          break; // Stop resolving deeper if path fails
+        }
+      }
+
+      // If nothing matched at all, default to the first root key
+      if (this.currentPath.length === 0) {
+        const rootCats = getCategories([], nameData);
+        if (rootCats.length > 0) this.currentPath = [rootCats[0]];
+      }
 
       const container = createHTMLElement('div', {
         style: { display: 'flex', flexDirection: 'column', gap: '12px', padding: '12px' }
       });
 
-      const navRow = createHTMLElement('div', { style: { display: 'flex', gap: '6px' } });
-      ['fantasy', 'scifi', 'modern'].forEach(g => {
-        const pill = createHTMLElement('button', {
-          textContent: g.toUpperCase(),
-          style: {
-            flex: '1', padding: '6px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer',
-            background: g === activeGenre ? 'var(--omni-accent)' : 'var(--omni-input-bg)',
-            color: g === activeGenre ? 'var(--omni-btn-text)' : 'var(--omni-muted)',
-            border: '1px solid var(--omni-border)', outline: 'none'
-          },
-          eventListener: () => { this.genre = g; refreshList(g); }
-        });
-        navRow.appendChild(pill);
+      const breadcrumbWrap = createHTMLElement('div', {
+        style: { display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', background: 'var(--omni-input-bg)', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--omni-border)' }
       });
-      container.appendChild(navRow);
+      container.appendChild(breadcrumbWrap);
 
       const listWrapper = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '220px', overflowY: 'auto' } });
       container.appendChild(listWrapper);
 
-      const generateBatch = (gKey) => {
+      const resolveProfiles = (path, dataTree) => {
+        const profiles = [];
+
+        const TRAIT_GROUPS = [
+          ['first', 'first_start', 'first_end'],
+          ['last', 'surname_prefix', 'surname_suffix'],
+          ['titles']
+        ];
+
+        const inheritTraits = (parentAffixes, childNode) => {
+          const childKeys = Object.keys(childNode).filter(k => Array.isArray(childNode[k]));
+          const newAffixes = {};
+
+          for (const [parentKey, parentArr] of Object.entries(parentAffixes)) {
+            const group = TRAIT_GROUPS.find(g => g.includes(parentKey));
+            const childOverridesGroup = group ? childKeys.some(ck => group.includes(ck)) : false;
+
+            if (!childOverridesGroup && !childKeys.includes(parentKey)) {
+              newAffixes[parentKey] = [...parentArr];
+            }
+          }
+
+          for (const k of childKeys) {
+             newAffixes[k] = [...childNode[k]];
+          }
+          return newAffixes;
+        };
+
+        const traverse = (node, parentAffixes) => {
+          const currentAffixes = inheritTraits(parentAffixes, node);
+
+          const hasArrays = Object.values(node).some(v => Array.isArray(v));
+          if (hasArrays) profiles.push(currentAffixes);
+
+          for (const [k, v] of Object.entries(node)) {
+            if (!Array.isArray(v) && typeof v === 'object' && v !== null) {
+              traverse(v, currentAffixes);
+            }
+          }
+        };
+
+        let current = dataTree;
+        let pathAffixes = {};
+
+        for (const step of path) {
+          pathAffixes = inheritTraits(pathAffixes, current);
+          if (current[step]) current = current[step];
+          else break;
+        }
+
+        traverse(current, pathAffixes);
+
+        return profiles;
+      };
+
+      const pick = (arr) => arr && arr.length > 0 ? arr[Math.floor(Math.random() * arr.length)] : '';
+      const cap = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : '';
+
+      const updateView = () => {
+        breadcrumbWrap.innerHTML = safeHTML('');
+
+        for (let i = 0; i <= this.currentPath.length; i++) {
+          const pathSoFar = this.currentPath.slice(0, i);
+          const options = getCategories(pathSoFar, nameData);
+
+          if (options.length === 0) break;
+
+          if (i > 0) {
+            breadcrumbWrap.appendChild(createHTMLElement('span', { textContent: '›', style: { color: 'var(--omni-muted)', fontSize: '16px', margin: '0 2px' } }));
+          }
+
+          const select = createHTMLElement('select', {
+            style: {
+              padding: '4px 20px 4px 8px', borderRadius: '6px', background: 'var(--omni-bg)',
+              color: 'var(--omni-text)', border: '1px solid var(--omni-border)',
+              fontSize: '12px', outline: 'none', cursor: 'pointer', appearance: 'auto', fontWeight: '600'
+            },
+            eventListener: {
+              change: (e) => {
+                const val = e.target.value;
+                const newPath = this.currentPath.slice(0, i);
+                if (val) newPath.push(val);
+                this.currentPath = newPath;
+                updateView();
+              }
+            }
+          });
+
+          if (i > 0) {
+             const allOpt = createHTMLElement('option', { value: '', textContent: '-- All --' });
+             if (this.currentPath[i] === undefined) allOpt.selected = true;
+             select.appendChild(allOpt);
+          }
+
+          options.forEach(opt => {
+            const readableName = opt.replace(/[_-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            const el = createHTMLElement('option', { value: opt, textContent: readableName });
+            if (this.currentPath[i] === opt) el.selected = true;
+            select.appendChild(el);
+          });
+
+          breadcrumbWrap.appendChild(select);
+        }
+
+        generateBatch();
+      };
+
+      const generateBatch = () => {
         listWrapper.innerHTML = safeHTML('');
-        const pool = namePools[gKey] || namePools.fantasy;
+
+        const profiles = resolveProfiles(this.currentPath, nameData);
+
+        if (profiles.length === 0) {
+           listWrapper.appendChild(createHTMLElement('div', {
+             textContent: 'No name data found in this category.',
+             style: { color: 'var(--omni-muted)', fontSize: '13px', textAlign: 'center', padding: '12px' }
+           }));
+           return;
+        }
 
         for (let i = 0; i < 5; i++) {
-          const randFirst = pool.first[Math.floor(Math.random() * pool.first.length)];
-          const randLast = pool.last[Math.floor(Math.random() * pool.last.length)];
-          const fullName = `${randFirst} ${randLast}`;
+          let firstName = '';
+          let lastName = '';
+
+          const pool = pick(profiles);
+
+          const hasFlatFirst = pool.first && pool.first.length > 0;
+          const hasCombFirst = pool.first_start && pool.first_start.length > 0;
+
+          if (hasFlatFirst && hasCombFirst) {
+            firstName = Math.random() > 0.5 ? pick(pool.first) : (cap(pick(pool.first_start)) + pick(pool.first_end));
+          } else if (hasFlatFirst) {
+            firstName = pick(pool.first);
+          } else if (hasCombFirst) {
+            firstName = cap(pick(pool.first_start)) + pick(pool.first_end);
+          }
+
+          const hasFlatLast = pool.last && pool.last.length > 0;
+          const hasCombLast = pool.surname_prefix && pool.surname_prefix.length > 0;
+
+          if (hasFlatLast && hasCombLast) {
+            lastName = Math.random() > 0.5 ? pick(pool.last) : (cap(pick(pool.surname_prefix)) + pick(pool.surname_suffix));
+          } else if (hasFlatLast) {
+            lastName = pick(pool.last);
+          } else if (hasCombLast) {
+            lastName = cap(pick(pool.surname_prefix)) + pick(pool.surname_suffix);
+          }
+
+          const hasTitle = pool.titles && pool.titles.length > 0;
+          const titleStr = hasTitle ? pick(pool.titles).trim() : '';
+
+          let fullName = [firstName, lastName, titleStr].filter(Boolean).join(' ').trim();
+          if (!fullName) fullName = 'Unknown Data Format';
 
           const row = createHTMLElement('div', {
             style: {
@@ -2220,7 +4079,6 @@
           });
 
           const nameSpan = createHTMLElement('span', { textContent: fullName, style: { fontWeight: '600', fontSize: '14px', color: 'var(--omni-text)', fontFamily: 'monospace' } });
-
           const copyHint = createHTMLElement('span', { textContent: 'Click to copy', style: { fontSize: '11px', color: 'var(--omni-muted)' } });
 
           row.appendChild(nameSpan);
@@ -2229,19 +4087,9 @@
         }
       };
 
-      const refreshList = (gKey) => {
-        Array.from(navRow.children).forEach((btn, idx) => {
-          const keys = ['fantasy', 'scifi', 'modern'];
-          const matches = keys[idx] === gKey;
-          btn.style.background = matches ? 'var(--omni-accent)' : 'var(--omni-input-bg)';
-          btn.style.color = matches ? 'var(--omni-btn-text)' : 'var(--omni-muted)';
-        });
-        generateBatch(gKey);
-      };
+      updateView();
 
-      generateBatch(activeGenre);
-
-      const actions = [FluxKit.ui.omni.Button('refresh', 'Generate More', (e) => { e.stopPropagation(); generateBatch(this.genre); })];
+      const actions = [FluxKit.ui.omni.Button('refresh', 'Generate More', (e) => { e.stopPropagation(); generateBatch(); })];
 
       return FluxKit.ui.omni.DetailCard(container, actions);
     }
@@ -2260,12 +4108,18 @@
       container.appendChild(imgWrapper);
 
       let currentBlobUrl = null;
+      let activeRequest = null;
+
       const fetchQR = (encodeText) => {
         const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize}x${qrSize}&data=${encodeURIComponent(encodeText)}&margin=0`;
 
         img.style.opacity = '0.3';
 
-        GM_xmlhttpRequest({
+        if (activeRequest && typeof activeRequest.abort === 'function') {
+          activeRequest.abort();
+        }
+
+        activeRequest = GM_xmlhttpRequest({
           method: 'GET', url: qrUrl, responseType: 'blob',
           onload: (response) => {
             if (response.status === 200) {
@@ -2283,6 +4137,8 @@
 
       const inputWrapper = createHTMLElement('div', { style: { width: '100%', display: 'flex', gap: '8px' } });
 
+      let debounceTimer = null;
+
       const textInput = createHTMLElement('input', {
         type: 'text', value: text,
         style: {
@@ -2293,8 +4149,11 @@
         eventListener: {
           focus: (e) => e.target.select(),
           input: (e) => {
-            clearTimeout(this.debounce);
-            this.debounce = setTimeout(() => { const val = e.target.value.trim() || window.location.href; fetchQR(val); }, 300);
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => { 
+              const val = e.target.value.trim() || window.location.href; 
+              fetchQR(val); 
+            }, 400); 
           }
         }
       });
@@ -2305,7 +4164,8 @@
       const actions = [
         FluxKit.ui.omni.Button('copy', 'Copy Link', (e) => {
           e.stopPropagation();
-          navigator.clipboard.writeText(textInput.value);
+          const targetVal = textInput.value.trim() || window.location.href;
+          navigator.clipboard.writeText(targetVal);
           const btnText = e.currentTarget.querySelector('.flx-omni-btn-label');
           if (btnText) {
             const original = btnText.textContent;
@@ -2317,7 +4177,6 @@
         FluxKit.ui.omni.Button('import', 'Save QR', (e) => {
           e.stopPropagation();
           if (!currentBlobUrl) return;
-
           const a = document.createElement('a');
           a.href = currentBlobUrl;
           a.download = 'flux-qr.png';
@@ -2332,7 +4191,8 @@
       const uuid = crypto.randomUUID();
       const output = createHTMLElement('div', { textContent: uuid, style: { padding: '16px', fontFamily: 'monospace', fontSize: '18px' }});
       const copyBtn = FluxKit.ui.omni.Button('copy', 'Copy UUID', () => { navigator.clipboard.writeText(uuid); FluxHub.ui.hide(); });
-      return FluxKit.ui.omni.DetailCard(output, [copyBtn]);
+      const refreshBtn = FluxKit.ui.omni.Button('refresh', 'Regenerate', (e) => { e.stopPropagation(); output.textContent = crypto.randomUUID(); });
+      return FluxKit.ui.omni.DetailCard(output, [refreshBtn, copyBtn]);
     }
 
     renderIconView(payload) {
@@ -2434,12 +4294,6 @@
     }
   }
 
-  /**
-   * ============================================================================
-   * VIEW: Developer Tools Hub (Tier 2)
-   * Consolidates string manipulation, formatting, and encoding utilities.
-   * ============================================================================
-   */
   class ToolsHubView extends BaseView {
     constructor(query) {
       super(query);
@@ -2453,8 +4307,8 @@
     static commandRegistry = [
       { prefix: '> json', description: 'Format, validate, and minify JSON payloads', icon: 'code' },
       { prefix: '> regex', description: 'Test regular expressions in real-time', icon: 'search' },
-      { prefix: '> b64', description: 'Encode or decode Base64 strings', icon: 'hash' },
-      { prefix: '> ratio', description: 'Crop and resize images for social media grids', icon: 'image' }
+      { prefix: ['> b64', '> base64'], description: 'Encode or decode Base64 strings', icon: 'hash' },
+      { prefix: ['> crop', '> resize', '> ratio'], description: 'Crop and resize images for social media grids', icon: 'image' }
     ];
 
     static matchConfidence(query) {
@@ -2502,6 +4356,271 @@
         case 'crop': return this.renderRatioTool();
         default: return createHTMLElement('div', { textContent: 'Unknown developer tool.' });
       }
+    }
+
+    openExpandedJsonEditor(inputAreaRef, initialMinified, onUpdateCb) {
+      const wrapper = createHTMLElement('div', {
+        style: { display: 'flex', width: '100%', height: '100%', gap: '16px', boxSizing: 'border-box' }
+      });
+
+      const styleNode = createHTMLElement('style', {
+        textContent: `
+          .flx-json-container { display: flex; flex-direction: column; width: 100%; padding-bottom: 16px; }
+          .flx-json-line { display: flex; font-family: monospace; font-size: 13px; line-height: 1.6; color: var(--fluxkit-text); white-space: pre; tab-size: 2; -moz-tab-size: 2; }
+          .flx-json-line:hover { background: var(--fluxkit-input-bg); }
+
+          /* Upgraded Gutter */
+          .flx-json-gutter {
+            user-select: none; text-align: right; min-width: 50px; padding-right: 8px;
+            color: var(--fluxkit-border-subtle); border-right: 1px solid var(--fluxkit-border-subtle);
+            margin-right: 12px; flex-shrink: 0; display: flex; justify-content: flex-end; align-items: center; gap: 6px;
+          }
+          .flx-json-line-num { min-width: 20px; text-align: right; }
+
+          /* Fold Toggles */
+          .flx-json-fold {
+            width: 12px; cursor: pointer; text-align: center; color: transparent;
+            user-select: none; font-size: 10px; display: inline-block; transition: color 0.1s ease;
+          }
+          .flx-json-line:hover .flx-json-fold.can-fold { color: var(--fluxkit-accent-text); }
+          .flx-json-fold.can-fold.is-collapsed { color: var(--fluxkit-text); }
+          .flx-json-fold.can-fold:hover { color: var(--fluxkit-text) !important; }
+
+          /* Hierarchical Tabs (Structural 2-Space Indent Guides) */
+          .flx-json-tab {
+            display: inline-block;
+            width: 2ch; /* Mathematically forces exactly 2 monospace characters of space */
+            height: 100%;
+            flex-shrink: 0;
+            box-sizing: border-box;
+            border-left: 1px solid transparent;
+            transition: border-color 0.2s ease;
+          }
+          .flx-json-line:hover .flx-json-tab {
+            border-left: 1px solid var(--fluxkit-border-subtle);
+          }
+
+          .flx-json-content { flex-grow: 1; display: flex; }
+          .flx-json-string { color: var(--omni-success, #10b981); word-break: break-all; white-space: pre-wrap; }
+          .flx-json-number { color: var(--omni-warning, #f59e0b); }
+          .flx-json-boolean { color: var(--omni-info, #3b82f6); }
+          .flx-json-null { color: var(--omni-danger, #ef4444); }
+          .flx-json-key { color: var(--fluxkit-accent-text); margin-right: 4px; }
+          .flx-json-collapsed-indicator { display: none; background: var(--fluxkit-input-bg); border-radius: 4px; padding: 0 4px; cursor: pointer; margin: 0 4px; color: var(--fluxkit-text); border: 1px solid var(--fluxkit-border-subtle); }
+          .flx-json-collapsed-indicator:hover { background: var(--fluxkit-border-subtle); }
+        `
+      });
+      wrapper.appendChild(styleNode);
+
+      const leftPane = createHTMLElement('textarea', {
+        value: inputAreaRef.value,
+        placeholder: 'Paste JSON payload to parse...',
+        style: {
+          flex: '1', height: '100%', padding: '16px', background: 'var(--fluxkit-input-bg)',
+          color: 'var(--fluxkit-text)', border: '1px solid var(--fluxkit-border-subtle)',
+          borderRadius: '6px', fontFamily: 'monospace', fontSize: '14px', resize: 'none', outline: 'none',
+          boxSizing: 'border-box', tabSize: 2, MozTabSize: 2
+        },
+        eventListener: {
+          input: () => this.debounce(updateOutput),
+          keydown: (e) => {
+            if (e.key === 'Tab') {
+              e.preventDefault();
+              const start = e.target.selectionStart;
+              const end = e.target.selectionEnd;
+              e.target.value = e.target.value.substring(0, start) + '  ' + e.target.value.substring(end);
+              e.target.selectionStart = e.target.selectionEnd = start + 2;
+              this.debounce(updateOutput);
+            }
+          }
+        }
+      });
+
+      const rightPane = createHTMLElement('div', {
+        style: {
+          flex: '1', height: '100%', overflowY: 'auto', background: 'var(--fluxkit-bg)',
+          border: '1px solid var(--fluxkit-border-subtle)', borderRadius: '6px',
+          boxSizing: 'border-box', padding: '8px 0'
+        }
+      });
+
+      let isMinified = initialMinified;
+
+      const updateOutput = () => {
+        const raw = leftPane.value.trim();
+
+        inputAreaRef.value = leftPane.value;
+        if (onUpdateCb) onUpdateCb();
+
+        rightPane.innerHTML = safeHTML('');
+
+        if (!raw) return;
+
+        try {
+          const parsed = JSON.parse(raw);
+
+          if (isMinified) {
+             const line = createHTMLElement('div', { class: 'flx-json-line' });
+             const gutter = createHTMLElement('div', { class: 'flx-json-gutter' });
+             gutter.appendChild(createHTMLElement('span', { class: 'flx-json-line-num', textContent: '1' }));
+             line.appendChild(gutter);
+
+             const content = createHTMLElement('div', { class: 'flx-json-content', style: { wordBreak: 'break-all', whiteSpace: 'pre-wrap', paddingRight: '16px' }, textContent: JSON.stringify(parsed) });
+             line.appendChild(content);
+             rightPane.appendChild(line);
+             return;
+          }
+
+          let lineNum = 1;
+
+          const getIndent = (depth) => {
+            const frag = document.createDocumentFragment();
+            for (let i = 0; i < depth; i++) {
+              frag.appendChild(createHTMLElement('span', { class: 'flx-json-tab' }));
+            }
+            return frag;
+          };
+
+          const createGutter = (isFoldable = false) => {
+            const gutter = createHTMLElement('div', { class: 'flx-json-gutter' });
+            gutter.appendChild(createHTMLElement('span', { class: 'flx-json-line-num', textContent: lineNum++ }));
+            const foldBtn = createHTMLElement('span', { class: 'flx-json-fold' });
+            if (isFoldable) foldBtn.classList.add('can-fold');
+            gutter.appendChild(foldBtn);
+            return { gutter, foldBtn };
+          };
+
+          const renderValue = (key, val, isLast, depth) => {
+            const isObj = val !== null && typeof val === 'object';
+            const isArr = Array.isArray(val);
+
+            // Base Case: Primitives
+            if (!isObj) {
+              const line = createHTMLElement('div', { class: 'flx-json-line' });
+              const { gutter } = createGutter(false);
+              line.appendChild(gutter);
+
+              const content = createHTMLElement('div', { class: 'flx-json-content' });
+              content.appendChild(getIndent(depth));
+
+              if (key !== null) content.appendChild(createHTMLElement('span', { class: 'flx-json-key', textContent: `"${key}":` }));
+
+              let valSpan;
+              if (typeof val === 'string') valSpan = createHTMLElement('span', { class: 'flx-json-string', textContent: `"${val}"` });
+              else if (typeof val === 'number') valSpan = createHTMLElement('span', { class: 'flx-json-number', textContent: val });
+              else if (typeof val === 'boolean') valSpan = createHTMLElement('span', { class: 'flx-json-boolean', textContent: val });
+              else valSpan = createHTMLElement('span', { class: 'flx-json-null', textContent: 'null' });
+
+              content.appendChild(valSpan);
+              if (!isLast) content.appendChild(document.createTextNode(','));
+
+              line.appendChild(content);
+              return line;
+            }
+
+            // Recursive Case: Objects and Arrays
+            const block = createHTMLElement('div', { class: 'flx-json-block' });
+            const openLine = createHTMLElement('div', { class: 'flx-json-line' });
+
+            const entries = isArr ? val : Object.entries(val);
+            const len = entries.length;
+
+            const { gutter, foldBtn } = createGutter(len > 0);
+            openLine.appendChild(gutter);
+
+            if (len > 0) foldBtn.innerHTML = safeHTML(FluxKit.ui.getIcon('chevronDown'));
+
+            const openContent = createHTMLElement('div', { class: 'flx-json-content' });
+            openContent.appendChild(getIndent(depth));
+
+            if (key !== null) openContent.appendChild(createHTMLElement('span', { class: 'flx-json-key', textContent: `"${key}":` }));
+
+            openContent.appendChild(document.createTextNode(isArr ? '[' : '{'));
+
+            const collapsedIndicator = createHTMLElement('span', { class: 'flx-json-collapsed-indicator', textContent: '...' });
+            openContent.appendChild(collapsedIndicator);
+
+            openLine.appendChild(openContent);
+            block.appendChild(openLine);
+
+            // Empty Array/Object Edge Case
+            if (len === 0) {
+              openContent.lastChild.remove();
+              openContent.appendChild(document.createTextNode((isArr ? ']' : '}') + (isLast ? '' : ',')));
+              return openLine;
+            }
+
+            const childrenContainer = createHTMLElement('div', { class: 'flx-json-children' });
+            entries.forEach((entry, idx) => {
+              const childIsLast = idx === len - 1;
+              childrenContainer.appendChild(renderValue(isArr ? null : entry[0], isArr ? entry : entry[1], childIsLast, depth + 1));
+            });
+            block.appendChild(childrenContainer);
+
+            const closeLine = createHTMLElement('div', { class: 'flx-json-line flx-json-close' });
+            const { gutter: closeGutter } = createGutter(false);
+            closeLine.appendChild(closeGutter);
+
+            const closeContent = createHTMLElement('div', { class: 'flx-json-content' });
+            closeContent.appendChild(getIndent(depth));
+            closeContent.appendChild(document.createTextNode((isArr ? ']' : '}') + (isLast ? '' : ',')));
+            closeLine.appendChild(closeContent);
+            block.appendChild(closeLine);
+
+            let isCollapsed = false;
+            const toggleFold = () => {
+              isCollapsed = !isCollapsed;
+              foldBtn.innerHTML = isCollapsed ? safeHTML(FluxKit.ui.getIcon('chevronRight')) : safeHTML(FluxKit.ui.getIcon('chevronDown'));
+
+              if (isCollapsed) foldBtn.classList.add('is-collapsed');
+              else foldBtn.classList.remove('is-collapsed');
+
+              childrenContainer.style.display = isCollapsed ? 'none' : 'block';
+              closeLine.style.display = isCollapsed ? 'none' : 'flex';
+              collapsedIndicator.style.display = isCollapsed ? 'inline-block' : 'none';
+
+              if (isCollapsed) {
+                collapsedIndicator.textContent = '...' + (isArr ? ']' : '}') + (isLast ? '' : ',');
+              }
+            };
+
+            foldBtn.addEventListener('click', toggleFold);
+            collapsedIndicator.addEventListener('click', toggleFold);
+
+            return block;
+          };
+
+          const container = createHTMLElement('div', { class: 'flx-json-container' });
+          container.appendChild(renderValue(null, parsed, true, 0));
+          rightPane.appendChild(container);
+
+        } catch (err) {
+          rightPane.innerHTML = safeHTML(`<div style="color: #ef4444; padding: 16px;">Invalid JSON:<br>${err.message}</div>`);
+        }
+      };
+
+      updateOutput();
+
+      wrapper.appendChild(leftPane);
+      wrapper.appendChild(rightPane);
+
+      FluxKit.ui.viewer.open('Advanced JSON Editor', wrapper, {
+        customActions: [
+          {
+            icon: 'code', tooltip: 'Toggle Minify / Beautify',
+            onClick: () => { isMinified = !isMinified; updateOutput(); }
+          },
+          {
+            icon: 'copy', tooltip: 'Copy Result',
+            onClick: () => {
+              try {
+                const parsed = JSON.parse(leftPane.value);
+                navigator.clipboard.writeText(JSON.stringify(parsed, null, isMinified ? 0 : 2));
+              } catch (err) {}
+            }
+          }
+        ]
+      });
     }
 
     renderJsonTool(initialPayload) {
@@ -2562,21 +4681,87 @@
         FluxHub.ui.hide();
       });
 
-      const actions = [toggleBtn, copyBtn];
+      const expandBtn = FluxKit.ui.omni.Button('maximize', 'Expanded View', (e) => {
+        e.stopPropagation();
+        this.openExpandedJsonEditor(inputArea, isMinified, processJson);
+      });
+
+      const actions = [toggleBtn, copyBtn, expandBtn];
 
       return FluxKit.ui.omni.DetailCard(container, actions);
     }
 
     renderRegexTool(initialPayload) {
-      const container = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '12px', padding: '12px' } });
+      const container = createHTMLElement('div', {
+        style: { display: 'flex', flexDirection: 'column', gap: '12px', padding: '12px' }
+      });
+
+      let activeTab = 'test';
+      const tabRow = createHTMLElement('div', { style: { display: 'flex', gap: '6px' } });
+
+      const tabs = [
+        { id: 'test', label: 'Test' },
+        { id: 'build', label: 'Build' },
+        { id: 'analyze', label: 'Analyze' }
+      ];
+
+      const tabButtons = {};
+      tabs.forEach(t => {
+        const btn = createHTMLElement('button', {
+          textContent: t.label,
+          style: {
+            flex: '1', padding: '6px', borderRadius: '6px', cursor: 'pointer', outline: 'none',
+            fontSize: '12px', fontWeight: 'bold', border: '1px solid var(--omni-border)',
+            background: 'var(--omni-input-bg)', color: 'var(--omni-text)'
+          },
+          eventListener: {
+            click: () => switchTab(t.id)
+          }
+        });
+        tabButtons[t.id] = btn;
+        tabRow.appendChild(btn);
+      });
+      container.appendChild(tabRow);
+      
+      const switchTab = (tabId) => {
+        activeTab = tabId;
+        tabs.forEach(t => {
+          const isActive = t.id === tabId;
+          tabButtons[t.id].style.background = isActive ? 'var(--omni-accent)' : 'var(--omni-input-bg)';
+          tabButtons[t.id].style.color = isActive ? 'var(--omni-btn-text)' : 'var(--omni-text)';
+          tabButtons[t.id].style.border = isActive ? 'none' : '1px solid var(--omni-border)';
+        });
+
+        testPane.style.display = tabId === 'test' ? 'flex' : 'none';
+        buildPane.style.display = tabId === 'build' ? 'flex' : 'none';
+        analyzePane.style.display = tabId === 'analyze' ? 'flex' : 'none';
+
+        if (tabId === 'analyze') runAnalyze();
+        if (tabId === 'test') processRegex();
+      };
+
+      const testPane = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '12px' } });
+      const buildPane = createHTMLElement('div', { style: { display: 'none', flexDirection: 'column', gap: '12px' } });
+      const analyzePane = createHTMLElement('div', { style: { display: 'none', flexDirection: 'column', gap: '12px' } });
+
+      container.appendChild(testPane);
+      container.appendChild(buildPane);
+      container.appendChild(analyzePane);
 
       const controlsRow = createHTMLElement('div', { style: { display: 'flex', gap: '8px' } });
 
       const patternInput = createHTMLElement('input', {
         type: 'text', placeholder: 'Regex pattern (e.g. [a-z]+)', value: initialPayload,
-        style: { flex: '1', padding: '8px 12px', background: 'var(--omni-input-bg)', color: 'var(--omni-text)', border: '1px solid var(--omni-border)', borderRadius: '6px', fontFamily: 'monospace', outline: 'none' },
+        style: {
+          flex: '1', padding: '8px 12px', background: 'var(--omni-input-bg)',
+          color: 'var(--omni-text)', border: '1px solid var(--omni-border)',
+          borderRadius: '6px', fontFamily: 'monospace', outline: 'none'
+        },
         eventListener: {
-          input: () => this.debounce(() => processRegex()),
+          input: () => this.debounce(() => {
+            processRegex();
+            if (activeTab === 'analyze') runAnalyze();
+          }),
           paste: (e) => {
             const pasted = (e.clipboardData || window.clipboardData).getData('text');
             const literalMatch = pasted.match(/^\/(.+)\/([a-z]*)$/i);
@@ -2585,39 +4770,57 @@
               patternInput.value = literalMatch[1];
               if (literalMatch[2]) flagsInput.value = literalMatch[2].replace(/y/g, '');
               processRegex();
+              if (activeTab === 'analyze') runAnalyze();
             }
           }
         }
       });
 
       const flagsInput = createHTMLElement('input', {
-        type: 'text', placeholder: 'Flags (g, i, m)', value: 'g',
-        style: { width: '80px', padding: '8px', background: 'var(--omni-input-bg)', color: 'var(--omni-text)', border: '1px solid var(--omni-border)', borderRadius: '6px', fontFamily: 'monospace', textAlign: 'center', outline: 'none' },
-        eventListener: { input: () => this.debounce(() => processRegex()) }
+        type: 'text', placeholder: 'Flags', value: 'g',
+        style: {
+          width: '70px', padding: '8px', background: 'var(--omni-input-bg)',
+          color: 'var(--omni-text)', border: '1px solid var(--omni-border)',
+          borderRadius: '6px', fontFamily: 'monospace', textAlign: 'center', outline: 'none'
+        },
+        eventListener: {
+          input: () => this.debounce(() => {
+            processRegex();
+            if (activeTab === 'analyze') runAnalyze();
+          })
+        }
       });
 
       controlsRow.appendChild(patternInput);
       controlsRow.appendChild(flagsInput);
-      container.appendChild(controlsRow);
+      testPane.appendChild(controlsRow);
 
       const testArea = createHTMLElement('textarea', {
         placeholder: 'Paste test string here...',
-        style: { width: '100%', height: '80px', padding: '10px', background: 'var(--omni-input-bg)', color: 'var(--omni-text)', border: '1px solid var(--omni-border)', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px', resize: 'vertical', outline: 'none' },
+        style: {
+          width: '100%', height: '80px', padding: '10px', background: 'var(--omni-input-bg)',
+          color: 'var(--omni-text)', border: '1px solid var(--omni-border)', borderRadius: '6px',
+          fontFamily: 'monospace', fontSize: '12px', resize: 'vertical', outline: 'none'
+        },
         eventListener: { input: () => this.debounce(() => processRegex()) }
       });
-      container.appendChild(testArea);
+      testPane.appendChild(testArea);
 
       const summaryRow = createHTMLElement('div', {
-        style: { fontSize: '11px', fontWeight: '600', color: 'var(--omni-muted)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }
+        style: { fontSize: '11px', fontWeight: '600', color: 'var(--omni-muted)', display: 'flex', justifyContent: 'space-between' }
       });
       const matchCountLabel = createHTMLElement('span', { textContent: 'Awaiting input...' });
       summaryRow.appendChild(matchCountLabel);
-      container.appendChild(summaryRow);
+      testPane.appendChild(summaryRow);
 
       const outputArea = createHTMLElement('div', {
-        style: { width: '100%', minHeight: '80px', maxHeight: '150px', overflowY: 'auto', padding: '10px', background: 'var(--omni-bg-light)', color: 'var(--omni-text)', border: '1px solid var(--omni-border)', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px', whiteSpace: 'pre-wrap', wordWrap: 'break-word' }
+        style: {
+          width: '100%', minHeight: '80px', maxHeight: '140px', overflowY: 'auto', padding: '10px',
+          background: 'var(--omni-bg-light)', color: 'var(--omni-text)', border: '1px solid var(--omni-border)',
+          borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px', whiteSpace: 'pre-wrap', wordWrap: 'break-word'
+        }
       });
-      container.appendChild(outputArea);
+      testPane.appendChild(outputArea);
 
       let lastMatches = [];
       const processRegex = () => {
@@ -2625,7 +4828,6 @@
         const pattern = patternInput.value.trim();
         const text = testArea.value;
         const flags = flagsInput.value.trim().replace(/y/g, '');
-
         lastMatches = [];
 
         if (!pattern || !text) {
@@ -2641,27 +4843,34 @@
           let matchFound = false;
 
           if (!re.global) {
-             const singleMatch = text.match(re);
-             if (singleMatch) {
+            const singleMatch = text.match(re);
+            if (singleMatch) {
               matchFound = true;
               lastMatches.push(singleMatch[0]);
               if (singleMatch.index > 0) outputArea.appendChild(document.createTextNode(text.substring(0, singleMatch.index)));
-
-              const highlight = createHTMLElement('span', { textContent: singleMatch[0], style: { background: 'var(--omni-muted)', color: 'var(--omni-btn-text)', borderRadius: '3px', padding: '0 2px' } });
+              const highlight = createHTMLElement('span', {
+                textContent: singleMatch[0],
+                style: { background: 'var(--omni-accent)', color: 'var(--omni-btn-text)', borderRadius: '3px', padding: '0 2px' }
+              });
               outputArea.appendChild(highlight);
-
-              if (singleMatch.index + singleMatch[0].length < text.length) outputArea.appendChild(document.createTextNode(text.substring(singleMatch.index + singleMatch[0].length)));
-             } else { outputArea.appendChild(document.createTextNode(text)); }
+              if (singleMatch.index + singleMatch[0].length < text.length) {
+                outputArea.appendChild(document.createTextNode(text.substring(singleMatch.index + singleMatch[0].length)));
+              }
+            } else {
+              outputArea.appendChild(document.createTextNode(text));
+            }
           } else {
             while ((match = re.exec(text)) !== null) {
               if (match.index < lastIndex) { re.lastIndex = lastIndex; continue; }
-
               matchFound = true;
               lastMatches.push(match[0]);
               if (match.index > lastIndex) outputArea.appendChild(document.createTextNode(text.substring(lastIndex, match.index)));
               if (match[0].length === 0) { re.lastIndex++; continue; }
 
-              const highlight = createHTMLElement('span', { textContent: match[0], style: { background: 'var(--omni-accent)', color: '#fff', borderRadius: '3px', padding: '0 2px' } });
+              const highlight = createHTMLElement('span', {
+                textContent: match[0],
+                style: { background: 'var(--omni-accent)', color: 'var(--omni-btn-text)', borderRadius: '3px', padding: '0 2px' }
+              });
               outputArea.appendChild(highlight);
               lastIndex = match.index + match[0].length;
             }
@@ -2671,25 +4880,299 @@
           matchCountLabel.textContent = matchFound
             ? `${lastMatches.length} match${lastMatches.length === 1 ? '' : 'es'} found`
             : 'No matches';
-
         } catch (err) {
-          outputArea.appendChild(createHTMLElement('span', { textContent: err.message, style: { color: 'var(--omni-danger, #ef4444)' } }));
+          outputArea.appendChild(createHTMLElement('span', { textContent: err.message, style: { color: 'var(--omni-danger)' } }));
           matchCountLabel.textContent = 'Invalid pattern';
         }
       };
 
+      const sampleInput = createHTMLElement('textarea', {
+        placeholder: 'Sample text to match (One per line)...\nE.g.\nID-49204\nID-10523',
+        style: {
+          width: '100%', height: '80px', padding: '8px 10px', background: 'var(--omni-input-bg)',
+          color: 'var(--omni-text)', border: '1px solid var(--omni-border)', borderRadius: '6px',
+          fontFamily: 'monospace', fontSize: '12px', resize: 'vertical', outline: 'none', whiteSpace: 'pre'
+        }
+      });
+      buildPane.appendChild(sampleInput);
+
+      const builderConfig = {
+        anchor: 'contains', // 'contains' | 'exact' | 'starts' | 'ends'
+        ignoreCase: false,
+        flexibleSpaces: false,
+        dynamicDigits: false,
+        wordBoundary: false
+      };
+
+      const anchorRow = createHTMLElement('div', { style: { display: 'flex', gap: '6px' } });
+      const anchorOptions = [
+        { id: 'contains', label: 'Contains' },
+        { id: 'exact', label: 'Exact Match' },
+        { id: 'starts', label: 'Starts With' },
+        { id: 'ends', label: 'Ends With' }
+      ];
+
+      const anchorButtons = {};
+      anchorOptions.forEach(opt => {
+        const btn = createHTMLElement('button', {
+          textContent: opt.label,
+          style: {
+            flex: '1', padding: '5px', borderRadius: '4px', cursor: 'pointer', outline: 'none',
+            fontSize: '11px', border: '1px solid var(--omni-border)',
+            background: builderConfig.anchor === opt.id ? 'var(--omni-accent)' : 'var(--omni-input-bg)',
+            color: builderConfig.anchor === opt.id ? 'var(--omni-btn-text)' : 'var(--omni-muted)'
+          },
+          eventListener: {
+            click: () => {
+              builderConfig.anchor = opt.id;
+              anchorOptions.forEach(o => {
+                const isSel = o.id === opt.id;
+                anchorButtons[o.id].style.background = isSel ? 'var(--omni-accent)' : 'var(--omni-input-bg)';
+                anchorButtons[o.id].style.color = isSel ? 'var(--omni-btn-text)' : 'var(--omni-muted)';
+                anchorButtons[o.id].style.border = isSel ? 'none' : '1px solid var(--omni-border)';
+              });
+              generatePattern();
+            }
+          }
+        });
+        anchorButtons[opt.id] = btn;
+        anchorRow.appendChild(btn);
+      });
+      buildPane.appendChild(anchorRow);
+
+      const togglesRow = createHTMLElement('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' } });
+      const rules = [
+        { key: 'ignoreCase', label: 'Case Insensitive' },
+        { key: 'flexibleSpaces', label: 'Flexible Spaces (\\s+)' },
+        { key: 'dynamicDigits', label: 'Match Any Digits (\\d+)' },
+        { key: 'wordBoundary', label: 'Word Boundary (\\b)' }
+      ];
+
+      rules.forEach(r => {
+        const toggleBtn = createHTMLElement('button', {
+          textContent: r.label,
+          style: {
+            padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', outline: 'none',
+            fontSize: '11px', border: '1px solid var(--omni-border)',
+            background: 'var(--omni-input-bg)', color: 'var(--omni-muted)'
+          },
+          eventListener: {
+            click: () => {
+              builderConfig[r.key] = !builderConfig[r.key];
+              toggleBtn.style.background = builderConfig[r.key] ? 'var(--omni-accent)' : 'var(--omni-input-bg)';
+              toggleBtn.style.color = builderConfig[r.key] ? 'var(--omni-btn-text)' : 'var(--omni-muted)';
+              toggleBtn.style.border = builderConfig[r.key] ? 'none' : '1px solid var(--omni-border)';
+              generatePattern();
+            }
+          }
+        });
+        togglesRow.appendChild(toggleBtn);
+      });
+      buildPane.appendChild(togglesRow);
+
+      const genResultBox = createHTMLElement('div', {
+        style: {
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '8px 10px', background: 'var(--omni-bg-light)', border: '1px solid var(--omni-border)',
+          borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px'
+        }
+      });
+      
+      const genResultWrapper = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', overflow: 'hidden' }});
+      const genResultPattern = createHTMLElement('span', { textContent: 'Awaiting sample input...', style: { color: 'var(--omni-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } });
+      genResultWrapper.appendChild(genResultPattern);
+      genResultBox.appendChild(genResultWrapper);
+
+      const applyBtn = createHTMLElement('button', {
+        textContent: 'Use in Tester',
+        style: {
+          padding: '4px 8px', background: 'var(--omni-accent)', color: 'var(--omni-btn-text)',
+          border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold', flexShrink: 0
+        },
+        eventListener: {
+          click: () => {
+            const rawGen = genResultPattern.dataset.rawPattern;
+            if (!rawGen) return;
+            patternInput.value = rawGen;
+            flagsInput.value = builderConfig.ignoreCase ? 'gi' : 'g';
+            switchTab('test');
+          }
+        }
+      });
+      genResultBox.appendChild(applyBtn);
+      buildPane.appendChild(genResultBox);
+
+      const generatePattern = () => {
+        const rawInput = sampleInput.value;
+        if (!rawInput.trim()) {
+          genResultPattern.textContent = 'Awaiting sample input...';
+          genResultPattern.style.color = 'var(--omni-muted)';
+          genResultPattern.dataset.rawPattern = '';
+          return;
+        }
+
+        const samples = rawInput.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+        const processedPatterns = new Set();
+
+        samples.forEach(sample => {
+          let pattern = sample.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          if (builderConfig.dynamicDigits) pattern = pattern.replace(/\d+/g, '\\d+');
+          if (builderConfig.flexibleSpaces) pattern = pattern.replace(/\s+/g, '\\s+');
+          processedPatterns.add(pattern);
+        });
+
+        if (processedPatterns.size === 0) return;
+
+        let arr = Array.from(processedPatterns);
+        let finalPattern = '';
+
+        if (arr.length === 1) {
+          finalPattern = arr[0];
+        } else {
+          const isSafeSplit = (str, idx) => {
+            if (idx === 0 || idx === str.length) return true;
+            const leftChar = str[idx - 1];
+            const rightChar = str[idx];
+            if (leftChar === '\\') return false;
+            if ((leftChar === 'd' || leftChar === 's') && idx >= 2 && str[idx - 2] === '\\' && rightChar === '+') return false;
+            return true;
+          };
+
+          let pLen = 0;
+          let minLen = Math.min(...arr.map(s => s.length));
+          while (pLen < minLen) {
+            if (arr.every(s => s[pLen] === arr[0][pLen])) pLen++;
+            else break;
+          }
+          while (pLen > 0 && !isSafeSplit(arr[0], pLen)) pLen--; // Rollback unsafe splits
+          
+          const prefix = arr[0].substring(0, pLen);
+          arr = arr.map(s => s.substring(pLen));
+
+          let sLen = 0;
+          minLen = Math.min(...arr.map(s => s.length));
+          while (sLen < minLen) {
+            let offset = sLen + 1;
+            if (arr.every(s => s[s.length - offset] === arr[0][arr[0].length - offset])) sLen++;
+            else break;
+          }
+          while (sLen > 0 && !isSafeSplit(arr[0], arr[0].length - sLen)) sLen--; // Rollback unsafe splits
+          
+          const suffix = arr[0].substring(arr[0].length - sLen);
+          arr = arr.map(s => s.substring(0, s.length - sLen));
+
+          finalPattern = `${prefix}(?:${arr.join('|')})${suffix}`;
+        }
+
+        if (builderConfig.wordBoundary) {
+          finalPattern = `\\b${finalPattern}\\b`;
+        }
+
+        if (builderConfig.anchor === 'exact') finalPattern = `^${finalPattern}$`;
+        else if (builderConfig.anchor === 'starts') finalPattern = `^${finalPattern}`;
+        else if (builderConfig.anchor === 'ends') finalPattern = `${finalPattern}$`;
+
+        genResultPattern.textContent = `/${finalPattern}/${builderConfig.ignoreCase ? 'gi' : 'g'}`;
+        genResultPattern.style.color = 'var(--omni-text)';
+        genResultPattern.dataset.rawPattern = finalPattern;
+      };
+
+      sampleInput.addEventListener('input', () => this.debounce(generatePattern));
+
+      const analyzeList = createHTMLElement('div', {
+        style: {
+          width: '100%', minHeight: '140px', maxHeight: '200px', overflowY: 'auto',
+          display: 'flex', flexDirection: 'column', gap: '6px'
+        }
+      });
+      analyzePane.appendChild(analyzeList);
+
+      const runAnalyze = () => {
+        analyzeList.innerHTML = safeHTML('');
+        const pattern = patternInput.value.trim();
+
+        if (!pattern) {
+          analyzeList.appendChild(createHTMLElement('div', {
+            textContent: 'Enter a regex pattern in the input bar to parse syntax.',
+            style: { color: 'var(--omni-muted)', fontSize: '12px', padding: '8px' }
+          }));
+          return;
+        }
+
+        const explanations = [];
+
+        try {
+          new RegExp(pattern);
+        } catch (e) {
+          analyzeList.appendChild(createHTMLElement('div', {
+            textContent: `Syntax Error: ${e.message}`,
+            style: { color: 'var(--omni-danger)', fontSize: '12px', padding: '8px' }
+          }));
+          return;
+        }
+
+        if (pattern.startsWith('^')) explanations.push({ token: '^', desc: 'Asserts the start of a string or line.' });
+        if (pattern.endsWith('$') && !pattern.endsWith('\\$')) explanations.push({ token: '$', desc: 'Asserts the end of a string or line.' });
+        if (/\\b/.test(pattern)) explanations.push({ token: '\\b', desc: 'Word boundary assertion (transition between \\w and \\W).' });
+        if (/\\d/.test(pattern)) explanations.push({ token: '\\d', desc: 'Matches any ASCII digit [0-9].' });
+        if (/\\D/.test(pattern)) explanations.push({ token: '\\D', desc: 'Matches any non-digit character.' });
+        if (/\\w/.test(pattern)) explanations.push({ token: '\\w', desc: 'Matches any alphanumeric word character or underscore [a-zA-Z0-9_].' });
+        if (/\\W/.test(pattern)) explanations.push({ token: '\\W', desc: 'Matches any non-word character.' });
+        if (/\\s/.test(pattern)) explanations.push({ token: '\\s', desc: 'Matches any whitespace character (space, tab, newline).' });
+        if (/\\S/.test(pattern)) explanations.push({ token: '\\S', desc: 'Matches any non-whitespace character.' });
+        if (/\+/.test(pattern)) explanations.push({ token: '+', desc: 'Matches 1 or more occurrences of the preceding token.' });
+        if (/\*/.test(pattern)) explanations.push({ token: '*', desc: 'Matches 0 or more occurrences of the preceding token.' });
+        if (/\?/.test(pattern)) explanations.push({ token: '?', desc: 'Matches 0 or 1 occurrence, or makes a quantifier lazy.' });
+        if (/\{[0-9]+(,[0-9]*)?\}/.test(pattern)) {
+          const match = pattern.match(/\{([0-9]+)(,([0-9]*))?\}/);
+          if (match) {
+            const min = match[1];
+            const max = match[3] ? match[3] : (match[2] ? 'infinite' : min);
+            explanations.push({ token: match[0], desc: `Quantifier: Matches between ${min} and ${max} times.` });
+          }
+        }
+        if (/\[.+?\]/.test(pattern)) explanations.push({ token: '[...]', desc: 'Character class: Matches any single character enclosed in the set.' });
+        if (/\(\?:.+?\)/.test(pattern)) explanations.push({ token: '(?:...)', desc: 'Non-capturing group: Groups expressions without persisting matches.' });
+        else if (/\(.+?\)/.test(pattern)) explanations.push({ token: '(...)', desc: 'Capturing group: Groups multiple tokens and extracts matched substrings.' });
+        if (/\(\?<=.+?\)/.test(pattern)) explanations.push({ token: '(?<=...)', desc: 'Positive lookbehind: Matches if preceded by pattern, without inclusion.' });
+        if (/\(\?<!.+?\)/.test(pattern)) explanations.push({ token: '(?<!...)', desc: 'Negative lookbehind: Matches if NOT preceded by pattern.' });
+        if (/\(\?=.+?\)/.test(pattern)) explanations.push({ token: '(?=...)', desc: 'Positive lookahead: Matches if followed by pattern, without inclusion.' });
+        if (/\(\?!.+?\)/.test(pattern)) explanations.push({ token: '(?!...)', desc: 'Negative lookahead: Matches if NOT followed by pattern.' });
+        if (/\|/.test(pattern)) explanations.push({ token: '|', desc: 'Alternation: Acts as an OR conditional between expressions.' });
+
+        if (explanations.length === 0) {
+          explanations.push({ token: 'Literal', desc: 'Matches exact string characters without active control operators.' });
+        }
+
+        explanations.forEach(item => {
+          const row = createHTMLElement('div', {
+            style: {
+              display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px',
+              background: 'var(--omni-bg-light)', borderRadius: '4px', border: '1px solid var(--omni-border)'
+            }
+          });
+          const badge = createHTMLElement('code', {
+            textContent: item.token,
+            style: {
+              padding: '2px 6px', background: 'var(--omni-input-bg)', borderRadius: '3px',
+              color: 'var(--omni-accent-text, var(--omni-text))', fontWeight: 'bold', fontSize: '11px'
+            }
+          });
+          const text = createHTMLElement('span', {
+            textContent: item.desc,
+            style: { fontSize: '11px', color: 'var(--omni-text)' }
+          });
+          row.appendChild(badge);
+          row.appendChild(text);
+          analyzeList.appendChild(row);
+        });
+      };
+
+      switchTab('test');
       processRegex();
       setTimeout(() => patternInput.focus(), 10);
 
-      const actions = [
-        FluxKit.ui.omni.Button('copy', 'Copy Matches', (e) => {
-          e.stopPropagation();
-          if (lastMatches.length) navigator.clipboard.writeText(lastMatches.join('\n'));
-          FluxHub.ui.hide();
-        })
-      ];
-
-      return FluxKit.ui.omni.DetailCard(container, actions);
+      return FluxKit.ui.omni.DetailCard(container, []);
     }
 
     renderBase64Tool(initialPayload) {
@@ -2861,16 +5344,15 @@
       container.appendChild(dimsLabel);
 
       const positionHandles = () => {
-        const mid = (a, b) => (a + b) / 2;
         const set = (h, x, y) => { h.style.left = `${x - 5}px`; h.style.top = `${y - 5}px`; };
-        set(handles.nw, sel.x, sel.y);
-        set(handles.n, mid(sel.x, sel.x + sel.w), sel.y);
-        set(handles.ne, sel.x + sel.w, sel.y);
-        set(handles.e, sel.x + sel.w, mid(sel.y, sel.y + sel.h));
-        set(handles.se, sel.x + sel.w, sel.y + sel.h);
-        set(handles.s, mid(sel.x, sel.x + sel.w), sel.y + sel.h);
-        set(handles.sw, sel.x, sel.y + sel.h);
-        set(handles.w, sel.x, mid(sel.y, sel.y + sel.h));
+        set(handles.nw, 0, 0);
+        set(handles.n, sel.w / 2, 0);
+        set(handles.ne, sel.w, 0);
+        set(handles.e, sel.w, sel.h / 2);
+        set(handles.se, sel.w, sel.h);
+        set(handles.s, sel.w / 2, sel.h);
+        set(handles.sw, 0, sel.h);
+        set(handles.w, 0, sel.h / 2);
       };
 
       const renderSelection = () => {
@@ -2985,7 +5467,6 @@
               h = w / lockedAspect;
               y = drag.startSel.y + (drag.startSel.h - h) / 2;
             } else {
-              // corner handles: drive off width, keep the opposite corner anchored
               h = w / lockedAspect;
               if (drag.mode.includes('n')) y = drag.startSel.y + drag.startSel.h - h;
               if (drag.mode.includes('w')) x = drag.startSel.x + drag.startSel.w - w;
@@ -3054,16 +5535,18 @@
         if (!loadedImage) return null;
         const r = getImageRect();
 
-        const sx = (sel.x - r.x) / displayScale;
-        const sy = (sel.y - r.y) / displayScale;
-        const sw = sel.w / displayScale;
-        const sh = sel.h / displayScale;
+        const sx = Math.round((sel.x - r.x) / displayScale);
+        const sy = Math.round((sel.y - r.y) / displayScale);
+        const sw = Math.max(1, Math.round(sel.w / displayScale));
+        const sh = Math.max(1, Math.round(sel.h / displayScale));
 
         const outCanvas = document.createElement('canvas');
-        outCanvas.width = Math.round(sw);
-        outCanvas.height = Math.round(sh);
+        outCanvas.width = sw;
+        outCanvas.height = sh;
+        
         const ctx = outCanvas.getContext('2d');
-        ctx.drawImage(loadedImage, sx, sy, sw, sh, 0, 0, outCanvas.width, outCanvas.height);
+        ctx.imageSmoothingEnabled = false; 
+        ctx.drawImage(loadedImage, sx, sy, sw, sh, 0, 0, sw, sh);
         return outCanvas;
       };
 
@@ -3106,13 +5589,6 @@
     destroy() { clearTimeout(this.debounceTimer); }
   }
 
-  /**
-   * ============================================================================
-   * VIEW: Time & Sync Hub (Tier 1)
-   * Consolidates Timer, Stopwatch, Pomodoro, World Clock, and Epoch operations
-   * onto a unified event loop to eliminate DOM thrashing and interval leaks.
-   * ============================================================================
-   */
   class TimeManagerHubView extends BaseView {
     constructor(query, context = null) {
       super(query, context);
@@ -3128,18 +5604,56 @@
 
     static isAvailable = true;
     static groupWidgets = true;
-
     static commandRegistry = [
       { prefix: '> timer', description: 'Start a cross-tab synchronized timer (e.g. > timer 5m)', icon: 'timer' },
-      { prefix: '> sw', description: 'High-precision, cross-tab synchronized stopwatch', icon: 'stopwatch' },
-      { prefix: '> pomo', description: 'Pomodoro Productivity Timer', icon: 'pomodoro' },
-      { prefix: '> clock', description: 'Check local time in any city (e.g., > clock London)', icon: 'worldClock' },
+      { prefix: ['> sw', '> stopwatch '], description: 'High-precision, cross-tab synchronized stopwatch', icon: 'stopwatch' },
+      { prefix: ['> pomo', '> pomodoro'], description: 'Pomodoro Productivity Timer', icon: 'pomodoro' },
+      { prefix: ['> clock', '> time'], description: 'Check local time in any city (e.g., > clock London)', icon: 'worldClock' },
       { prefix: '> epoch', description: 'Convert Unix timestamps to human-readable time', icon: 'clock' }
     ];
 
+    static async getSuggestions(rawQuery) {
+      const q = rawQuery.toLowerCase();
+      const suggestions = [];
+
+      if (q.startsWith('> timer ') || q.startsWith('> t ')) {
+        const match = rawQuery.match(/^>\s*(timer|t)\s+/i);
+        if (match) {
+          const prefix = match[0];
+          try {
+            const recents = FluxHubState.get('RECENT_TIMERS', []);
+            recents.forEach(r => suggestions.push(`${prefix}${r}`));
+          } catch(e) {}
+          
+          ['5m', '10m', '15m', '25m', '30m', '1h'].forEach(p => suggestions.push(`${prefix}${p}`));
+        }
+      }
+
+      if (q.startsWith('> clock ') || q.startsWith('> time ')) {
+        const match = rawQuery.match(/^>\s*(clock|time)\s+/i);
+        if (match) {
+          const prefix = match[0];
+          ['London', 'New York', 'Tokyo', 'Paris', 'Sydney', 'Dubai'].forEach(city => {
+            suggestions.push(`${prefix}${city}`);
+          });
+        }
+      }
+
+      if (q.startsWith('> epoch ')) {
+        const match = rawQuery.match(/^>\s*epoch\s+/i);
+        if (match) {
+          const prefix = match[0];
+          suggestions.push(`${prefix}${Math.floor(Date.now() / 1000)}`); // Seconds
+          suggestions.push(`${prefix}${Date.now()}`); // Milliseconds
+        }
+      }
+
+      return suggestions.filter(s => s.toLowerCase().startsWith(q));
+    }
+
     static matchConfidence(query) {
       const q = query.trim().toLowerCase();
-      if (['> sw', '> stopwatch', '> pomo', '> pomodoro', '> pm', '> timer', '> t', '> epoch'].includes(q)) return 100;
+      if (['> sw', '> stopwatch', '> pomo', '> pomodoro', '> pm', '> timer', '> t', '> epoch', '> clock', '> time'].includes(q)) return 100;
       if (q.startsWith('> timer ') || q.startsWith('> t ') || q.startsWith('> sw ') || q.startsWith('> pomo ') || q.startsWith('> pm ') || q.startsWith('> epoch ') || q.startsWith('> clock ') || q.startsWith('> time ')) return 100;
       if (/^\d{10,13}$/.test(query.trim())) return 100; // Raw Unix timestamps
       return 0;
@@ -3179,6 +5693,49 @@
       return showMs ? `${formattedMain}.<span style="font-size: 0.6em; opacity: 0.7;">${msPart.toString().padStart(2, '0')}</span>` : formattedMain;
     }
 
+    updateTimerSelection() {
+      if (!this.nodes.timerItems) return;
+      this.nodes.timerItems.forEach((node, idx) => {
+        if (idx === this.timerSelectedIndex) {
+          node.style.background = 'var(--omni-hover)';
+          node.style.borderColor = 'var(--omni-accent)';
+          node.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        } else {
+          node.style.background = 'var(--omni-bg)';
+          node.style.borderColor = 'var(--omni-border)';
+        }
+      });
+
+      if (this.timerSelectedIndex >= 0 && this.nodes.timerItems[this.timerSelectedIndex]) {
+        const itemText = this.nodes.timerItems[this.timerSelectedIndex].dataset.preset;
+        if (itemText) {
+          this.rawQuery = `> timer ${itemText}`;
+          this.query = this.rawQuery.toLowerCase();
+          
+          if (typeof FluxHub !== 'undefined' && FluxHub.ui && FluxHub.ui.input) {
+            FluxHub.ui.input.value = this.rawQuery;
+          }
+
+          if (this.nodes.timerInput && typeof this.nodes.timerInput.updateFromMs === 'function') {
+            const ms = this.parseTime(itemText);
+            this.nodes.timerInput.updateFromMs(ms);
+          }
+        }
+      } else if (this.timerSelectedIndex === -1 && this._originalQuery) {
+        this.rawQuery = this._originalQuery;
+        this.query = this.rawQuery.toLowerCase();
+        
+        if (typeof FluxHub !== 'undefined' && FluxHub.ui && FluxHub.ui.input) {
+          FluxHub.ui.input.value = this.rawQuery;
+        }
+
+        if (this.nodes.timerInput && typeof this.nodes.timerInput.updateFromMs === 'function') {
+          const ms = this.parseTime(this.rawQuery.replace(/^>\s*(timer|t)\s*/i, '').trim());
+          this.nodes.timerInput.updateFromMs(ms);
+        }
+      }
+    }
+
     async getIANATimezone(city) {
       const cacheKey = `tz_${city.toLowerCase()}`;
       const cached = await FluxHub.cache.get(cacheKey);
@@ -3214,9 +5771,13 @@
         tool = 'timer';
         const input = this.rawQuery.replace(/^>\s*(timer|t)\s*/i, '').trim();
         const activeTimer = FluxHubState.get(STATE_KEYS.ACTIVE_TIMER, null);
-        if (input) { const ms = this.parseTime(input); payload = !ms ? { error: 'Invalid format. Use "5m", "1h 30m"' } : { action: 'start', ms, label: input }; }
+        const recents = FluxHubState.get('RECENT_TIMERS', []);
+        if (input) { 
+          const ms = this.parseTime(input); 
+          payload = !ms ? { error: 'Invalid format. Use "5m", "1h 30m"' } : { action: 'start', ms, label: input, recents }; 
+        }
         else if (activeTimer) { payload = { action: 'view', timer: activeTimer }; }
-        else { payload = { error: 'No active timer. Type "> timer 5m" to start.' }; }
+        else { payload = { action: 'hub', recents }; }
       }
       else if (this.query.startsWith('> sw') || this.query.startsWith('> stopwatch')) {
         tool = 'stopwatch';
@@ -3234,10 +5795,13 @@
       }
       else if (this.query.startsWith('> clock') || this.query.startsWith('> time')) {
         tool = 'clock';
-        const city = this.rawQuery.replace(/^>\s*(clock|time)\s+(in\s+)?/i, '').trim();
-        if (!city) return null;
-        const tz = await this.getIANATimezone(city);
-        payload = !tz ? { city, error: 'Timezone not found' } : { city, tz };
+        const city = this.rawQuery.replace(/^>\s*(clock|time)\s*(in\s+)?/i, '').trim();
+        if (!city) {
+          payload = { local: true, city: 'Local Time' };
+        } else {
+          const tz = await this.getIANATimezone(city);
+          payload = !tz ? { city, error: 'Timezone not found' } : { city, tz };
+        }
       }
 
       this.activeTool = tool;
@@ -3267,8 +5831,6 @@
     }
 
     renderTimerTool(data) {
-      if (data.action === 'start') return null;
-
       const container = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 0', fontFamily: 'var(--omni-font)' } });
 
       if (data.error) {
@@ -3301,6 +5863,148 @@
         stopBtn.style.background = 'var(--omni-danger)';
         stopBtn.style.color = 'var(--omni-btn-text)';
         return FluxKit.ui.omni.DetailCard(container, [stopBtn]);
+      }
+
+      if (data.action === 'hub' || data.action === 'start') {
+        const container = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '12px', padding: '8px', fontFamily: 'var(--omni-font)' } });
+
+        const inputWrapper = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '16px 0 24px 0' } });
+        inputWrapper.appendChild(createHTMLElement('span', { textContent: 'Set Timer', style: { fontSize: '12px', color: 'var(--omni-muted)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px' } }));
+
+        let timeDigits = '000000';
+        if (data.action === 'start' && data.ms) {
+          const totalSecs = Math.floor(data.ms / 1000);
+          const h = Math.floor(totalSecs / 3600);
+          const m = Math.floor((totalSecs % 3600) / 60);
+          const s = totalSecs % 60;
+          timeDigits = h.toString().padStart(2, '0') + m.toString().padStart(2, '0') + s.toString().padStart(2, '0');
+        }
+
+        const displayDiv = createHTMLElement('div', {
+          tabindex: '0',
+          style: {
+            fontSize: '56px', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums', letterSpacing: '2px',
+            cursor: 'text', outline: 'none', borderBottom: '2px solid transparent', transition: 'border-color 0.2s', display: 'flex', justifyContent: 'center'
+          },
+          eventListener: {
+            focus: () => { displayDiv.style.borderBottom = '2px solid var(--omni-accent)'; },
+            blur: () => { displayDiv.style.borderBottom = '2px solid transparent'; },
+            keydown: (e) => {
+              if (e.key === 'ArrowDown' || e.key === 'ArrowUp') return;
+              
+              if (e.key === 'Enter') {
+                e.preventDefault(); e.stopPropagation();
+                const h = parseInt(timeDigits.slice(0, 2), 10);
+                const m = parseInt(timeDigits.slice(2, 4), 10);
+                const s = parseInt(timeDigits.slice(4, 6), 10);
+                const totalMs = (h * 3600 + m * 60 + s) * 1000;
+                
+                if (totalMs > 0) {
+                  let queryLabel = [];
+                  if (h > 0) queryLabel.push(`${h}h`);
+                  if (m > 0) queryLabel.push(`${m}m`);
+                  if (s > 0 || queryLabel.length === 0) queryLabel.push(`${s}s`);
+                  this.rawQuery = `> timer ${queryLabel.join(' ')}`;
+                  this.query = this.rawQuery.toLowerCase();
+                  FluxHub.ui.setInputVal(this.rawQuery);
+                  this.execute();
+                }
+              } else if (e.key === 'Backspace') {
+                 e.preventDefault(); e.stopPropagation();
+                 timeDigits = '0' + timeDigits.slice(0, 5);
+                 updateDisplayStandard();
+              } else if (/^\d$/.test(e.key)) {
+                 e.preventDefault(); e.stopPropagation();
+                 timeDigits = timeDigits.slice(1) + e.key;
+                 updateDisplayStandard();
+              }
+            }
+          }
+        });
+
+        const updateDisplayStandard = () => {
+          const h = timeDigits.slice(0, 2);
+          const m = timeDigits.slice(2, 4);
+          const s = timeDigits.slice(4, 6);
+          
+          const hColor = h === '00' ? 'var(--omni-muted)' : 'var(--omni-text)';
+          const mColor = (h === '00' && m === '00') ? 'var(--omni-muted)' : 'var(--omni-text)';
+          const sColor = timeDigits === '000000' ? 'var(--omni-muted)' : 'var(--omni-text)';
+          
+          displayDiv.innerHTML = safeHTML(
+            `<span style="color: ${hColor}">${h}</span><span style="color: var(--omni-muted)">:</span>` +
+            `<span style="color: ${mColor}">${m}</span><span style="color: var(--omni-muted)">:</span>` +
+            `<span style="color: ${sColor}">${s}</span>`
+          );
+        };
+
+        updateDisplayStandard();
+
+        displayDiv.updateFromMs = (ms) => {
+          if (!ms) ms = 0;
+          const totalSecs = Math.floor(ms / 1000);
+          const h = Math.floor(totalSecs / 3600);
+          const m = Math.floor((totalSecs % 3600) / 60);
+          const s = totalSecs % 60;
+          timeDigits = h.toString().padStart(2, '0') + m.toString().padStart(2, '0') + s.toString().padStart(2, '0');
+          updateDisplayStandard();
+        };
+
+        this.nodes.timerInput = displayDiv;
+        inputWrapper.appendChild(displayDiv);
+        container.appendChild(inputWrapper);
+
+        const listContainer = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '250px', overflowY: 'auto' } });
+        this.nodes.timerItems = [];
+        this.timerSelectedIndex = -1;
+
+        const addSection = (title, items) => {
+          if (!items || items.length === 0) return;
+          listContainer.appendChild(createHTMLElement('div', { textContent: title, style: { fontSize: '11px', textTransform: 'uppercase', color: 'var(--omni-muted)', fontWeight: 'bold', marginTop: '8px', marginBottom: '4px', letterSpacing: '0.5px' } }));
+          items.forEach((item) => {
+            const row = createHTMLElement('div', {
+              style: { padding: '10px 12px', background: 'var(--omni-bg)', border: '1px solid var(--omni-border)', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', color: 'var(--omni-text)', transition: 'all 0.15s ease' },
+              eventListener: {
+                mouseenter: () => {
+                  this.nodes.timerItems.forEach((n, i) => {
+                    if (i !== this.timerSelectedIndex) {
+                      n.style.background = 'var(--omni-bg)';
+                      n.style.borderColor = 'var(--omni-border)';
+                    }
+                  });
+                  if (this.timerSelectedIndex !== this.nodes.timerItems.indexOf(row)) {
+                    row.style.background = 'var(--omni-hover)';
+                  }
+                },
+                mouseleave: () => {
+                  if (this.timerSelectedIndex !== this.nodes.timerItems.indexOf(row)) {
+                    row.style.background = 'var(--omni-bg)';
+                    row.style.borderColor = 'var(--omni-border)';
+                  }
+                },
+                click: (e) => {
+                  e.stopPropagation();
+                  this.rawQuery = `> timer ${item}`;
+                  this.query = this.rawQuery.toLowerCase();
+                  FluxHub.ui.setInputVal(this.rawQuery);
+                  this.execute();
+                }
+              }
+            });
+            row.dataset.preset = item;
+            row.appendChild(createHTMLElement('span', { icon: 'timer', style: { color: 'var(--omni-accent)', fontSize: '14px', display: 'flex' } }));
+            row.appendChild(createHTMLElement('span', { textContent: item, style: { fontWeight: '500' } }));
+            this.nodes.timerItems.push(row);
+            listContainer.appendChild(row);
+          });
+        };
+
+        addSection('Recent Timers', data.recents);
+        addSection('Presets', ['5m', '10m', '15m', '25m', '30m', '1h']);
+
+        container.appendChild(listContainer);
+
+        return FluxKit.ui.omni.DetailCard(container, []);
       }
 
       return null;
@@ -3570,8 +6274,16 @@
       const tickFn = (now) => {
         if (!timeDisplay.isConnected) return this.tickSubscribers.delete(tickFn);
         const d = new Date(now);
-        timeDisplay.textContent = d.toLocaleTimeString('en-US', { timeZone: data.tz, hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        dateDisplay.textContent = d.toLocaleDateString('en-US', { timeZone: data.tz, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        const timeOpts = { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' };
+        const dateOpts = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+        
+        if (data.tz) {
+          timeOpts.timeZone = data.tz;
+          dateOpts.timeZone = data.tz;
+        }
+        
+        timeDisplay.textContent = d.toLocaleTimeString('en-US', timeOpts);
+        dateDisplay.textContent = d.toLocaleDateString('en-US', dateOpts);
       };
       this.tickSubscribers.add(tickFn);
 
@@ -3582,6 +6294,40 @@
       if (e.key === 'Enter') {
         const active = e.composedPath()[0];
         if (active && active.tagName === 'BUTTON') { e.preventDefault(); e.stopPropagation(); active.click(); return true; }
+      }
+
+      if (this.activeTool === 'timer' && this.nodes.timerItems && this.nodes.timerItems.length > 0) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault(); e.stopPropagation();
+          if (this.timerSelectedIndex === -1) {
+             this._originalQuery = this.rawQuery;
+          }
+          if (document.activeElement === this.nodes.timerInput) {
+            this.nodes.timerInput.blur();
+            this.timerSelectedIndex = 0;
+          } else {
+            this.timerSelectedIndex = (this.timerSelectedIndex + 1) % this.nodes.timerItems.length;
+          }
+          this.updateTimerSelection();
+          return true;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault(); e.stopPropagation();
+          if (this.timerSelectedIndex <= 0) {
+            this.timerSelectedIndex = -1;
+            this.updateTimerSelection();
+            if (this.nodes.timerInput) this.nodes.timerInput.focus();
+          } else {
+            this.timerSelectedIndex = (this.timerSelectedIndex - 1 + this.nodes.timerItems.length) % this.nodes.timerItems.length;
+            this.updateTimerSelection();
+          }
+          return true;
+        }
+        if (e.key === 'Enter' && this.timerSelectedIndex >= 0) {
+          e.preventDefault(); e.stopPropagation();
+          this.execute();
+          return true;
+        }
       }
 
       if (this.activeTool === 'stopwatch' && this.nodes.swDisplay) {
@@ -3654,7 +6400,12 @@
     async execute() {
       const data = await this.fetchData();
       if (data.tool === 'timer' && data.payload && data.payload.action === 'start') {
-        FluxHubState.set(STATE_KEYS.ACTIVE_TIMER, { endsAt: Date.now() + data.payload.ms, label: data.payload.label, hostTab: FluxKit.ipc.getTabId() });
+        const label = data.payload.label;
+        const recents = FluxHubState.get('RECENT_TIMERS', []);
+        const updatedRecents = [label, ...recents.filter(r => r !== label)].slice(0, 5);
+        FluxHubState.set('RECENT_TIMERS', updatedRecents);
+
+        FluxHubState.set(STATE_KEYS.ACTIVE_TIMER, { endsAt: Date.now() + data.payload.ms, label: label, hostTab: FluxKit.ipc.getTabId() });
         FluxHub.ui.setInputVal('> timer');
       } else { FluxHub.ui.expandListItem(this, data); }
     }
@@ -3718,21 +6469,24 @@
           }, 500);
         }
         else if (params.tool === 'clock') {
-          node = createHTMLElement('div', { class: 'flx-omni-widget', style: { alignItems: 'center', cursor: 'pointer', flex: '1' }, eventListener: () => FluxHub.ui.setInputVal(`> clock ${params.payload.city}`) });
+          const cmdStr = params.payload.local ? '> clock' : `> clock ${params.payload.city}`;
+          node = createHTMLElement('div', { class: 'flx-omni-widget', style: { alignItems: 'center', cursor: 'pointer', flex: '1' }, eventListener: () => FluxHub.ui.setInputVal(cmdStr) });
           node.appendChild(createHTMLElement('div', { style: { fontSize: '11px', textTransform: 'uppercase', color: 'var(--omni-muted)', fontWeight: 'bold' }, textContent: params.payload.city }));
 
           const display = createHTMLElement('div', { style: { fontSize: '26px', fontWeight: 'bold', color: 'var(--omni-text)', fontVariantNumeric: 'tabular-nums', marginTop: '4px' }, textContent: '...' });
           node.appendChild(display);
 
           const startClockTick = (tz) => {
-            display.textContent = new Date().toLocaleTimeString('en-US', { timeZone: tz, hour12: false, hour: '2-digit', minute: '2-digit' });
+            const opts = { hour12: false, hour: '2-digit', minute: '2-digit' };
+            if (tz) opts.timeZone = tz;
+            display.textContent = new Date().toLocaleTimeString('en-US', opts);
             const i = setInterval(() => {
               if (!node.isConnected) return clearInterval(i);
-              display.textContent = new Date().toLocaleTimeString('en-US', { timeZone: tz, hour12: false, hour: '2-digit', minute: '2-digit' });
+              display.textContent = new Date().toLocaleTimeString('en-US', opts);
             }, 1000);
           };
 
-          if (params.payload.tz) {
+          if (params.payload.local || params.payload.tz) {
             startClockTick(params.payload.tz);
           } else {
             this.getIANATimezone(params.payload.city).then(tz => {
@@ -3759,6 +6513,9 @@
     }
 
     static isAvailable = true;
+    static commandRegistry = [
+      { prefix: ['> clip', '> clipboard'], description: 'View, search, and paste your clipboard history', icon: 'copy' },
+    ];
 
     static matchConfidence(query) {
       const q = query.trim().toLowerCase();
@@ -3844,11 +6601,77 @@
         });
 
         const displayText = text.length > 80 ? text.substring(0, 80) + '...' : text;
+        row.appendChild(createHTMLElement('div', { 
+          textContent: displayText, 
+          style: { opacity: '0.9', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', paddingRight: '16px' } 
+        }));
 
-        row.appendChild(createHTMLElement('div', { textContent: displayText, style: { opacity: '0.9', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', paddingRight: '16px' } }));
+        const actionsWrap = createHTMLElement('div', {
+          style: { display: 'flex', alignItems: 'center', gap: '12px' }
+        });
 
-        const lbl = createHTMLElement('div', { class: 'copy-lbl', icon: 'enter', textContent: 'Paste', style: { display: 'flex', gap: '4px', fontSize: '12px', fontWeight: 'bold', color: 'var(--omni-muted)', whiteSpace: 'nowrap' } });
-        row.appendChild(lbl);
+        const bmBtn = createHTMLElement('button', {
+          icon: 'bookmark',
+          title: 'Bookmark this clip',
+          style: { 
+            background: 'transparent', border: 'none', color: 'var(--omni-muted)', 
+            cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center',
+            transition: 'color 0.2s ease, transform 0.1s ease'
+          },
+          eventListener: {
+            click: (e) => {
+              e.stopPropagation(); 
+              const btn = e.currentTarget;
+              
+              const isUrl = BookmarkParser.URL_REGEX.test(text);
+              const title = isUrl ? text.replace(/^https?:\/\//, '').split('/')[0] : (text.slice(0, 40) + (text.length > 40 ? '...' : ''));
+
+              BookmarksState.save({
+                type: isUrl ? 'link' : 'text',
+                url: isUrl ? text : null,
+                payload: text,
+                title: title.trim(),
+                notes: 'Saved via Clipboard',
+                tags: ['clipboard']
+              });
+
+              const originalIcon = btn.innerHTML;
+              
+              btn.innerHTML = FluxKit.utils.safeHTML('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="1.2em" height="1.2em" vector-effect="non-scaling-stroke"><polyline points="20 6 9 17 4 12"></polyline></svg>');
+              btn.style.color = 'var(--omni-success)';
+              btn.style.transform = 'scale(1.1)';
+              
+              FluxKit.ui.showNotification('Saved directly to Bookmarks', { icon: 'success' });
+              
+              setTimeout(() => {
+                if (btn.isConnected) {
+                  btn.innerHTML = originalIcon;
+                  btn.style.color = 'var(--omni-muted)';
+                  btn.style.transform = 'scale(1)';
+                }
+              }, 2000);
+            },
+            mouseenter: (e) => { 
+              if (e.currentTarget.style.color !== 'var(--omni-success)') {
+                e.currentTarget.style.color = 'var(--omni-accent)'; 
+              }
+            },
+            mouseleave: (e) => { 
+              if (e.currentTarget.style.color !== 'var(--omni-success)') {
+                e.currentTarget.style.color = 'var(--omni-muted)'; 
+              }
+            }
+          }
+        });
+
+        const lbl = createHTMLElement('div', { 
+          class: 'copy-lbl', icon: 'enter', textContent: 'Paste', 
+          style: { display: 'flex', gap: '4px', fontSize: '12px', fontWeight: 'bold', color: 'var(--omni-muted)', whiteSpace: 'nowrap' } 
+        });
+        
+        actionsWrap.appendChild(bmBtn);
+        actionsWrap.appendChild(lbl);
+        row.appendChild(actionsWrap);
 
         this.itemNodes.push(row);
         bodyContainer.appendChild(row);
@@ -4329,10 +7152,42 @@
       return { ...defaults, ...custom };
     }
 
-    static get isAvailable() { return typeof GM_openInTab !== 'undefined'; }
+    static isAvailable = typeof GM_openInTab !== 'undefined';
+
+    static async getSuggestions(rawQuery) {
+      const q = rawQuery.toLowerCase();
+      const suggestions = [];
+      if (q.startsWith('@')) {
+        const parts = q.split(' ');
+        if (parts.length === 1) {
+          const allBangs = this.bangs;
+          Object.keys(allBangs).forEach(prefix => {
+            if (prefix.startsWith(q)) {
+              suggestions.push(`${prefix} `); 
+            }
+          });
+        }
+      }
+
+      if (q.startsWith('> b')) {
+        if ('> bang add @'.startsWith(q)) suggestions.push('> bang add @');
+        if ('> bang rm '.startsWith(q)) suggestions.push('> bang rm ');
+        if (q.startsWith('> bang rm ')) {
+          const customBangs = BangsState.getAll();
+          Object.keys(customBangs).forEach(prefix => {
+            const rmCommand = `> bang rm ${prefix}`;
+            if (rmCommand.startsWith(q)) {
+              suggestions.push(rmCommand);
+            }
+          });
+        }
+      }
+      return suggestions;
+    }
 
     static matchConfidence(query) {
       const clean = query.trim().toLowerCase();
+      if (clean.startsWith('> bang')) return 100;
       if (!clean.startsWith('@')) return 0;
       const bang = clean.split(' ')[0];
       if (this.bangs[bang]) return 100;
@@ -4340,7 +7195,20 @@
       return isPartial ? 60 : 0;
     }
 
+    async fetchData() {
+      const clean = this.query.trim().toLowerCase();
+      if (clean.startsWith('> bang')) return { mode: 'manager' };
+      return null;
+    }
+
     renderListRow() {
+      const clean = this.query.trim().toLowerCase();
+      if (clean.startsWith('> bang')) {
+        if (clean.startsWith('> bang add')) return FluxKit.ui.omni.ListRow('Add Custom Bang', 'plus', this.query, 'to Add');
+        if (clean.startsWith('> bang rm')) return FluxKit.ui.omni.ListRow('Remove Custom Bang', 'trash', this.query, 'to Remove');
+        return FluxKit.ui.omni.ListRow('Manage Bangs', 'settings', 'View and edit custom bangs', 'to Manage');
+      }
+
       const parts = this.query.trim().split(' ');
       const bang = parts[0].toLowerCase();
       const searchTerm = parts.slice(1).join(' ');
@@ -4350,7 +7218,87 @@
       return FluxKit.ui.omni.ListRow(title, config.icon, 'Web Search', 'to Open Tab');
     }
 
+    renderExpandedCard(data) {
+      if (!data || data.mode !== 'manager') return null;
+      const { createHTMLElement } = FluxKit.utils;
+
+      const container = createHTMLElement('div', { 
+        style: { display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '300px', overflowY: 'auto', paddingRight: '4px' } 
+      });
+      
+      const allBangs = this.constructor.bangs;
+      const customBangs = BangsState.getAll();
+
+      Object.entries(allBangs).forEach(([prefix, config]) => {
+        const isCustom = !!customBangs[prefix];
+        
+        const row = createHTMLElement('div', {
+          style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', borderRadius: '6px', background: 'var(--omni-surface)', border: '1px solid var(--omni-separator)' }
+        });
+
+        const left = createHTMLElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } });
+        left.appendChild(createHTMLElement('div', { icon: config.icon || 'externalLink', style: { color: 'var(--omni-muted)', display: 'flex' } }));
+        
+        const textCol = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column' } });
+        textCol.appendChild(createHTMLElement('div', { textContent: `${prefix} - ${config.name}`, style: { fontSize: '13px', fontWeight: 'bold', color: 'var(--omni-text)' } }));
+        textCol.appendChild(createHTMLElement('div', { textContent: config.url || config.base, style: { fontSize: '11px', color: 'var(--omni-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '300px' } }));
+        left.appendChild(textCol);
+        row.appendChild(left);
+
+        if (isCustom) {
+          const delBtn = createHTMLElement('button', {
+            textContent: 'Remove',
+            style: { background: 'var(--omni-hover)', border: 'none', color: 'var(--omni-danger)', cursor: 'pointer', fontSize: '10px', padding: '6px 10px', borderRadius: '4px', textTransform: 'uppercase', fontWeight: 'bold' },
+            eventListener: (e) => {
+              e.stopPropagation();
+              FluxHub.ui.setInputVal(`> bang rm ${prefix}`);
+              FluxHub.engine.handleInput(`> bang rm ${prefix}`);
+            }
+          });
+          row.appendChild(delBtn);
+        } else {
+          row.appendChild(createHTMLElement('div', { textContent: 'Default', style: { fontSize: '10px', color: 'var(--omni-muted)', textTransform: 'uppercase', fontWeight: 'bold', paddingRight: '8px' } }));
+        }
+
+        container.appendChild(row);
+      });
+
+      const actions = [
+        FluxKit.ui.omni.Button('plus', 'Add Custom Bang', (e) => {
+          e.stopPropagation();
+          FluxHub.ui.setInputVal('> bang add @');
+        })
+      ];
+
+      return FluxKit.ui.omni.DetailCard(container, actions);
+    }
+
     execute() {
+      const clean = this.query.trim().toLowerCase();
+      if (clean.startsWith('> bang')) {
+        if (clean.startsWith('> bang add ')) {
+          const args = this.query.replace(/^>\s*bang\s+add\s+/i, '').trim().split(' ');
+          if (args.length >= 2 && args[0].startsWith('@')) {
+            const prefix = args[0].toLowerCase();
+            const url = args.slice(1).join(' ');
+            BangsState.save(prefix, { name: prefix, url, base: url.split('?')[0], icon: 'externalLink' });
+            FluxKit.ui.showNotification(`Added custom bang: ${prefix}`, { icon: 'success' });
+            FluxHub.ui.setInputVal('> bang');
+          } else {
+            FluxKit.ui.showNotification('Format: > bang add @prefix url', { icon: 'warning' });
+          }
+        } else if (clean.startsWith('> bang rm ')) {
+          const prefix = clean.replace(/^>\s*bang\s+rm\s*/i, '').trim().toLowerCase();
+          if (BangsState.remove(prefix)) {
+            FluxKit.ui.showNotification(`Removed custom bang: ${prefix}`, { icon: 'success' });
+          } else {
+            FluxKit.ui.showNotification(`Not found: ${prefix}`, { icon: 'warning' });
+          }
+          FluxHub.ui.setInputVal('> bang');
+        }
+        return;
+      }
+
       const parts = this.query.trim().split(' ');
       const bang = parts[0].toLowerCase();
       const searchTerm = parts.slice(1).join(' ');
@@ -4379,6 +7327,8 @@
 
   class DictionaryView extends BaseView {
     static isAvailable = true;
+
+    static commandRegistry = [{ prefix: ['> def', '> define'], description: 'Lookup dictionary lookup for any text', icon: 'book' }];
 
     static matchConfidence(query) {
       const clean = query.trim();
@@ -4602,7 +7552,7 @@
     }
 
     static isAvailable = true;
-    static commandRegistry = [{ prefix: '> tr', description: 'Translate text...', icon: 'translate' }];
+    static commandRegistry = [{ prefix: ['> tr', '> translate '], description: 'Translate text...', icon: 'translate' }];
 
     static matchConfidence(query) {
       const clean = query.trim();
@@ -4846,11 +7796,6 @@
   }
 
   class SettingsView extends BaseView {
-    static isAvailable = true;
-    static commandRegistry = [{ prefix: '> config', description: 'Manage & view app configurations', icon: 'settings' }];
-
-    validSubs = ['theme', 'ocr', 'saavn', 'shazam'];
-    
     constructor(query, context = null) {
       super(query, context);
       this.subIndex = -1;
@@ -4858,6 +7803,58 @@
       this.currentData = null;
       this.lastAutoExpandSub = null;
     }
+
+    static isAvailable = true;
+    static commandRegistry = [{ 
+      prefix: ['> config', '> settings', '> set'], 
+      description: 'Manage & view app configurations', 
+      icon: 'settings' 
+    }];
+
+    static async getSuggestions(query) {
+      const q = query.toLowerCase();
+      const rawPrefix = this.commandRegistry[0].prefix;
+      const prefixes = Array.isArray(rawPrefix) ? rawPrefix : [rawPrefix];
+      
+      const activePrefix = prefixes.find(p => q.startsWith(p + ' '));
+      if (!activePrefix) return [];
+
+      const suggestions = [];
+      const remainder = q.slice(activePrefix.length).trimStart();
+      const parts = remainder.split(/\s+/);
+      const subQuery = parts[0] || '';
+      
+      const validSubs = ['theme', 'ocr', 'saavn', 'shazam'];
+
+      if (parts.length === 1) {
+        for (const sub of validSubs) {
+          if (sub.startsWith(subQuery)) {
+            suggestions.push(`${activePrefix} ${sub} `); 
+          }
+        }
+        return suggestions;
+      }
+
+      if (parts.length >= 2 && validSubs.includes(subQuery)) {
+        const valQuery = parts.slice(1).join(' ').trim();
+        
+        if (subQuery === 'theme') {
+          const themes = ['auto', ...Object.keys(FluxKit.theme?.presets || {})];
+          themes.forEach(t => {
+            if (t.startsWith(valQuery)) suggestions.push(`${activePrefix} ${subQuery} ${t}`);
+          });
+        } 
+        else if (subQuery === 'ocr') {
+          ['live', 'native'].forEach(o => {
+            if (o.startsWith(valQuery)) suggestions.push(`${activePrefix} ${subQuery} ${o}`);
+          });
+        }
+      }
+
+      return suggestions;
+    }
+
+    validSubs = ['theme', 'ocr', 'saavn', 'shazam'];
 
     static matchConfidence(query) {
       const q = query.trim().toLowerCase();
@@ -5339,6 +8336,24 @@
   class WikipediaView extends BaseView {
     static isAvailable = true;
 
+    static async getSuggestions(rawQuery) {
+      const q = rawQuery.toLowerCase();
+      if (q === '@w' || q === '@wiki') return ['@w ', '@wiki '];
+
+      const match = rawQuery.match(/^@w(iki)?\s+(.*)/i);
+      if (match && match[2]) {
+        const term = match[2].trim();
+        if (term.length < 2) return [];
+        try {
+          const res = await fetch(`https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(term)}&limit=5&origin=*&format=json`);
+          const data = await res.json();
+          const prefix = rawQuery.split(/\s+/)[0]; 
+          if (data[1]) return data[1].map(title => `${prefix} ${title}`);
+        } catch (e) { return []; }
+      }
+      return [];
+    }
+
     static matchConfidence(query) {
       const q = query.trim().toLowerCase();
       if (['@w', '@wiki'].includes(q) || q.startsWith('@wiki ') || q.startsWith('@w ')) return 100;
@@ -5455,6 +8470,23 @@
   class DuckDuckGoView extends BaseView {
     static isAvailable = true;
 
+    static async getSuggestions(rawQuery) {
+      const q = rawQuery.toLowerCase();
+      if (q === '@d' || q === '@dd') return ['@ddg '];
+      
+      const match = rawQuery.match(/^@ddg\s+(.*)/i);
+      if (match && match[1]) {
+        const term = match[1].trim();
+        if (term.length < 2) return [];
+        try {
+          const res = await fetch(`https://duckduckgo.com/ac/?q=${encodeURIComponent(term)}&type=list`);
+          const data = await res.json();
+          if (data[1]) return data[1].map(s => `@ddg ${s}`);
+        } catch (e) { return []; }
+      }
+      return [];
+    }
+
     static matchConfidence(query) {
       const clean = query.trim();
       if (!clean) return 0;
@@ -5557,6 +8589,28 @@
 
   class WeatherView extends BaseView {
     static isAvailable = true;
+
+    static async getSuggestions(rawQuery) {
+      const q = rawQuery.toLowerCase();
+      if (['> w', '> wea', '> weat', '> weath', '> weathe', '> weather'].includes(q)) {
+        return ['> w ', '> weather '];
+      }
+      
+      const match = rawQuery.match(/^>\s*(weather|w)\s+(.*)/i);
+      if (match && match[2]) {
+        const prefix = rawQuery.split(/\s+/)[0]; 
+        const term = match[2].trim();
+        if (term.length < 2) return [];
+        try {
+          const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(term)}&count=5&language=en&format=json`);
+          const data = await res.json();
+          if (data.results) {
+            return data.results.map(r => `${prefix} ${r.name}`);
+          }
+        } catch(e) { return []; }
+      }
+      return [];
+    }
 
     static matchConfidence(query) {
       const q = query.trim().toLowerCase();
@@ -5909,6 +8963,12 @@
   class GitHubView extends BaseView {
     static isAvailable = true;
 
+    static async getSuggestions(rawQuery) {
+      const q = rawQuery.toLowerCase();
+      if (q === '@g' || q === '@gh') return ['@gh '];
+      return [];
+    }
+
     static matchConfidence(query) {
       const clean = query.trim().toLowerCase();
       if (clean.startsWith('@gh ') && clean.includes('/')) return 100;
@@ -6049,32 +9109,6 @@
 
   FluxKit.api = {
     ...FluxKit.api,
-    gmFetch: function(url, options = {}) {
-      return new Promise((resolve, reject) => {
-        if (options.signal && options.signal.aborted) return reject({ name: 'AbortError' });
-        const req = GM_xmlhttpRequest({
-          method: options.method || 'GET',
-          url: url,
-          headers: options.headers || {},
-          data: options.body || undefined,
-          onload: (res) => {
-            resolve({
-              ok: res.status >= 200 && res.status < 300,
-              status: res.status,
-              text: async () => res.responseText,
-              json: async () => JSON.parse(res.responseText)
-            });
-          },
-          onerror: (err) => reject(err),
-          onabort: () => reject({ name: 'AbortError' })
-        });
-        if (options.signal) {
-          options.signal.addEventListener('abort', () => {
-            if (req && typeof req.abort === 'function') req.abort();
-          });
-        }
-      });
-    },
     music: {
       _scAuthPromise: null,
       _proxyBase: 'https://proxy-alpha-ivory.vercel.app/api/proxy?target=',
@@ -8373,6 +11407,25 @@
       this.STATIC_FALLBACK_COVER = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiBmaWxsPSIjMjIyIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgcng9IjgiLz48dGV4dCB4PSI1MCIgeT0iNTUiIGZvbnQtc2l6ZT0iMzAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM1NTUiPvCfjbc8L3RleHQ+PC9zdmc+';
     }
 
+    static isAvailable = true;
+
+    static async getSuggestions(rawQuery) {
+      const q = rawQuery.toLowerCase();
+      const suggestions = [];
+
+      if (['> pl ', '> playlist '].includes(q)) {
+        const prefix = rawQuery;
+        ['load ', 'add ', 'addtrack ', 'rename ', 'delete '].forEach(cmd => suggestions.push(`${prefix}${cmd}`));
+      }
+
+      if (['> play ', '> p ', '> playar ', '> qar '].includes(q)) {
+        const prefix = rawQuery;
+        suggestions.push(`${prefix}Mohit Chauhan`, `${prefix}KK`, `${prefix}Mohammed Rafi`);
+      }
+
+      return suggestions;
+    }
+
     _fallbackCover(entity = null) {
       try {
         if (!entity || !entity.id) return FALLBACK_COVERS.getRandomFallbackCover();
@@ -8433,8 +11486,6 @@
         }
       });
     }
-
-    static get isAvailable() { return true; }
 
     static matchConfidence(query) {
       const q = query.trim().toLowerCase();
@@ -9152,13 +12203,11 @@
         setTimeout(() => {
           if (!playerPanel.isConnected) return;
           this._playerObserver = new IntersectionObserver(([entry]) => {
-              if (entry.intersectionRatio < 0.2) {
-                  // Show compact player
+              if (entry.intersectionRatio < 0.2) { // Show compact player
                   compactPanel.style.opacity = '1';
                   compactPanel.style.pointerEvents = 'auto';
                   compactPanel.style.transform = 'translateY(0)';
-              } else {
-                  // Hide compact player
+              } else { // Hide compact player
                   compactPanel.style.opacity = '0';
                   compactPanel.style.pointerEvents = 'none';
                   compactPanel.style.transform = 'translateY(-100%)';
@@ -9293,9 +12342,6 @@
         const hoverEffect = (e) => { e.target.style.background = 'var(--omni-input-bg)' };
         const leaveEffect = (e) => { e.target.style.background = 'transparent' };
 
-        // ==========================================
-        // LEFT COLUMN (Lyrics & Reroll)
-        // ==========================================
         const leftGroup = createHTMLElement('div', { style: { flex: '1', display: 'flex', justifyContent: 'flex-start', gap: '4px', alignItems: 'center' } });
 
         const isLyricsMode = FluxHubState.get(STATE_KEYS.LYRICS_MODE, false);
@@ -9322,9 +12368,6 @@
           leftGroup.appendChild(rerollBtn);
         }
 
-        // ==========================================
-        // CENTER COLUMN (Playback)
-        // ==========================================
         const centerGroup = createHTMLElement('div', { style: { flex: '1', display: 'flex', justifyContent: 'center', gap: '8px', alignItems: 'center' } });
 
         const prevBtn = createHTMLElement('button', { icon: 'prev', style: btnStyle, eventListener: { click: () => sendCommand('previous'), mouseenter: hoverEffect, mouseleave: leaveEffect } });
@@ -9344,9 +12387,6 @@
         centerGroup.appendChild(this.uiNodes.playBtn);
         centerGroup.appendChild(nextBtn);
 
-        // ==========================================
-        // RIGHT COLUMN (Shuffle, Loop, & Volume)
-        // ==========================================
         const rightGroup = createHTMLElement('div', { style: { flex: '1', display: 'flex', justifyContent: 'flex-end', gap: '4px', alignItems: 'center' } });
 
         this.uiNodes.shuffleBtn = createHTMLElement('button', {
@@ -10346,7 +13386,8 @@
       { prefix: '> stats', description: 'Dashboard of your personal music listening habits', icon: 'trending' },
       { prefix: '> top', description: 'View your most played tracks and artists', icon: 'shine' },
       { prefix: '> history', description: 'View your recently played tracks', icon: 'history' },
-      { prefix: '> fav', description: 'View your favorite tracks', icon: 'heart' }
+      { prefix: '> fav', description: 'View your favorite tracks', icon: 'heart' },
+      { prefix: '> discover', description: 'View your discovered tracks', icon: 'search' }
     ];
 
     static matchConfidence(query) {
@@ -10385,7 +13426,7 @@
       else if (this.query.match(/^>\s*history/)) initialTab = 'history';
       else if (this.query.match(/^>\s*fav/)) initialTab = 'favorites';
       else if (this.query.match(/^>\s*artist/)) initialTab = 'artists';
-      else if (this.query.match(/^>\s*(discoveries|shazam)/)) initialTab = 'discoveries'; // ADD THIS LINE
+      else if (this.query.match(/^>\s*(discoveries|shazam)/)) initialTab = 'discoveries';
 
       return { initialTab };
     }
@@ -10402,7 +13443,7 @@
       this.nodes.viewport = createHTMLElement('div', { style: { minHeight: '300px', position: 'relative', zIndex: '2' } });
 
       if (data.initialTab === 'inspect') {
-        this.activeTab = 'overview'; // Fallback for the back button
+        this.activeTab = 'overview';
         this.renderTrackInspector(data.inspectTrack);
       } else {
         this.renderDashboard(data.initialTab);
@@ -10464,7 +13505,7 @@
         }
 
         items.forEach((item, i) => {
-          const track = (type === 'history' || type === 'discoveries') ? item.meta : item; // UPDATE THIS LINE
+          const track = (type === 'history' || type === 'discoveries') ? item.meta : item;
           if (!track) return;
 
           const row = createHTMLElement('div', {
@@ -10655,7 +13696,7 @@
     static get isAvailable() { return true; }
     
     static get commandRegistry() {
-      return [{ prefix: '> identify', description: 'Listen and identify playing music', icon: 'audio' }];
+      return [{ prefix: ['> identify', '> shazam'], description: 'Listen and identify playing music', icon: 'mic' }];
     }
 
     static matchConfidence(query) {
@@ -10855,6 +13896,820 @@
     }
   }
 
+  class OsintView extends BaseView {
+    constructor(query) {
+      super(query);
+      this.rawQuery = query.trim();
+      this.currentPath = [];
+      this.targetPayload = '';
+      this.selectedTool = null;
+      this.searchQuery = null;
+      this.rootNode = null;
+      this.containerRef = null;
+      this.bodyWrapRef = null;
+      this.headerWrapRef = null;
+    }
+
+    static isAvailable = true;
+    static commandRegistry = [{ prefix: '> osint', description: 'Explore live OSINT Framework Tools & Metadata', icon: 'osint' }];
+
+    static async getSuggestions(rawQuery) {
+      const match = rawQuery.match(/^>\s*osint\s+(.*)/i);
+      if (match && match[1]) {
+        const term = match[1].trim();
+        if (term.length < 2) return [];
+
+        try {
+          const CACHE_KEY = 'osint_arf_registry_v2';
+          let data = await FluxHub.cache.get(CACHE_KEY);
+
+          if (!data) {
+            const res = await fetch('https://raw.githubusercontent.com/lockfale/OSINT-Framework/master/public/arf.json');
+            data = await res.json();
+            await FluxHub.cache.set(CACHE_KEY, data, 86400000);
+          }
+
+          const flatTree = OsintView.flattenTree(data);
+          const matches = flatTree.filter(item => 
+            (item.name && item.name.toLowerCase().includes(term)) || 
+            (item.path && item.path.toLowerCase().includes(term))
+          );
+
+          return matches.map(m => `> osint ${m.name}`);
+        } catch (e) {
+          return [];
+        }
+      }
+      return [];
+    }
+
+    static matchConfidence(query) {
+      const q = query.trim().toLowerCase();
+      if (q === '> osint' || q.startsWith('> osint ')) return 100;
+      return 0;
+    }
+
+    findPathByName(node, targetName, currentPath = []) {
+      const path = [...currentPath, node];
+      if (node.name && node.name.toLowerCase().includes(targetName.toLowerCase())) return path;
+      if (node.children) {
+        for (const child of node.children) {
+          const found = this.findPathByName(child, targetName, path);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+
+    static flattenTree(node, pathStr = '', currentPathArr = []) {
+      let results = [];
+      const currentPath = pathStr ? `${pathStr} / ${node.name}` : node.name;
+      const nodePath = [...currentPathArr, node];
+
+      // Include both Tools and Folders in the global index
+      if (node.url || (node.children && node.children.length > 0)) {
+        results.push({ 
+          nodeRef: node, 
+          name: node.name, 
+          url: node.url, 
+          path: currentPath, 
+          isFolder: !!node.children, 
+          nodePath 
+        });
+      }
+
+      if (node.children) {
+        node.children.forEach(child => {
+          results = results.concat(OsintView.flattenTree(child, currentPath, nodePath));
+        });
+      }
+      return results;
+    }
+
+    async fetchData(signal) {
+      const rawPayload = this.rawQuery.replace(/^>\s*osint\s*/i, '').trim();
+      let typeMatch = null;
+      let searchQuery = null;
+
+      const CACHE_KEY = 'osint_arf_registry_v2';
+      let data = await FluxHub.cache.get(CACHE_KEY);
+
+      if (!data) {
+        const url = 'https://raw.githubusercontent.com/lockfale/OSINT-Framework/master/public/arf.json';
+        const res = await FluxKit.api.gmFetch(url, { signal });
+        if (!res.ok) throw new Error('Failed to fetch OSINT framework registry');
+        data = await res.json();
+        await FluxHub.cache.set(CACHE_KEY, data, 86400000);
+      }
+
+      // Strict Entity Regex Routing
+      if (/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(rawPayload)) typeMatch = 'IP Address';
+      else if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawPayload)) typeMatch = 'Email Address';
+      else if (/^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(rawPayload)) typeMatch = 'Domain Name';
+      else if (rawPayload.length > 0) {
+        // Disambiguation
+        const flat = OsintView.flattenTree(data);
+        const term = rawPayload.toLowerCase();
+        const matches = flat.filter(item => (item.name && item.name.toLowerCase().includes(term)) || (item.path && item.path.toLowerCase().includes(term)));
+
+        if (matches.length > 0) { // It matches known tools -> Treat as Global Search
+          searchQuery = rawPayload;
+        } else { // Zero tool matches -> Treat strictly as a Target Payload and route to Usernames
+          typeMatch = 'Username';
+        }
+      }
+
+      // Resolve Initial View Path
+      let initialPath = [data];
+      if (typeMatch) {
+        const path = this.findPathByName(data, typeMatch);
+        if (path) initialPath = path;
+      }
+
+      return { rootNode: data, initialPath, payload: rawPayload, searchQuery };
+    }
+
+    renderListRow() {
+      return FluxKit.ui.omni.ListRow('Live OSINT Framework', 'osint', this.rawQuery, 'to explore');
+    }
+
+    async launchTool(tool) {
+      if (!tool || !tool.url) return;
+      if (this.targetPayload) {
+        try {
+          await navigator.clipboard.writeText(this.targetPayload);
+          FluxKit.ui.showNotification(`Copied target "${this.targetPayload}" to clipboard for ${tool.name}`, { icon: 'clipboard' });
+        } catch (err) {}
+      }
+      GM_openInTab(tool.url, { active: true, insert: true });
+      FluxHub.ui.hide();
+    }
+
+    createToolCard(tool, subtitle = null) {
+      const card = createHTMLElement('div', {
+        style: {
+          display: 'flex',
+          alignItems: 'stretch',
+          background: 'var(--omni-input-bg)',
+          border: '1px solid var(--omni-border)',
+          borderRadius: '8px',
+          overflow: 'hidden',
+          transition: 'all 0.15s ease'
+        },
+        eventListener: {
+          mouseenter: (e) => {
+            e.currentTarget.style.borderColor = 'var(--omni-accent)';
+            e.currentTarget.style.background = 'var(--omni-hover)';
+          },
+          mouseleave: (e) => {
+            e.currentTarget.style.borderColor = 'var(--omni-border)';
+            e.currentTarget.style.background = 'var(--omni-input-bg)';
+          }
+        }
+      });
+
+      const body = createHTMLElement('div', {
+        tabindex: '0',
+        role: 'button',
+        style: {
+          display: 'flex', flexDirection: 'column', gap: '4px',
+          flexGrow: '1', padding: '10px 12px', minWidth: '0',
+          cursor: 'pointer', outline: 'none'
+        },
+        eventListener: {
+          click: (e) => {
+            e.stopPropagation();
+            if (e.ctrlKey || e.metaKey || e.altKey) {
+              this.launchTool(tool);
+              return;
+            }
+            this.selectedTool = tool;
+            this.renderCurrentView();
+          },
+          keydown: (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.stopPropagation();
+              this.selectedTool = tool;
+              this.renderCurrentView();
+            }
+          }
+        }
+      });
+
+      const titleRow = createHTMLElement('div', {
+        style: { display: 'flex', alignItems: 'center', gap: '6px', minWidth: '0' }
+      });
+
+      titleRow.appendChild(createHTMLElement('div', {
+        icon: 'osint',
+        style: { color: 'var(--omni-accent)', fontSize: '15px', minWidth: '15px', flexShrink: '0' }
+      }));
+
+      titleRow.appendChild(createHTMLElement('div', {
+        textContent: tool.name,
+        style: { fontWeight: '600', fontSize: '13px', color: 'var(--omni-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+      }));
+
+      body.appendChild(titleRow);
+
+      if (subtitle) {
+        body.appendChild(createHTMLElement('div', {
+          textContent: subtitle,
+          style: { fontSize: '10px', color: 'var(--omni-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '-2px' }
+        }));
+      }
+
+      const metaRow = createHTMLElement('div', {
+        style: { display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--omni-muted)', minWidth: '0' }
+      });
+
+      if (tool.pricing) {
+        const isFree = String(tool.pricing).toLowerCase().includes('free');
+        metaRow.appendChild(createHTMLElement('span', {
+          textContent: String(tool.pricing).toUpperCase(),
+          style: {
+            fontSize: '9px', fontWeight: 'bold', padding: '1px 5px', borderRadius: '3px',
+            background: isFree ? 'color-mix(in srgb, var(--omni-success) 15%, transparent)' : 'color-mix(in srgb, var(--omni-warning) 15%, transparent)',
+            color: isFree ? 'var(--omni-success)' : 'var(--omni-warning)',
+            flexShrink: '0'
+          }
+        }));
+      }
+
+      if (tool.opsec) {
+        const isPassive = String(tool.opsec).toLowerCase() === 'passive';
+        metaRow.appendChild(createHTMLElement('span', {
+          textContent: String(tool.opsec).toUpperCase(),
+          style: {
+            fontSize: '9px', fontWeight: 'bold', padding: '1px 5px', borderRadius: '3px',
+            background: isPassive ? 'color-mix(in srgb, var(--omni-info) 15%, transparent)' : 'color-mix(in srgb, var(--omni-danger) 15%, transparent)',
+            color: isPassive ? 'var(--omni-info)' : 'var(--omni-danger)',
+            flexShrink: '0'
+          }
+        }));
+      }
+
+      const desc = tool.bestFor || tool.description || '';
+      if (desc) {
+        metaRow.appendChild(createHTMLElement('div', {
+          textContent: desc,
+          style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexGrow: '1' }
+        }));
+      }
+
+      body.appendChild(metaRow);
+      card.appendChild(body);
+
+      const quickLaunch = createHTMLElement('button', {
+        fluxHubTooltip: 'Direct Launch (Skips detail view)',
+        icon: 'externalLink',
+        style: {
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          width: '38px', background: 'transparent', border: 'none',
+          borderLeft: '1px solid var(--omni-border)', color: 'var(--omni-muted)',
+          cursor: 'pointer', transition: 'all 0.15s ease', flexShrink: '0'
+        },
+        eventListener: {
+          mouseenter: (e) => {
+            e.currentTarget.style.background = 'var(--omni-accent)';
+            e.currentTarget.style.color = 'var(--omni-btn-text)';
+            e.currentTarget.style.borderColor = 'var(--omni-accent)';
+          },
+          mouseleave: (e) => {
+            e.currentTarget.style.background = 'transparent';
+            e.currentTarget.style.color = 'var(--omni-muted)';
+            e.currentTarget.style.borderColor = 'var(--omni-border)';
+          },
+          click: (e) => {
+            e.stopPropagation();
+            this.launchTool(tool);
+          }
+        }
+      });
+
+      card.appendChild(quickLaunch);
+      return card;
+    }
+
+    renderToolDetailView(tool) {
+      this.headerWrapRef.innerHTML = safeHTML('');
+      this.bodyWrapRef.innerHTML = safeHTML('');
+
+      const navBar = createHTMLElement('div', {
+        style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', width: '100%' }
+      });
+
+      const backBtn = createHTMLElement('button', {
+        class: 'flx-omni-btn',
+        icon: 'chevronLeft',
+        textContent: this.searchQuery ? 'Back to Search' : 'Back to Directory',
+        style: { fontSize: '12px', padding: '4px 10px' },
+        eventListener: {
+          click: (e) => {
+            e.stopPropagation();
+            this.selectedTool = null;
+            this.renderCurrentView();
+          }
+        }
+      });
+      navBar.appendChild(backBtn);
+
+      const targetInput = createHTMLElement('input', {
+        type: 'text',
+        placeholder: 'Target payload...',
+        value: this.targetPayload,
+        style: {
+          maxWidth: '220px',
+          background: 'var(--omni-input-bg)',
+          border: '1px solid var(--omni-border)',
+          borderRadius: '6px',
+          color: 'var(--omni-text)',
+          padding: '4px 8px',
+          fontSize: '12px',
+          outline: 'none'
+        },
+        eventListener: {
+          input: (e) => { this.targetPayload = e.target.value.trim(); },
+          keydown: (e) => e.stopPropagation()
+        }
+      });
+      navBar.appendChild(targetInput);
+      this.headerWrapRef.appendChild(navBar);
+
+      const detailContainer = createHTMLElement('div', {
+        style: { display: 'flex', flexDirection: 'column', gap: '14px', paddingBottom: '8px' }
+      });
+
+      const titleSection = createHTMLElement('div', {
+        style: { display: 'flex', flexDirection: 'column', gap: '6px' }
+      });
+
+      const titleHeader = createHTMLElement('div', {
+        style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }
+      });
+
+      titleHeader.appendChild(createHTMLElement('div', {
+        textContent: tool.name,
+        style: { fontSize: '18px', fontWeight: '700', color: 'var(--omni-text)' }
+      }));
+
+      if (tool.status) {
+        const isLive = tool.status.toLowerCase() === 'live';
+        titleHeader.appendChild(createHTMLElement('span', {
+          textContent: tool.status.toUpperCase(),
+          style: {
+            fontSize: '9px',
+            fontWeight: 'bold',
+            padding: '2px 6px',
+            borderRadius: '4px',
+            background: isLive ? 'color-mix(in srgb, var(--omni-success) 15%, transparent)' : 'color-mix(in srgb, var(--omni-danger) 15%, transparent)',
+            color: isLive ? 'var(--omni-success)' : 'var(--omni-danger)'
+          }
+        }));
+      }
+
+      if (tool.pricing) {
+        titleHeader.appendChild(createHTMLElement('span', {
+          textContent: tool.pricing.toUpperCase(),
+          style: {
+            fontSize: '9px',
+            fontWeight: 'bold',
+            padding: '2px 6px',
+            borderRadius: '4px',
+            background: 'color-mix(in srgb, var(--omni-accent) 15%, transparent)',
+            color: 'var(--omni-accent)'
+          }
+        }));
+      }
+
+      titleSection.appendChild(titleHeader);
+
+      if (tool.description) {
+        titleSection.appendChild(createHTMLElement('div', {
+          textContent: tool.description,
+          style: { fontSize: '13px', lineHeight: '1.5', color: 'var(--omni-text)', opacity: '0.9' }
+        }));
+      }
+      detailContainer.appendChild(titleSection);
+
+      if (tool.bestFor) {
+        const bestForBox = createHTMLElement('div', {
+          style: {
+            background: 'var(--omni-input-bg)',
+            border: '1px solid var(--omni-border)',
+            borderRadius: '8px',
+            padding: '10px 12px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '4px'
+          }
+        });
+        bestForBox.appendChild(createHTMLElement('div', {
+          textContent: 'BEST FOR',
+          style: { fontSize: '10px', fontWeight: 'bold', color: 'var(--omni-muted)', letterSpacing: '0.5px' }
+        }));
+        bestForBox.appendChild(createHTMLElement('div', {
+          textContent: tool.bestFor,
+          style: { fontSize: '13px', color: 'var(--omni-accent-text)', fontWeight: '500' }
+        }));
+        detailContainer.appendChild(bestForBox);
+      }
+
+      if (tool.input || tool.output) {
+        const ioGrid = createHTMLElement('div', {
+          style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }
+        });
+
+        const inputCard = createHTMLElement('div', {
+          style: { background: 'var(--omni-input-bg)', border: '1px solid var(--omni-border)', borderRadius: '6px', padding: '8px 10px' }
+        });
+        inputCard.appendChild(createHTMLElement('div', { textContent: 'INPUT', style: { fontSize: '10px', fontWeight: 'bold', color: 'var(--omni-muted)' } }));
+        inputCard.appendChild(createHTMLElement('div', { textContent: tool.input || 'Target String', style: { fontSize: '12px', color: 'var(--omni-text)', marginTop: '2px' } }));
+
+        const outputCard = createHTMLElement('div', {
+          style: { background: 'var(--omni-input-bg)', border: '1px solid var(--omni-border)', borderRadius: '6px', padding: '8px 10px' }
+        });
+        outputCard.appendChild(createHTMLElement('div', { textContent: 'OUTPUT', style: { fontSize: '10px', fontWeight: 'bold', color: 'var(--omni-muted)' } }));
+        outputCard.appendChild(createHTMLElement('div', { textContent: tool.output || 'Direct Intelligence', style: { fontSize: '12px', color: 'var(--omni-text)', marginTop: '2px' } }));
+
+        ioGrid.appendChild(inputCard);
+        ioGrid.appendChild(outputCard);
+        detailContainer.appendChild(ioGrid);
+      }
+
+      if (tool.opsec || tool.opsecNote) {
+        const opsecCard = createHTMLElement('div', {
+          style: {
+            background: 'color-mix(in srgb, var(--omni-warning) 8%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--omni-warning) 25%, transparent)',
+            borderRadius: '8px',
+            padding: '10px 12px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '4px'
+          }
+        });
+
+        const opsecHeader = createHTMLElement('div', {
+          style: { display: 'flex', alignItems: 'center', gap: '6px' }
+        });
+        opsecHeader.appendChild(createHTMLElement('div', { icon: 'shield', style: { color: 'var(--omni-warning)', fontSize: '14px' } }));
+        opsecHeader.appendChild(createHTMLElement('div', {
+          textContent: `OPSEC ADVISORY: ${String(tool.opsec || 'STANDARD').toUpperCase()}`,
+          style: { fontSize: '10px', fontWeight: 'bold', color: 'var(--omni-warning)' }
+        }));
+        opsecCard.appendChild(opsecHeader);
+
+        if (tool.opsecNote) {
+          opsecCard.appendChild(createHTMLElement('div', {
+            textContent: tool.opsecNote,
+            style: { fontSize: '12px', lineHeight: '1.4', color: 'var(--omni-text)', opacity: '0.9' }
+          }));
+        }
+        detailContainer.appendChild(opsecCard);
+      }
+
+      const flags = [];
+      if (tool.api) flags.push('API Support');
+      if (tool.registration === false) flags.push('No Registration');
+      if (tool.localInstall) flags.push('Local CLI / Script');
+      if (tool.googleDork) flags.push('Google Dork');
+      if (tool.invitationOnly) flags.push('Invite Only');
+
+      if (flags.length > 0) {
+        const flagRow = createHTMLElement('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' } });
+        flags.forEach(f => {
+          flagRow.appendChild(createHTMLElement('span', {
+            textContent: f,
+            style: {
+              fontSize: '11px',
+              padding: '2px 8px',
+              borderRadius: '12px',
+              background: 'var(--omni-hover)',
+              color: 'var(--omni-text)',
+              border: '1px solid var(--omni-border)'
+            }
+          }));
+        });
+        detailContainer.appendChild(flagRow);
+      }
+
+      const actionsRow = createHTMLElement('div', {
+        style: { display: 'flex', gap: '8px', marginTop: '6px' }
+      });
+
+      const launchBtn = createHTMLElement('button', {
+        class: 'flx-omni-btn',
+        icon: 'externalLink',
+        textContent: 'Launch Tool',
+        style: {
+          flex: '1',
+          justifyContent: 'center',
+          background: 'var(--omni-accent)',
+          color: 'var(--omni-btn-text)',
+          fontWeight: '600',
+          padding: '8px 14px'
+        },
+        eventListener: {
+          click: (e) => {
+            e.stopPropagation();
+            this.launchTool(tool);
+          }
+        }
+      });
+
+      const copyUrlBtn = createHTMLElement('button', {
+        class: 'flx-omni-btn',
+        icon: 'copy',
+        textContent: 'Copy URL',
+        style: { padding: '8px 12px' },
+        eventListener: {
+          click: (e) => {
+            e.stopPropagation();
+            if (tool.url) {
+              navigator.clipboard.writeText(tool.url);
+              FluxKit.ui.showNotification('URL copied to clipboard', { icon: 'clipboard' });
+            }
+          }
+        }
+      });
+
+      actionsRow.appendChild(launchBtn);
+      actionsRow.appendChild(copyUrlBtn);
+      detailContainer.appendChild(actionsRow);
+
+      this.bodyWrapRef.appendChild(detailContainer);
+    }
+
+    renderDirectoryView() {
+      this.headerWrapRef.innerHTML = safeHTML('');
+      this.bodyWrapRef.innerHTML = safeHTML('');
+
+      const topControlsRow = createHTMLElement('div', {
+        style: { display: 'flex', gap: '8px', width: '100%', alignItems: 'center' }
+      });
+
+      const targetWrap = createHTMLElement('div', {
+        style: {
+          display: 'flex', alignItems: 'center', gap: '8px',
+          background: 'var(--omni-input-bg)', padding: '4px 12px',
+          borderRadius: '8px', border: '1px solid var(--omni-border)', flex: '1'
+        }
+      });
+      targetWrap.appendChild(createHTMLElement('div', { icon: 'target', style: { color: 'var(--omni-accent)', fontSize: '15px' } }));
+      
+      const targetInput = createHTMLElement('input', {
+        type: 'text', placeholder: 'Target payload (auto-copied)...',
+        value: this.targetPayload,
+        style: { flexGrow: '1', background: 'transparent', border: 'none', color: 'var(--omni-text)', padding: '6px 0', fontSize: '13px', outline: 'none', minWidth: '0' },
+        eventListener: {
+          input: (e) => { this.targetPayload = e.target.value; },
+          keydown: (e) => e.stopPropagation()
+        }
+      });
+      targetWrap.appendChild(targetInput);
+      topControlsRow.appendChild(targetWrap);
+
+      const filterWrap = createHTMLElement('div', {
+        style: {
+          display: 'flex', alignItems: 'center', gap: '8px',
+          background: 'var(--omni-input-bg)', padding: '4px 12px',
+          borderRadius: '8px', border: '1px solid var(--omni-border)', flex: '1'
+        }
+      });
+      filterWrap.appendChild(createHTMLElement('div', { icon: 'search', style: { color: 'var(--omni-muted)', fontSize: '14px' } }));
+      
+      const filterInput = createHTMLElement('input', {
+        type: 'text', placeholder: 'Global look-ahead...',
+        value: this.searchQuery || '',
+        style: { flexGrow: '1', background: 'transparent', border: 'none', color: 'var(--omni-text)', padding: '6px 0', fontSize: '13px', outline: 'none', minWidth: '0' },
+        eventListener: {
+          keydown: (e) => e.stopPropagation(),
+          focus: (e) => e.target.parentElement.style.borderColor = 'var(--omni-accent)',
+          blur: (e) => e.target.parentElement.style.borderColor = 'var(--omni-border)'
+        }
+      });
+      filterWrap.appendChild(filterInput);
+      topControlsRow.appendChild(filterWrap);
+
+      this.headerWrapRef.appendChild(topControlsRow);
+
+      const breadcrumbWrap = createHTMLElement('div', {
+        style: { display: 'flex', alignItems: 'center', gap: '6px', overflowX: 'auto', whiteSpace: 'nowrap', paddingBottom: '2px', fontSize: '12px', fontWeight: 'bold' }
+      });
+      breadcrumbWrap.classList.add('flx-hidden-scroll');
+
+      this.currentPath.forEach((node, idx) => {
+        const crumb = createHTMLElement('div', {
+          textContent: node.name === 'OSINT Framework' ? 'Home' : node.name,
+          style: { cursor: 'pointer', color: idx === this.currentPath.length - 1 ? 'var(--omni-text)' : 'var(--omni-muted)', transition: 'color 0.15s ease' },
+          eventListener: {
+            click: (e) => {
+              e.stopPropagation();
+              this.currentPath = this.currentPath.slice(0, idx + 1);
+              this.searchQuery = null;
+              this.renderCurrentView();
+            }
+          }
+        });
+        breadcrumbWrap.appendChild(crumb);
+        if (idx < this.currentPath.length - 1) {
+          breadcrumbWrap.appendChild(createHTMLElement('span', { textContent: '/', style: { color: 'var(--omni-separator)' } }));
+        }
+      });
+      this.headerWrapRef.appendChild(breadcrumbWrap);
+      setTimeout(() => { breadcrumbWrap.scrollLeft = breadcrumbWrap.scrollWidth; }, 10);
+
+      const defaultGridContainer = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } });
+      const lookAheadGridContainer = createHTMLElement('div', { style: { display: 'none', flexDirection: 'column', gap: '8px' } });
+      
+      this.bodyWrapRef.appendChild(defaultGridContainer);
+      this.bodyWrapRef.appendChild(lookAheadGridContainer);
+
+      const currentNode = this.currentPath[this.currentPath.length - 1];
+      if (currentNode && currentNode.children && currentNode.children.length > 0) {
+        const grid = createHTMLElement('div', {
+          style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '8px' }
+        });
+
+        currentNode.children.forEach(child => {
+          const isFolder = child.children && child.children.length > 0;
+          if (isFolder) {
+            const cardEl = createHTMLElement('button', {
+              style: {
+                display: 'flex', alignItems: 'center', gap: '8px', width: '100%',
+                justifyContent: 'flex-start', padding: '10px 12px', textAlign: 'left',
+                background: 'var(--omni-input-bg)', border: '1px solid var(--omni-border)', 
+                borderRadius: '8px', cursor: 'pointer', transition: 'all 0.15s ease',
+                color: 'var(--omni-text)'
+              },
+              eventListener: {
+                mouseenter: (e) => {
+                  e.currentTarget.style.borderColor = 'var(--omni-accent)';
+                  e.currentTarget.style.background = 'var(--omni-hover)';
+                },
+                mouseleave: (e) => {
+                  e.currentTarget.style.borderColor = 'var(--omni-border)';
+                  e.currentTarget.style.background = 'var(--omni-input-bg)';
+                },
+                click: (e) => {
+                  e.stopPropagation();
+                  this.searchQuery = null; 
+                  this.currentPath.push(child);
+                  this.renderCurrentView();
+                }
+              }
+            });
+            cardEl.appendChild(createHTMLElement('div', { icon: 'folder', style: { color: 'var(--omni-accent)', fontSize: '16px', minWidth: '16px' } }));
+            cardEl.appendChild(createHTMLElement('div', { textContent: child.name, style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: '500' } }));
+            grid.appendChild(cardEl);
+          } else if (child.url) {
+            grid.appendChild(this.createToolCard(child));
+          }
+        });
+        defaultGridContainer.appendChild(grid);
+      } else {
+        defaultGridContainer.appendChild(createHTMLElement('div', {
+          textContent: 'No sub-tools found in this node.',
+          style: { color: 'var(--omni-muted)', textAlign: 'center', marginTop: '20px', fontSize: '13px' }
+        }));
+      }
+
+      let globalFlatTree = null;
+
+      const performSearch = (term) => {
+        if (!term) {
+          lookAheadGridContainer.style.display = 'none';
+          defaultGridContainer.style.display = 'flex';
+          breadcrumbWrap.style.display = 'flex';
+          return;
+        }
+
+        if (!globalFlatTree) globalFlatTree = OsintView.flattenTree(this.rootNode);
+
+        lookAheadGridContainer.style.display = 'flex';
+        defaultGridContainer.style.display = 'none';
+        breadcrumbWrap.style.display = 'none';
+        lookAheadGridContainer.innerHTML = safeHTML('');
+
+        const matches = globalFlatTree.filter(item => 
+          (item.name && item.name.toLowerCase().includes(term)) || 
+          (item.path && item.path.toLowerCase().includes(term))
+        );
+
+        if (matches.length > 0) {
+          const laGrid = createHTMLElement('div', {
+            style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '8px' }
+          });
+          
+          matches.slice(0, 80).forEach(match => {
+            if (match.isFolder) {
+              const cardEl = createHTMLElement('button', {
+                style: {
+                  display: 'flex', flexDirection: 'column', gap: '4px', width: '100%',
+                  justifyContent: 'flex-start', padding: '10px 12px', textAlign: 'left',
+                  background: 'var(--omni-input-bg)', border: '1px solid var(--omni-border)', 
+                  borderRadius: '8px', cursor: 'pointer', transition: 'all 0.15s ease',
+                  color: 'var(--omni-text)'
+                },
+                eventListener: {
+                  mouseenter: (e) => {
+                    e.currentTarget.style.borderColor = 'var(--omni-accent)';
+                    e.currentTarget.style.background = 'var(--omni-hover)';
+                  },
+                  mouseleave: (e) => {
+                    e.currentTarget.style.borderColor = 'var(--omni-border)';
+                    e.currentTarget.style.background = 'var(--omni-input-bg)';
+                  },
+                  click: (e) => {
+                    e.stopPropagation();
+                    this.searchQuery = null; 
+                    this.currentPath = match.nodePath; 
+                    this.renderCurrentView();
+                  }
+                }
+              });
+              
+              const topRow = createHTMLElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', width: '100%' } });
+              topRow.appendChild(createHTMLElement('div', { icon: 'folder', style: { color: 'var(--omni-accent)', fontSize: '15px', minWidth: '15px' } }));
+              topRow.appendChild(createHTMLElement('div', { textContent: match.name, style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: '600', color: 'var(--omni-text)' } }));
+              cardEl.appendChild(topRow);
+              cardEl.appendChild(createHTMLElement('div', { textContent: match.path, style: { fontSize: '10px', color: 'var(--omni-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' } }));
+              laGrid.appendChild(cardEl);
+            } else {
+              laGrid.appendChild(this.createToolCard(match.nodeRef, match.path));
+            }
+          });
+          lookAheadGridContainer.appendChild(laGrid);
+        } else {
+          lookAheadGridContainer.appendChild(createHTMLElement('div', {
+            textContent: 'No tools or folders match this global query.',
+            style: { color: 'var(--omni-muted)', textAlign: 'center', marginTop: '20px', fontSize: '13px' }
+          }));
+        }
+      };
+
+      filterInput.addEventListener('input', (e) => {
+        this.searchQuery = e.target.value.trim().toLowerCase();
+        performSearch(this.searchQuery);
+      });
+
+      if (this.searchQuery) performSearch(this.searchQuery);
+    }
+
+    renderCurrentView() {
+      if (this.selectedTool) {
+        this.renderToolDetailView(this.selectedTool);
+      } else {
+        this.renderDirectoryView();
+      }
+    }
+
+    renderExpandedCard(data) {
+      this.rootNode = data.rootNode;
+      this.currentPath = data.initialPath || [this.rootNode];
+      this.targetPayload = data.payload || '';
+      this.searchQuery = data.searchQuery || null;
+      this.selectedTool = null;
+
+      this.containerRef = createHTMLElement('div', {
+        style: { display: 'flex', flexDirection: 'column', position: 'relative' }
+      });
+
+      this.headerWrapRef = createHTMLElement('div', {
+        style: {
+          padding: '16px 20px',
+          margin: '-16px -20px 0 -20px',
+          borderBottom: '1px solid var(--omni-separator)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '10px',
+          position: 'sticky',
+          top: '-8px',
+          background: 'var(--omni-bg-solid)',
+          backdropFilter: 'blur(16px) saturate(180%)',
+          zIndex: '10'
+        }
+      });
+
+      this.bodyWrapRef = createHTMLElement('div', {
+        style: { display: 'flex', flexDirection: 'column', paddingTop: '16px' }
+      });
+
+      this.containerRef.appendChild(this.headerWrapRef);
+      this.containerRef.appendChild(this.bodyWrapRef);
+
+      this.renderCurrentView();
+      return FluxKit.ui.omni.DetailCard(this.containerRef, []);
+    }
+
+    async execute() {
+      const data = await this.fetchData();
+      FluxHub.ui.expandListItem(this, data);
+    }
+  }
+
   class StockView extends BaseView {
     constructor(query, context = null) {
       super(query, context);
@@ -10863,6 +14718,30 @@
 
     static isAvailable = true;
     static groupWidgets = true;
+    static commandRegistry = [{ prefix: '> stock', description: 'View live stock prices, charts, and market data', icon: 'trending' }];
+
+    static async getSuggestions(rawQuery) {
+      const q = rawQuery.toLowerCase();
+      if (q === '> st' || q === '> sto') return ['> stock '];
+      if (q === '> ma' || q === '> mar') return ['> market '];
+
+      const match = rawQuery.match(/^>\s*(stock|market)\s+(.*)/i);
+      if (match && match[2]) {
+        const prefix = rawQuery.split(/\s+/)[0]; 
+        const term = match[2].trim();
+        if (term.length < 1) return [];
+
+        try {
+          const searchUrl = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(term)}&quotesCount=5`;
+          const res = await fetch(searchUrl);
+          const data = await res.json();
+          if (data.quotes) {
+             return data.quotes.map(q => `${prefix} ${q.symbol}`);
+          }
+        } catch (e) { return []; }
+      }
+      return [];
+    }
 
     static matchConfidence(query) {
       const q = query.trim().toLowerCase();
@@ -11167,6 +15046,23 @@
 
   class RSSView extends BaseView {
     static isAvailable = true;
+    static commandRegistry = [{ prefix: '> rss', description: 'Fetch and parse news/blogs from any RSS feed URL', icon: 'rss' }];
+
+    static async getSuggestions(rawQuery) {
+      const q = rawQuery.toLowerCase();
+      if (q === '> r' || q === '> rs') return ['> rss '];
+      
+      const suggestions = [
+         '> rss https://feeds.bbci.co.uk/news/world/rss.xml',
+         '> rss https://hnrss.org/frontpage',
+         '> rss https://rss.nytimes.com/services/xml/rss/nyt/World.xml'
+      ];
+      
+      if (q.startsWith('> rss ')) {
+        return suggestions.filter(s => s.toLowerCase().startsWith(q));
+      }
+      return [];
+    }
 
     static matchConfidence(query) {
       if (query.trim().toLowerCase().startsWith('> rss ')) return 100;
@@ -11265,6 +15161,571 @@
     async execute() { const data = await this.fetchData(); if (data) FluxHub.ui.expandListItem(this, data); }
   }
 
+  const BookmarkParser = {
+    TAG_REGEX: /(?:^|\s)#([\w\d-]+)/g,
+    URL_REGEX: /^(https?:\/\/[^\s]+)$/i,
+
+    parseAddPayload: (rawPayload) => {
+      const tags = [];
+      const stripped = rawPayload.replace(BookmarkParser.TAG_REGEX, (_, tag) => {
+        tags.push(tag.toLowerCase());
+        return '';
+      }).trim();
+
+      const isUrl = BookmarkParser.URL_REGEX.test(stripped);
+      return {
+        type: isUrl ? 'link' : 'text',
+        url: isUrl ? stripped : null,
+        payload: stripped,
+        title: isUrl ? stripped : (stripped.slice(0, 60) + (stripped.length > 60 ? '...' : '')),
+        tags: [...new Set(tags)]
+      };
+    },
+
+    parseIntent: (query) => {
+      const clean = query.replace(/^>\s*(b|bookmark)\s*/i, '').trim();
+
+      const addMatch = clean.match(/^(-a|-add)\s*(.*)$/i);
+      if (addMatch) {
+        return { action: 'add', payload: addMatch[2].trim() };
+      }
+
+      const tagMatch = clean.match(/^(-t|-tag)\s*(.*)$/i);
+      if (tagMatch) {
+        return { action: 'tag-manager', filter: tagMatch[2].trim().replace(/^#/, '').toLowerCase() };
+      }
+
+      return { action: 'filter', query: clean };
+    }
+  };
+
+  class BookmarkView extends BaseView {
+    static isAvailable = true;
+    static commandRegistry = [
+      { prefix: '> b', description: 'Search, manage, or add bookmarks (-a <text|url> #tag)', icon: 'bookmark' },
+      { prefix: '> bookmark', description: 'Search, manage, or add bookmarks (-a <text|url> #tag)', icon: 'bookmark' }
+    ];
+
+    static async getSuggestions(rawQuery) {
+      const q = rawQuery.toLowerCase();
+      
+      if (!q.startsWith('> b ') && !q.startsWith('> bookmark ')) return [];
+      
+      const prefix = q.startsWith('> bookmark ') ? '> bookmark ' : '> b ';
+      const payload = q.slice(prefix.length).trimLeft();
+      const suggestions = [];
+      const activeBookmarks = BookmarksState.getActive();
+
+      if (payload.startsWith('-t ') || payload.startsWith('--tag ')) {
+        const flag = payload.startsWith('-t ') ? '-t ' : '--tag ';
+        const tagQuery = payload.slice(flag.length).replace(/^#/, '').trim();
+        
+        const allTags = new Set();
+        activeBookmarks.forEach(b => b.tags.forEach(t => allTags.add(t)));
+        
+        allTags.forEach(tag => {
+          if (tag.includes(tagQuery)) suggestions.push(`${prefix}${flag}#${tag}`);
+        });
+        return suggestions;
+      }
+
+      if (payload.startsWith('-a ') || payload.startsWith('--add ')) {
+        const flag = payload.startsWith('-a ') ? '-a ' : '--add ';
+        const content = payload.slice(flag.length);
+        
+        if (!content.trim()) {
+          suggestions.push(`${prefix}${flag}https:// `);
+          suggestions.push(`${prefix}${flag}#tag `);
+          return suggestions;
+        }
+
+        const parts = content.split(' ');
+        const lastPart = parts[parts.length - 1];
+        
+        if (lastPart.startsWith('#')) {
+          const tagQuery = lastPart.slice(1).toLowerCase();
+          const allTags = new Set();
+          activeBookmarks.forEach(b => b.tags.forEach(t => allTags.add(t)));
+          
+          allTags.forEach(tag => {
+            if (tag.startsWith(tagQuery)) {
+              const baseCommand = content.slice(0, content.lastIndexOf(lastPart));
+              suggestions.push(`${prefix}${flag}${baseCommand}#${tag} `);
+            }
+          });
+        }
+        return suggestions;
+      }
+
+      if (payload.length > 0) {
+        activeBookmarks.forEach(b => {
+          if (
+            b.title.toLowerCase().includes(payload) || 
+            (b.url && b.url.toLowerCase().includes(payload)) ||
+            b.tags.some(t => t.includes(payload))
+          ) {
+            suggestions.push(`${prefix}${b.title}`);
+          }
+        });
+      }
+
+      return [...new Set(suggestions)];
+    }
+
+    static matchConfidence(query) {
+      const clean = query.trim().toLowerCase();
+      if (clean === '> b' || clean === '> bookmark') return 100;
+      if (clean.startsWith('> b ') || clean.startsWith('> bookmark ')) return 100;
+      return 0;
+    }
+
+    async fetchData() {
+      const intent = BookmarkParser.parseIntent(this.query);
+      const active = BookmarksState.getActive();
+
+      if (intent.action === 'add') {
+        return { mode: 'add', rawPayload: intent.payload };
+      }
+
+      let filtered = active;
+
+      if (intent.action === 'tag-manager') {
+        const tagCounts = {};
+        active.forEach(b => b.tags.forEach(t => { tagCounts[t] = (tagCounts[t] || 0) + 1; }));
+        
+        let items = Object.keys(tagCounts)
+          .map(t => ({ tag: t, count: tagCounts[t] }));
+
+        if (intent.filter) {
+          items = items.filter(item => item.tag.includes(intent.filter));
+        }
+
+        items.sort((a, b) => b.count - a.count);
+        return { mode: 'tags', items, intent };
+      } else if (intent.action === 'filter' && intent.query) {
+        const q = intent.query.toLowerCase();
+        filtered = active.filter(b => 
+          b.title.toLowerCase().includes(q) ||
+          (b.url && b.url.toLowerCase().includes(q)) ||
+          b.payload.toLowerCase().includes(q) ||
+          b.tags.some(t => t.includes(q))
+        );
+      }
+
+      filtered.sort((a, b) => b.createdAt - a.createdAt);
+      return { mode: 'list', items: filtered, intent };
+    }
+
+    renderListRow() {
+      const intent = BookmarkParser.parseIntent(this.query);
+
+      if (intent.action === 'add') {
+        const label = intent.payload ? `Add Bookmark: "${intent.payload}"` : 'Add Bookmark (-a <url|text> #tags)';
+        return FluxKit.ui.omni.ListRow(label, 'plus', 'Bookmark Mutation', '↵ to Save');
+      }
+
+      if (intent.action === 'tag-manager') {
+        return FluxKit.ui.omni.ListRow('Manage Tags', 'tag', 'Bookmark Hub', '↵ to Open');
+      }
+
+      const count = BookmarksState.getActive().length;
+      const title = intent.query ? `Bookmarks matching "${intent.query}"` : `Bookmarks Hub (${count})`;
+      return FluxKit.ui.omni.ListRow(title, 'bookmark', 'Bookmark Hub', '↵ to Open');
+    }
+
+    renderExpandedCard(data) {
+      const { createHTMLElement, safeHTML } = FluxKit.utils;
+
+      if (data.mode === 'add' || data.mode === 'edit') {
+        const isEdit = data.mode === 'edit';
+        const parsed = isEdit ? data.item : BookmarkParser.parseAddPayload(data.rawPayload || '');
+
+        const container = createHTMLElement('div', {
+          style: { display: 'flex', flexDirection: 'column', gap: '12px', padding: '4px', fontFamily: 'var(--omni-font)' }
+        });
+
+        container.appendChild(createHTMLElement('div', {
+          textContent: isEdit ? 'Edit Bookmark' : 'Add Bookmark',
+          style: { fontWeight: 'bold', fontSize: '14px', color: 'var(--omni-text)' }
+        }));
+
+        const inputStyle = {
+          padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--omni-border)',
+          background: 'var(--omni-input-bg)', color: 'var(--omni-text)',
+          fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box'
+        };
+
+        const initialTitle = parsed.title !== parsed.payload ? parsed.title : '';
+        const titleInput = createHTMLElement('input', { placeholder: 'Title (leave blank to auto-extract)', value: initialTitle, style: inputStyle });
+        
+        const payloadInput = createHTMLElement('textarea', { placeholder: 'URL or Text Snippet...', value: parsed.payload || '', style: { ...inputStyle, minHeight: '60px', resize: 'vertical' } });
+        
+        const notesInput = createHTMLElement('textarea', { placeholder: 'What do you plan to do with this?', value: parsed.notes || '', style: { ...inputStyle, minHeight: '50px', resize: 'vertical' } });
+
+        const tagInputEngine = (() => {
+          const wrapper = createHTMLElement('div', { 
+            className: 'flxn-tag-input-wrapper', 
+            style: { display: 'flex', flexWrap: 'wrap', gap: '6px', padding: '8px 12px', border: '1px solid var(--omni-border)', borderRadius: '6px', background: 'var(--omni-input-bg)', cursor: 'text' } 
+          });
+          const input = createHTMLElement('input', { 
+            type: 'text', id: 'flxn-tag-input', placeholder: 'Add tag...',
+            style: 'border: none; outline: none; flex: 1; min-width: 80px; margin-bottom: 0; background: transparent; color: var(--omni-text); font-size: 13px;' 
+          });
+          wrapper.addEventListener('click', () => input.focus());
+          
+          const currentTags = new Set(parsed.tags || []);
+          
+          const renderChips = () => {
+            wrapper.innerHTML = FluxKit.utils.safeHTML('');
+            currentTags.forEach(tag => {
+              const chip = createHTMLElement('span', {
+                style: { padding: '2px 8px', borderRadius: '10px', background: 'var(--omni-hover)', border: '1px solid var(--omni-border)', color: 'var(--omni-text)', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' },
+                textContent: `#${tag}`
+              });
+              const del = createHTMLElement('span', { 
+                textContent: '×', 
+                style: { cursor: 'pointer', color: 'var(--omni-muted)' }, 
+                eventListener: { click: (e) => { e.stopPropagation(); currentTags.delete(tag); renderChips(); } } 
+              });
+              chip.appendChild(del);
+              wrapper.appendChild(chip);
+            });
+            wrapper.appendChild(input);
+            
+            requestAnimationFrame(() => input.focus()); 
+          };
+          
+          input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ',') {
+              e.preventDefault();
+              const val = input.value.replace(/^#/, '').trim().toLowerCase();
+              if (val) currentTags.add(val);
+              input.value = '';
+              renderChips();
+            }
+          });
+          
+          renderChips();
+          return { wrapper, getTags: () => Array.from(currentTags) };
+        })();
+
+        const makeField = (label, el) => {
+          const wrap = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px' } });
+          wrap.appendChild(createHTMLElement('div', { textContent: label, style: { fontSize: '11px', fontWeight: 'bold', color: 'var(--omni-muted)', textTransform: 'uppercase' } }));
+          wrap.appendChild(el);
+          return wrap;
+        };
+
+        const inputGrid = createHTMLElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px' } });
+        inputGrid.appendChild(makeField('URL / Content', payloadInput));
+        inputGrid.appendChild(makeField('Title', titleInput));
+        inputGrid.appendChild(makeField('Notes', notesInput));
+        inputGrid.appendChild(makeField('Tags', tagInputEngine.wrapper));
+        container.appendChild(inputGrid);
+
+        this.currentSaveCallback = () => {
+          const rawPayload = payloadInput.value.trim();
+          if (!rawPayload) return FluxKit.ui.showNotification('Content cannot be empty', { icon: 'error' });
+
+          const isUrl = BookmarkParser.URL_REGEX.test(rawPayload);
+          let finalTitle = titleInput.value.trim();
+          if (!finalTitle) finalTitle = isUrl ? rawPayload.replace(/^https?:\/\//, '').split('/')[0] : rawPayload.slice(0, 40) + '...';
+
+          const finalBookmark = {
+            id: isEdit ? parsed.id : undefined,
+            type: isUrl ? 'link' : 'text',
+            url: isUrl ? rawPayload : null,
+            payload: rawPayload,
+            title: finalTitle,
+            notes: notesInput.value.trim(),
+            tags: tagInputEngine.getTags()
+          };
+
+          BookmarksState.save(finalBookmark);
+          FluxKit.ui.showNotification(`Saved: ${finalBookmark.title}`, { icon: 'success' });
+          FluxKit.ipc.broadcast('flxhub-set-input', { value: '> b ' });
+        };
+
+        return FluxKit.ui.omni.DetailCard(container, [
+          FluxKit.ui.omni.Button('success', isEdit ? 'Save Changes' : 'Save Bookmark', (e) => { e.stopPropagation(); this.currentSaveCallback(); }, 'plus')
+        ]);
+      }
+
+      if (data.mode === 'tags') {
+        const items = data.items;
+        const ROW_HEIGHT = 56;
+        const CONTAINER_HEIGHT = 320;
+
+        const listContainer = createHTMLElement('div', {
+          style: { display: 'flex', flexDirection: 'column', width: '100%' }
+        });
+
+        if (items.length === 0) {
+          listContainer.appendChild(createHTMLElement('div', {
+            style: { padding: '32px', textAlign: 'center', color: 'var(--omni-muted)', fontSize: '13px' },
+            textContent: 'No tags found in your vault.'
+          }));
+          return FluxKit.ui.omni.DetailCard(listContainer, []);
+        }
+
+        const performMassTagMutation = (oldTag, newTag) => {
+          const active = BookmarksState.getActive();
+          const affected = active.filter(b => b.tags.includes(oldTag));
+          
+          affected.forEach(b => {
+            const updatedTags = new Set(b.tags.filter(t => t !== oldTag));
+            if (newTag) updatedTags.add(newTag);
+            BookmarksState.save({ ...b, tags: Array.from(updatedTags) });
+          });
+          
+          FluxKit.ui.showNotification(`Updated ${affected.length} bookmark(s)`, { icon: 'success' });
+          this.execute();
+        };
+
+        const renderRowFn = (node, item) => {
+          node.innerHTML = FluxKit.utils.safeHTML('');
+          
+          const row = createHTMLElement('div', {
+            style: { height: `${ROW_HEIGHT - 8}px`, margin: '4px 0', padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--omni-bg)', border: '1px solid var(--omni-border)', borderRadius: '6px', boxSizing: 'border-box' },
+            eventListener: {
+              mouseenter: () => { row.style.borderColor = 'var(--omni-text)'; },
+              mouseleave: () => { row.style.borderColor = 'var(--omni-border)'; }
+            }
+          });
+
+          const readLeftCol = createHTMLElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } });
+          readLeftCol.appendChild(createHTMLElement('span', { style: { fontWeight: 'bold', color: 'var(--omni-text)', fontSize: '13px' }, textContent: `#${item.tag}` }));
+          readLeftCol.appendChild(createHTMLElement('span', { style: { color: 'var(--omni-muted)', fontSize: '11px', background: 'var(--omni-hover)', padding: '2px 6px', borderRadius: '10px' }, textContent: `${item.count} items` }));
+
+          const editInput = createHTMLElement('input', {
+            type: 'text', value: item.tag,
+            style: { padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--omni-text)', background: 'var(--omni-input-bg)', color: 'var(--omni-text)', fontSize: '12px', outline: 'none' },
+            eventListener: {
+              keydown: (e) => {
+                if (e.key === 'Enter') { e.stopPropagation(); performMassTagMutation(item.tag, editInput.value.trim().toLowerCase()); }
+                if (e.key === 'Escape') { e.stopPropagation(); this.execute(); }
+              }
+            }
+          });
+
+          const rightCol = createHTMLElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } });
+
+          const saveBtn = createHTMLElement('button', {
+            icon: 'success', title: 'Save',
+            style: { background: 'transparent', border: 'none', color: 'var(--omni-success)', cursor: 'pointer', padding: '4px', display: 'none' },
+            eventListener: { click: (e) => { e.stopPropagation(); performMassTagMutation(item.tag, editInput.value.trim().toLowerCase()); } }
+          });
+
+          const editBtn = createHTMLElement('button', {
+            icon: 'edit', title: 'Rename or Merge Tag',
+            style: { background: 'transparent', border: 'none', color: 'var(--omni-muted)', cursor: 'pointer', padding: '4px' },
+            eventListener: {
+              click: (e) => {
+                e.stopPropagation();
+                row.replaceChild(editInput, readLeftCol);
+                editBtn.style.display = 'none';
+                delBtn.style.display = 'none';
+                saveBtn.style.display = 'flex';
+                editInput.focus();
+              },
+              mouseenter: (e) => { e.currentTarget.style.color = 'var(--omni-text)'; },
+              mouseleave: (e) => { e.currentTarget.style.color = 'var(--omni-muted)'; }
+            }
+          });
+
+          const delBtn = createHTMLElement('button', {
+            icon: 'trash', title: 'Delete Tag from all bookmarks',
+            style: { background: 'transparent', border: 'none', color: 'var(--omni-muted)', cursor: 'pointer', padding: '4px' },
+            eventListener: {
+              click: (e) => { e.stopPropagation(); performMassTagMutation(item.tag, null); },
+              mouseenter: (e) => { e.currentTarget.style.color = 'var(--omni-danger)'; },
+              mouseleave: (e) => { e.currentTarget.style.color = 'var(--omni-muted)'; }
+            }
+          });
+
+          rightCol.appendChild(saveBtn);
+          rightCol.appendChild(editBtn);
+          rightCol.appendChild(delBtn);
+          row.appendChild(readLeftCol);
+          row.appendChild(rightCol);
+          node.appendChild(row);
+        };
+
+        const vList = createVirtualList(items, ROW_HEIGHT, CONTAINER_HEIGHT, renderRowFn);
+        listContainer.appendChild(vList.container);
+
+        return FluxKit.ui.omni.DetailCard(listContainer, [
+          FluxKit.ui.omni.Button('secondary', 'Back to Search', () => FluxKit.ipc.broadcast('flxhub-set-input', { value: '> b ' }), 'arrowLeft')
+        ]);
+      }
+
+      const items = data.items;
+      const ROW_HEIGHT = 64;
+      const CONTAINER_HEIGHT = 320;
+
+      const listContainer = createHTMLElement('div', {
+        style: { display: 'flex', flexDirection: 'column', width: '100%' }
+      });
+
+      if (items.length === 0) {
+        const emptyState = createHTMLElement('div', {
+          style: { padding: '32px', textAlign: 'center', color: 'var(--omni-muted)', fontSize: '13px' },
+          textContent: 'No bookmarks found. Use the Add button below to create one.'
+        });
+        listContainer.appendChild(emptyState);
+      } else {
+        const renderRowFn = (node, item) => {
+          node.innerHTML = safeHTML('');
+          const row = createHTMLElement('div', {
+            style: {
+              height: `${ROW_HEIGHT - 8}px`,
+              margin: '4px 0',
+              padding: '8px 12px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: 'var(--omni-bg)',
+              border: '1px solid var(--omni-border)',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              boxSizing: 'border-box'
+            },
+            eventListener: {
+              mouseenter: () => { row.style.borderColor = 'var(--omni-text)'; },
+              mouseleave: () => { row.style.borderColor = 'var(--omni-border)'; },
+              click: (e) => {
+                e.stopPropagation();
+                FluxHub.ui.expandListItem(this, { mode: 'edit', item });
+              }
+            }
+          });
+
+          const leftCol = createHTMLElement('div', {
+            style: { display: 'flex', flexDirection: 'column', gap: '2px', overflow: 'hidden', flex: '1', minWidth: '0' }
+          });
+
+          const titleLine = createHTMLElement('div', {
+            style: {
+              fontSize: '13px',
+              fontWeight: '600',
+              color: 'var(--omni-text)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
+            },
+            textContent: item.title
+          });
+
+          const subLine = createHTMLElement('div', {
+            style: { display: 'flex', gap: '8px', alignItems: 'center', fontSize: '11px', color: 'var(--omni-muted)' }
+          });
+
+          if (item.url) {
+            subLine.appendChild(createHTMLElement('span', {
+              style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '240px' },
+              textContent: item.url.replace(/^https?:\/\//, '')
+            }));
+          }
+
+          if (item.tags.length > 0) {
+            const tagTokens = createHTMLElement('span', {
+              style: { color: 'var(--omni-text)' },
+              textContent: item.tags.map(t => `#${t}`).join(' ')
+            });
+            subLine.appendChild(tagTokens);
+          }
+
+          leftCol.appendChild(titleLine);
+          leftCol.appendChild(subLine);
+
+          const rightCol = createHTMLElement('div', {
+            style: { display: 'flex', alignItems: 'center', gap: '8px', flexShrink: '0', marginLeft: '12px' }
+          });
+
+          const quickActionBtn = createHTMLElement('button', {
+            icon: item.url ? 'externalLink' : 'copy',
+            title: item.url ? 'Open URL' : 'Copy Snippet',
+            style: { background: 'transparent', border: 'none', color: 'var(--omni-muted)', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center' },
+            eventListener: {
+              click: (e) => {
+                e.stopPropagation();
+                if (item.url) {
+                  GM_openInTab(item.url, { active: true, insert: true });
+                  FluxHub.ui.hide();
+                } else {
+                  navigator.clipboard.writeText(item.payload);
+                  FluxKit.ui.showNotification('Snippet copied to clipboard', { icon: 'success' });
+                }
+              },
+              mouseenter: (e) => { e.currentTarget.style.color = 'var(--omni-text)'; },
+              mouseleave: (e) => { e.currentTarget.style.color = 'var(--omni-muted)'; }
+            }
+          });
+
+          const delBtn = createHTMLElement('button', {
+            icon: 'trash',
+            title: 'Delete Bookmark',
+            style: { background: 'transparent', border: 'none', color: 'var(--omni-muted)', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center' },
+            eventListener: {
+              click: (e) => {
+                e.stopPropagation();
+                BookmarksState.remove(item.id);
+                this.execute();
+              },
+              mouseenter: (e) => { e.currentTarget.style.color = 'var(--omni-danger)'; },
+              mouseleave: (e) => { e.currentTarget.style.color = 'var(--omni-muted)'; }
+            }
+          });
+
+          rightCol.appendChild(quickActionBtn);
+          rightCol.appendChild(delBtn);
+          row.appendChild(leftCol);
+          row.appendChild(rightCol);
+          node.appendChild(row);
+        };
+
+        const vList = createVirtualList(items, ROW_HEIGHT, CONTAINER_HEIGHT, renderRowFn);
+        listContainer.appendChild(vList.container);
+      }
+
+      const footerActions = [
+        FluxKit.ui.omni.Button('bookmark', 'Bookmark Current Tab', () => this.saveCurrentTab()),
+        FluxKit.ui.omni.Button('plus', 'Add Bookmark', () => {
+          FluxKit.ipc.broadcast('flxhub-set-input', { value: '> b -a ' });
+        })
+      ];
+
+      return FluxKit.ui.omni.DetailCard(listContainer, footerActions);
+    }
+
+    saveCurrentTab() {
+      BookmarksState.save({
+        type: 'link',
+        url: window.location.href,
+        title: document.title || window.location.hostname,
+        payload: window.location.href,
+        tags: ['web']
+      });
+      FluxKit.ui.showNotification('Saved current tab to bookmarks', { icon: 'success' });
+      this.execute();
+    }
+
+    execute() {
+      const intent = BookmarkParser.parseIntent(this.query);
+
+      if (intent.action === 'add') {
+        if (this.currentSaveCallback) {
+          this.currentSaveCallback();
+        }
+        return;
+      }
+
+      this.fetchData().then(data => {
+        FluxHub.ui.expandListItem(this, data);
+      });
+    }
+  }
+
   FluxHub.BaseView = BaseView;
   FluxHub.engine = new CommandRouter();
   FluxHub.engine.initIPC();
@@ -11277,7 +15738,7 @@
     GenerativeHubView, ToolsHubView, TimeManagerHubView,
     DictionaryView, TranslateView, WikipediaView,
     DuckDuckGoView, BangView, GoogleFallbackView, GitHubView,
-    WeatherView, StockView, RSSView,
+    WeatherView, StockView, RSSView, OsintView, BookmarkView,
     MusicView, MusicStatsHubView, IdentifyMusicView
   ]);
 
@@ -11310,45 +15771,17 @@
     },
   });
 
-  FluxHub.engine.registerAction({
-    id: 'add-bang', prefix: '> addbang ',
-    title: 'Add Custom Bang (e.g. > addbang @npm https://npmjs.com/search?q=)',
-    icon: 'plus', acceptsArgs: true, type: 'action',
-    execute: (query) => {
-      const args = query.replace(/^>\s*addbang\s+/i, '').trim().split(' ');
-      if (args.length >= 2 && args[0].startsWith('@')) {
-        const prefix = args[0].toLowerCase();
-        const url = args.slice(1).join(' ');
-        BangsState.save(prefix, { name: prefix, url, base: url.split('?')[0], icon: 'externalLink' });
-        FluxKit.ui.showNotification(`Added custom bang: ${prefix}`, { icon: 'success' });
-      } else FluxKit.ui.showNotification('Format: > addbang @prefix url', { icon: 'warning' });
-      FluxHub.ui.hide();
-    },
-  });
-
-  FluxHub.engine.registerAction({
-    id: 'remove-bang', prefix: '> rmbang ',
-    title: 'Remove Custom Bang (e.g. > rmbang @npm)',
-    icon: 'trash', acceptsArgs: true, type: 'action',
-    execute: (query) => {
-      const prefix = query.replace(/^>\s*rmbang\s*/i, '').trim().toLowerCase();
-      if (!prefix) { FluxKit.ui.showNotification('Format: > rmbang @prefix', { icon: 'warning' }); FluxHub.ui.hide(); return; }
-      if (BangsState.remove(prefix)) FluxKit.ui.showNotification(`Removed custom bang: ${prefix}`, { icon: 'success' });
-      else FluxKit.ui.showNotification(`No custom bang found: ${prefix}`, { icon: 'warning' });
-      FluxHub.ui.hide();
-    },
-  });
-
   /**
-   * ============================================================================
-   * BACKGROUND MANAGER: Timers & Alarms
-   * Checks global state. Prevents multi-tab notification spam via Leader Election.
-   * ============================================================================
-   */
+  *  ============================================================================
+  *  BACKGROUND MANAGER: Timers & Alarms
+  *  Checks global state. Prevents multi-tab notification spam via Leader Election.
+  *  ============================================================================ */
+  let activeAlarmContext = null;
+
   setInterval(() => {
     const timer = FluxHubState.get(STATE_KEYS.ACTIVE_TIMER, null);
     if (!timer) return;
-
+    
     const now = Date.now();
     if (now >= timer.endsAt) {
       const isHost = timer.hostTab === FluxKit.ipc.getTabId();
@@ -11356,21 +15789,81 @@
 
       if (isHost || hostIsDead) {
         FluxHubState.delete(STATE_KEYS.ACTIVE_TIMER);
-
-        FluxKit.ui.showNotification(`Timer Complete: ${timer.label || 'Time is up!'}`, { icon: 'bell' });
-
-        try {
-          const ctx = new (window.AudioContext || window.webkitAudioContext)();
-          const osc = ctx.createOscillator();
-          osc.type = 'sine';
-          osc.frequency.setValueAtTime(880, ctx.currentTime);
-          osc.connect(ctx.destination);
-          osc.start();
-          osc.stop(ctx.currentTime + 0.5);
-        } catch(e) {}
+        FluxKit.ipc.broadcast('timer-alarm-start', { label: timer.label, hostId: FluxKit.ipc.getTabId() }, true);
       }
     }
   }, 1000);
+
+  FluxKit.ipc.listen('timer-alarm-start', (payload) => {
+    if (activeAlarmContext) return;
+
+    const label = payload.label || 'Time is up!';
+    const isAudioHost = payload.hostId === FluxKit.ipc.getTabId();
+
+    const overlay = FluxKit.utils.createHTMLElement('div', {
+      style: {
+        position: 'fixed', top: '0', left: '0', width: '100vw', height: '100vh',
+        boxSizing: 'border-box', border: '8px solid var(--omni-danger, #ef4444)',
+        boxShadow: 'inset 0 0 60px rgba(239, 68, 68, 0.4)',
+        pointerEvents: 'none', zIndex: '2147483647',
+        animation: 'flxkit-pulse-alarm 1s infinite alternate',
+        transition: 'opacity 0.2s'
+      }
+    });
+    const style = FluxKit.utils.createHTMLElement('style', {
+      textContent: `@keyframes flxkit-pulse-alarm { from { opacity: 0.2; } to { opacity: 1; } }`
+    });
+    document.documentElement.appendChild(style);
+    document.documentElement.appendChild(overlay);
+
+    FluxKit.ui.showNotification(`Timer Complete: ${label}`, { icon: 'bell', duration: 15000 });
+
+    let audioInterval = null;
+    if (isAudioHost) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        audioInterval = setInterval(() => {
+          if (ctx.state === 'suspended') ctx.resume();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(880, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.4);
+          gain.gain.setValueAtTime(0.5, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.6);
+        }, 1200);
+      } catch(e) {}
+    }
+
+    const dismissAlarm = (e) => {
+      if (e && !e.isTrusted) return;
+      if (!activeAlarmContext) return;
+
+      if (activeAlarmContext.overlay) activeAlarmContext.overlay.remove();
+      if (activeAlarmContext.style) activeAlarmContext.style.remove();
+      if (activeAlarmContext.audioInterval) clearInterval(activeAlarmContext.audioInterval);
+      
+      const cleanupEvents = ['keydown', 'mousedown', 'touchstart', 'wheel'];
+      cleanupEvents.forEach(ev => document.removeEventListener(ev, activeAlarmContext.dismissHandler, { capture: true }));
+      
+      activeAlarmContext = null;
+      
+      if (e) FluxKit.ipc.broadcast('timer-alarm-stop', {}, true);
+    };
+
+    activeAlarmContext = { overlay, style, audioInterval, dismissHandler: dismissAlarm };
+
+    const cleanupEvents = ['keydown', 'mousedown', 'touchstart', 'wheel'];
+    cleanupEvents.forEach(ev => document.addEventListener(ev, activeAlarmContext.dismissHandler, { capture: true, once: true }));
+  }, true);
+
+  FluxKit.ipc.listen('timer-alarm-stop', () => {
+    if (activeAlarmContext) activeAlarmContext.dismissHandler();
+  }, true);
 
   /**
    * ============================================================================
@@ -11379,11 +15872,12 @@
    * ============================================================================
    */
   document.addEventListener('copy', () => {
-    const text = window.getSelection().toString().trim();
-    if (text) {
+    const selectionContext = FluxKit.capture.text.getDeepSelectionContext();
+    const selectionText = selectionContext ? selectionContext.text.trim() : window.getSelection().toString().trim();
+    if (selectionText) {
       const history = FluxHubState.get(STATE_KEYS.CLIP_HISTORY, []);
-      const filtered = history.filter(item => item !== text);
-      filtered.unshift(text);
+      const filtered = history.filter(item => item !== selectionText);
+      filtered.unshift(selectionText);
       if (filtered.length > 50) filtered.pop();
       FluxHubState.set(STATE_KEYS.CLIP_HISTORY, filtered);
     }

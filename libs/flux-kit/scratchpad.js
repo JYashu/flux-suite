@@ -2645,8 +2645,8 @@
       this.container.style.setProperty('--sp-dot', dotColor);
       this.container.style.setProperty('--sp-color-btn-bg', FluxKit.theme.createAlphaColor(this.theme.accentBg, 0.12));
 
-      const textHex = FluxKit.theme.rgbToHex(this.theme.text, true).toLowerCase();
-      const accentHex = FluxKit.theme.rgbToHex(this.theme.accentBg, true).toLowerCase();
+      const textHex = FluxKit.theme.getHexCode(this.theme.text, true).toLowerCase();
+      const accentHex = FluxKit.theme.getHexCode(this.theme.accentBg, true).toLowerCase();
 
       const defaultColors = [
         { id: 'Theme Primary', val: 'var(--sp-text)' },
@@ -2678,7 +2678,7 @@
         }
         let compareVal = finalObj.val.toLowerCase().trim();
         if (compareVal.startsWith('rgb')) {
-          compareVal = FluxKit.theme.rgbToHex(compareVal, true);
+          compareVal = FluxKit.theme.getHexCode(compareVal, true);
         } else if (compareVal.startsWith('#')) {
           if (compareVal.length === 4) compareVal = '#' + compareVal.split('').slice(1).map(x => x + x).join('');
           else if (compareVal.length === 9) compareVal = compareVal.substring(0, 7);
