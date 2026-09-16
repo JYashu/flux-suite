@@ -47,6 +47,7 @@
 // @connect      audius.co
 // @connect      lrclib.net
 // @connect      newton.vercel.app
+// @connect      github.com
 // @connect      *
 // ==/UserScript==
 /* global FluxKit */

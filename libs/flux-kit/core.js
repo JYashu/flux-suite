@@ -2282,7 +2282,7 @@
 
       if (!palettes) {
         try {
-          const res = await FluxKit.api.gmFetch('https://github.com/Experience-Monks/nice-color-palettes/blob/master/500.json');
+          const res = await FluxKit.api.gmFetch('https://raw.githubusercontent.com/Experience-Monks/nice-color-palettes/refs/heads/master/500.json');
           if (res.ok) {
             const raw = await res.json();
             const list = Array.isArray(raw) ? raw : raw.palettes || raw.colors || raw.data || [];
@@ -2311,10 +2311,10 @@
     loadColorDictionary: async function() {
       if (this._colorDictionary && this._colorDictionary.length > 0) return;
       if (!this._themeCache) {
-        this._themeCache = FluxKit.cache.register('fluxkit-theme-cache', { 
-          storage: 'gm', 
-          policy: 'lru', 
-          maxSize: 5 
+        this._themeCache = FluxKit.cache.register('fluxkit-theme-cache', {
+          storage: 'gm',
+          policy: 'lru',
+          maxSize: 5
         });
       }
       const cacheKey = 'xkcd-color-dict';
@@ -2329,15 +2329,15 @@
 
           let rawWiki = [], rawXkcd = { colors: [] };
 
-          if (wikiRes.ok) rawWiki = JSON.parse(wikiRes);
-          if (rawXkcd.ok) rawXkcd = JSON.parse(xkcdRes);
+          if (wikiRes.ok) rawWiki = await wikiRes.json();
+          if (xkcdRes.ok) rawXkcd = await xkcdRes.json();
 
           if (rawWiki.length > 0 || rawXkcd.colors.length > 0) {
-            
+
             let dictArray = [];
 
-            rawWiki.colors.map((item) => {
-              const p = FluxKit.theme.parseColor(item.hex);
+            rawWiki.map((item) => {
+              const p = FluxKit.theme.parseColor(item.color);
               if (!p) return;
               const cleanName = item.name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
               dictArray.push({ name: cleanName, hex: item.color, r: p.r, g: p.g, b: p.b });
@@ -2353,7 +2353,7 @@
             }
 
             dict = dictArray;
-            
+
             await this._themeCache.set(cacheKey, dict, { ttl: 30 * 24 * 60 * 60 * 1000 });
           }
         } catch (e) {
