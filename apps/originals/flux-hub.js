@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Flux Hub
 // @namespace    https://github.com/JYashu/flux-suite
-// @version      2.0.0
+// @version      2.1.0
 // @description  Universal Command Palette and Search Engine. Press a hotkey to calculate, translate, convert, search the web, or control other Flux scripts instantly.
 // @icon         https://logo-bits.s3.us-east-2.amazonaws.com/flux-hub.svg
 // @author       JYashu
@@ -136,6 +136,10 @@
     RAPIDAPI_KEY: 'hub:rapid_api_key',
     BOOKMARKS: 'hub:bookmarks',
     BOOKMARK_TOMBSTONES: 'hub:bookmarks_tombstones',
+    MEMOS_URL: 'hub:memos_url',
+    MEMOS_TOKEN: 'hub:memos_token',
+    LINKDING_URL: 'hub:linkding_url',
+    LINKDING_TOKEN: 'hub:linkding_token',
   };
 
   const FluxHubState = FluxKit.state.register('flux-hub');
@@ -253,58 +257,68 @@
   };
 
   const BookmarksState = {
-    getAll: () => FluxHubState.get(STATE_KEYS.BOOKMARKS, {}),
-    
-    getTombstones: () => FluxHubState.get(STATE_KEYS.BOOKMARK_TOMBSTONES, {}),
-    
-    getActive: () => {
-      const all = BookmarksState.getAll();
-      const tombs = BookmarksState.getTombstones();
-      return Object.values(all).filter(b => !b.deletedAt && !tombs[b.id]);
+    getAll() {
+      return FluxHubState.get(STATE_KEYS.BOOKMARKS, {});
     },
+    
+    getActive() {
+      return Object.values(this.getAll()).filter(b => !b.deleted && !b.deletedAt);
+    },
+    
+    getTombstones() {
+      return FluxHubState.get(STATE_KEYS.BOOKMARK_TOMBSTONES, {});
+    },
+    
+    setTombstones(t) {
+      FluxHubState.set(STATE_KEYS.BOOKMARK_TOMBSTONES, t);
+    },
+    
+    save(bookmark, silent = false) {
+      const all = this.getAll();
+      const isNew = !bookmark.id;
+      if (isNew) bookmark.id = FluxKit.utils.getUniqueId();
+      
+      bookmark.updatedAt = Date.now();
+      if (isNew) bookmark.createdAt = bookmark.updatedAt;
 
-    save: (bookmark) => {
-      const all = BookmarksState.getAll();
-      const tombs = BookmarksState.getTombstones();
-      const id = bookmark.id || ('bm_' + FluxKit.utils.getUniqueId());
-      const now = Date.now();
-
-      const record = {
-        id,
-        type: bookmark.type || 'text',
-        title: bookmark.title || 'Untitled Bookmark',
-        url: bookmark.url || null,
-        payload: bookmark.payload || '',
-        notes: bookmark.notes || '',
-        tags: Array.isArray(bookmark.tags) ? bookmark.tags : [],
-        createdAt: bookmark.createdAt || now,
-        updatedAt: now,
-        deletedAt: null
-      };
-
-      all[id] = record;
-      delete tombs[id];
-
+      all[bookmark.id] = bookmark;
       FluxHubState.set(STATE_KEYS.BOOKMARKS, all);
-      FluxHubState.set(STATE_KEYS.BOOKMARK_TOMBSTONES, tombs);
+      if (FluxKit.sync?.auto && !silent) AutoSync.notifyLocalChange();
 
-      if (FluxKit.sync?.auto) AutoSync.notifyLocalChange();
-      return record;
-    },
-
-    remove: (id) => {
-      const all = BookmarksState.getAll();
-      const tombs = BookmarksState.getTombstones();
-      const now = Date.now();
-
-      if (all[id]) {
-        all[id] = { ...all[id], deletedAt: now, updatedAt: now };
+      // Fire & Forget: Dispatch to Homelab ONLY if not silent
+      if (!silent) {
+        FluxKit.api.bookmarks.syncUp(bookmark).then(updated => {
+          if (updated._linkdingId || updated._memosId) {
+            const current = this.getAll();
+            if (current[bookmark.id]) {
+              current[bookmark.id] = { ...current[bookmark.id], ...updated, updatedAt: Date.now() };
+              FluxHubState.set(STATE_KEYS.BOOKMARKS, current);
+              if (FluxKit.sync?.auto) AutoSync.notifyLocalChange();
+            }
+          }
+        }).catch(err => logError('Homelab Sync failed for bookmark:', bookmark.id, err));
       }
-      tombs[id] = now;
 
+      return bookmark;
+    },
+    
+    remove(id) {
+      const all = this.getAll();
+      const target = all[id];
+      if (!target) return;
+
+      // Fire & Forget: Dispatch deletion to Homelab
+      FluxKit.api.bookmarks.syncDelete(target).catch(err => 
+        logError('Homelab Deletion failed for bookmark:', id, err)
+      );
+
+      delete all[id];
       FluxHubState.set(STATE_KEYS.BOOKMARKS, all);
-      FluxHubState.set(STATE_KEYS.BOOKMARK_TOMBSTONES, tombs);
-
+      
+      const tombs = this.getTombstones();
+      tombs[id] = Date.now();
+      this.setTombstones(tombs);
+      
       if (FluxKit.sync?.auto) AutoSync.notifyLocalChange();
     }
   };
@@ -393,7 +407,12 @@
     }
 
     function requestSync(reason) {
-      runSync(reason);
+      if (reason === 'manual') {
+        FluxKit.ipc.broadcast('hijack-leader', {}, true);
+        setTimeout(() => runSync(reason), 50);
+      } else {
+        runSync(reason);
+      }
       FluxKit.ipc.broadcast('request-sync', { reason }, true);
     }
 
@@ -431,6 +450,13 @@
     }
 
     function init() {
+      FluxKit.ipc.listen('hijack-leader', (payload, senderTab) => {
+        if (senderTab !== FluxKit.ipc.getTabId() && releaseLeaderClaim) {
+          logMessage('Stepping down as sync leader due to remote manual override.');
+          releaseLeaderClaim();
+          releaseLeaderClaim = null;
+        }
+      }, true);
       FluxKit.ipc.listen('request-sync', (payload) => runSync(payload.reason || 'remote-request'), true);
       setInterval(() => runSync('periodic'), PERIODIC_MS);
       document.addEventListener('visibilitychange', () => {
@@ -491,6 +517,19 @@
     const mergedSettings = settingsWins ? remote.settings : localSettings;
     const mergedSettingsAt = Math.max(remote.settingsUpdatedAt || 0, localSettingsAt);
 
+    const localIntegrationsAt = FluxHubState.get('hub:integrations_updated_at', 0);
+    const integrationsWins = (remote.integrationsUpdatedAt || 0) > localIntegrationsAt;
+    const mergedIntegrationsAt = Math.max(remote.integrationsUpdatedAt || 0, localIntegrationsAt);
+    const localIntegrations = {
+      saavnUrl: FluxHubState.get(STATE_KEYS.CUSTOM_SAAVN_URL, ''),
+      rapidApiKey: FluxHubState.get(STATE_KEYS.RAPIDAPI_KEY, ''),
+      memosUrl: FluxHubState.get(STATE_KEYS.MEMOS_URL, ''),
+      memosToken: FluxHubState.get(STATE_KEYS.MEMOS_TOKEN, ''),
+      linkdingUrl: FluxHubState.get(STATE_KEYS.LINKDING_URL, ''),
+      linkdingToken: FluxHubState.get(STATE_KEYS.LINKDING_TOKEN, '')
+    };
+    const mergedIntegrations = integrationsWins && remote.integrations ? { ...localIntegrations, ...remote.integrations } : localIntegrations;
+
     const localClips = FluxHubState.get(STATE_KEYS.CLIP_HISTORY, []);
     const mergedClips = [...new Set([...localClips, ...(remote.clipHistory || [])])].slice(0, 50);
 
@@ -511,6 +550,17 @@
     FluxHubState.set(STATE_KEYS.PINNED_WIDGET_TOMBSTONES, wg.tombstones);
     FluxHubState.set(STATE_KEYS.SEARCH_CONFIG, mergedSettings);
     FluxHubState.set(STATE_KEYS.SEARCH_CONFIG_UPDATED_AT, mergedSettingsAt);
+    
+    FluxHubState.set('hub:integrations_updated_at', mergedIntegrationsAt);
+    if (integrationsWins && remote.integrations) {
+      if (mergedIntegrations.saavnUrl !== undefined) FluxHubState.set(STATE_KEYS.CUSTOM_SAAVN_URL, mergedIntegrations.saavnUrl);
+      if (mergedIntegrations.rapidApiKey !== undefined) FluxHubState.set(STATE_KEYS.RAPIDAPI_KEY, mergedIntegrations.rapidApiKey);
+      if (mergedIntegrations.memosUrl !== undefined) FluxHubState.set(STATE_KEYS.MEMOS_URL, mergedIntegrations.memosUrl);
+      if (mergedIntegrations.memosToken !== undefined) FluxHubState.set(STATE_KEYS.MEMOS_TOKEN, mergedIntegrations.memosToken);
+      if (mergedIntegrations.linkdingUrl !== undefined) FluxHubState.set(STATE_KEYS.LINKDING_URL, mergedIntegrations.linkdingUrl);
+      if (mergedIntegrations.linkdingToken !== undefined) FluxHubState.set(STATE_KEYS.LINKDING_TOKEN, mergedIntegrations.linkdingToken);
+    }
+
     FluxHubState.set(STATE_KEYS.CLIP_HISTORY, mergedClips);
     FluxHubState.set(STATE_KEYS.BOOKMARKS, bm.merged);
     FluxHubState.set(STATE_KEYS.BOOKMARK_TOMBSTONES, bm.tombstones);
@@ -520,6 +570,7 @@
       bangs: bg.merged, bangTombstones: bg.tombstones,
       widgets: Object.values(wg.merged), widgetTombstones: wg.tombstones,
       clipHistory: mergedClips, settings: mergedSettings, settingsUpdatedAt: mergedSettingsAt,
+      integrations: mergedIntegrations, integrationsUpdatedAt: mergedIntegrationsAt,
       musicStats: finalMusicStats, musicHistory: finalMusicHistory, musicDiscoveries: finalMusicDiscoveries,
       bookmarks: bm.merged, bookmarkTombstones: bm.tombstones
     };
@@ -527,6 +578,11 @@
     await FluxKit.sync.upload(profile, { [BACKUP_FILE]: { content: JSON.stringify(payload, null, 2) } }, BACKUP_FILE);
 
     FluxHubState.set(STATE_KEYS.SYNC_BASELINE, { playlists: pl.merged, bangs: bg.merged, widgets: wg.merged });
+
+    // Fire and forget homelab background reconciliation[cite: 1]
+    if (FluxKit.api.bookmarks && typeof FluxKit.api.bookmarks.reconcile === 'function') {
+      FluxKit.api.bookmarks.reconcile().catch(e => logError('[FluxKit] Reconciliation loop failed:', e));
+    }
 
     return payload;
   };
@@ -1297,7 +1353,7 @@
       this.pendingCompletions = new Map(); 
     }
 
-    registerAction(actionCmd) { this.localActions.push({ acceptsArgs: false, ...actionCmd }); }
+    registerAction(actionCmd) { this.localActions.push({ acceptsArgs: false, type: 'action',  ...actionCmd }); }
 
     registerViews(ViewClassList) { ViewClassList.forEach((ViewClass) => this.localViews.push(ViewClass)); }
 
@@ -1332,6 +1388,13 @@
         if (!host || !host.shadowRoot) return;
         if (payload && typeof payload.value === 'string') FluxHub.ui.setInputVal(payload.value);
       });
+
+      FluxKit.ipc.listen('force-page-reload', (payload, sender) => {
+        if (sender !== FluxKit.ipc.getTabId()) {
+          logWarning('[FluxHub] Global reload requested by another tab. Refreshing...', { __v: 1 });
+          window.location.reload();
+        }
+      }, true);
       
       this.refreshPlugins();
     }
@@ -1523,6 +1586,8 @@
       for (const view of sortedViews) {
         const intent = filteredIntents.find(i => i.instance === view);
         if (intent && intent.confidence >= 70) {
+          if (view.isExpandable === false) break;
+
           const index = FluxHub.ui.currentViews.indexOf(view);
           const row = FluxHub.ui.resultsList.children[index];
           let ogSubtitle = '', ogIcon = '';
@@ -1576,6 +1641,7 @@
     createRemoteViewWrapper(cmd, rawQuery) {
       if (cmd.type === 'action') {
         return {
+          isExpandable: false,
           destroy: () => {},
           fetchData: async () => null,
           renderListRow: () => FluxKit.ui.omni.ListRow(cmd.title, cmd.icon || 'code', `Command: ${cmd.prefix}`, 'to run'),
@@ -2276,12 +2342,12 @@
         try {
           const encodedExpr = encodeURIComponent(parsed.expr.replace(/\s+/g, ''));
           const res = await FluxKit.api.gmFetch(`https://newton.vercel.app/api/v2/${parsed.operation}/${encodedExpr}`, { signal });
-          if (!res.ok) return null;
+          if (!res.ok) throw new Error('Failed to fetch CAS data.');
           
           const data = await res.json();
           this.lastResult = data.result;
           return { mode: 'cas', expr: parsed.expr, operation: parsed.operation, result: data.result };
-        } catch (e) { return null; }
+        } catch (e) { throw new Error('Failed to fetch CAS data.'); }
       }
       
       if (parsed.mode === 'graph') {
@@ -2299,7 +2365,7 @@
           return safeExpr ? { original: e, safeExpr, isImplicit } : null;
         }).filter(e => e !== null);
 
-        if (parsedExprs.length === 0) return null;
+        if (parsedExprs.length === 0) throw new Error('No valid graph expressions found.');
         return { mode: 'graph', expr: parsed.expr, exprs: parsed.exprs, parsedExprs };
       }
 
@@ -2310,8 +2376,8 @@
           testExpr = `(${parts[0]}) - (${parts.slice(1).join('=')})`;
         }
         const safeExpr = this.constructor._sanitizeExpression(testExpr);
-        if (!safeExpr) return null;
-        
+        if (!safeExpr) throw new Error('Invalid expression.');
+
         const res = new Function('M', 'x', 'y', `return (${safeExpr})`)(this.constructor._mathContext, 0, 0);
         
         let formattedResult;
@@ -7313,6 +7379,11 @@
   }
 
   class GoogleFallbackView extends BaseView {
+    constructor(query, context = null) {
+      super(query, context);
+      this.isExpandable = false;
+    }
+
     static get isAvailable() { return typeof GM_openInTab !== 'undefined'; }
 
     static matchConfidence(query) { return query.trim().length > 0 ? 50 : 0; }
@@ -7358,7 +7429,7 @@
 
       try {
         const dictData = await FluxKit.api.dictionary.fetch(word, 'en', signal);
-        if (!dictData) return null;
+        if (!dictData) throw new Error('No dictionary data found.');
         if (signal && signal.aborted) return null;
 
         const synonyms = await FluxKit.api.thesaurus.fetch(word, 'syn', 5, signal);
@@ -7367,7 +7438,7 @@
         const finalData = { ...dictData, synonyms, antonyms };
         await FluxHub.cache.set(cacheKey, finalData);
         return finalData;
-      } catch (err) { return null; }
+      } catch (err) { throw new Error('Failed to fetch dictionary data.'); }
     }
 
     renderListRow() {
@@ -7572,12 +7643,12 @@
 
       try {
         const transData = await FluxKit.api.translate.fetch(text, this.targetLang, this.sourceLang, signal);
-        if (!transData || (signal && signal.aborted)) return null;
+        if (!transData || (signal && signal.aborted)) throw new Error('Failed to fetch translation data.');
 
         transData.targetLang = this.targetLang;
         await FluxHub.cache.set(cacheKey, transData);
         return transData;
-      } catch (err) { return null; }
+      } catch (err) { throw new Error('Failed to fetch translation data.'); }
     }
 
     async triggerInternalUpdate() {
@@ -7803,6 +7874,7 @@
       this.listNodes = [];
       this.currentData = null;
       this.lastAutoExpandSub = null;
+      this.validSubs = ['theme', 'ocr', 'saavn', 'shazam', 'memos', 'linkding'];
     }
 
     static isAvailable = true;
@@ -7825,10 +7897,8 @@
       const parts = remainder.split(/\s+/);
       const subQuery = parts[0] || '';
       
-      const validSubs = ['theme', 'ocr', 'saavn', 'shazam'];
-
       if (parts.length === 1) {
-        for (const sub of validSubs) {
+        for (const sub of this.validSubs) {
           if (sub.startsWith(subQuery)) {
             suggestions.push(`${activePrefix} ${sub} `); 
           }
@@ -7836,7 +7906,7 @@
         return suggestions;
       }
 
-      if (parts.length >= 2 && validSubs.includes(subQuery)) {
+      if (parts.length >= 2 && this.validSubs.includes(subQuery)) {
         const valQuery = parts.slice(1).join(' ').trim();
         
         if (subQuery === 'theme') {
@@ -7854,8 +7924,6 @@
 
       return suggestions;
     }
-
-    validSubs = ['theme', 'ocr', 'saavn', 'shazam'];
 
     static matchConfidence(query) {
       const q = query.trim().toLowerCase();
@@ -7912,6 +7980,9 @@
       if (sub === 'shazam') {
         return { mode: 'shazam', val, config };
       }
+      if (sub === 'memos' || sub === 'linkding') {
+        return { mode: sub, val, config };
+      }
 
       return { mode: 'default', config };
     }
@@ -7923,6 +7994,8 @@
       if (sub === 'ocr') return FluxKit.ui.omni.ListRow(val ? `Search OCR Modes: ${val}` : 'Select OCR Mode', 'scan', 'Settings');
       if (sub === 'saavn') return FluxKit.ui.omni.ListRow(val ? `Set Saavn URL: ${val}` : 'Set Saavn URL', 'link', val || 'Paste URL to save');
       if (sub === 'shazam') return FluxKit.ui.omni.ListRow(val ? `Set RapidAPI Key: ${val}` : 'Configure Shazam API', 'note', val || 'Set RapidAPI Key for Music Recognition');
+      if (sub === 'memos') return FluxKit.ui.omni.ListRow(val ? `Set Memos: ${val}` : 'Configure Memos Instance', 'server', val || 'Paste URL [space] Token');
+      if (sub === 'linkding') return FluxKit.ui.omni.ListRow(val ? `Set Linkding: ${val}` : 'Configure Linkding Instance', 'bookmark', val || 'Paste URL [space] Token');
 
       return FluxKit.ui.omni.ListRow('Flux Settings', 'settings', 'Configure Theme & Shortcuts'); 
     }
@@ -7937,10 +8010,25 @@
         FluxKit.ui.showNotification(`OCR Mode set to: ${item.text}`);
       } else if (mode === 'saavn') {
         FluxHubState.set(STATE_KEYS.CUSTOM_SAAVN_URL, item);
+        FluxHubState.set('hub:integrations_updated_at', Date.now());
+        if (FluxKit.sync?.auto) AutoSync.notifyLocalChange();
         FluxKit.ui.showNotification(`JioSaavn URL updated`);
       } else if (mode === 'shazam') {
         FluxHubState.set(STATE_KEYS.RAPIDAPI_KEY, item);
+        FluxHubState.set('hub:integrations_updated_at', Date.now());
+        if (FluxKit.sync?.auto) AutoSync.notifyLocalChange();
         FluxKit.ui.showNotification(`RapidAPI Key updated`);
+      } else if (mode === 'memos' || mode === 'linkding') {
+        const parts = (typeof item === 'string' ? item : '').split(' ').filter(Boolean);
+        const urlKey = mode === 'memos' ? STATE_KEYS.MEMOS_URL : STATE_KEYS.LINKDING_URL;
+        const tokenKey = mode === 'memos' ? STATE_KEYS.MEMOS_TOKEN : STATE_KEYS.LINKDING_TOKEN;
+        const name = mode === 'memos' ? 'Memos' : 'Linkding';
+        
+        if (parts[0]) FluxHubState.set(urlKey, parts[0]);
+        if (parts[1]) FluxHubState.set(tokenKey, parts[1]);
+        FluxHubState.set('hub:integrations_updated_at', Date.now());
+        if (FluxKit.sync?.auto) AutoSync.notifyLocalChange();
+        FluxKit.ui.showNotification(`${name} configuration updated`);
       }
       
       this.lastAutoExpandSub = null;
@@ -8056,6 +8144,34 @@
         return FluxKit.ui.omni.DetailCard(container, actions);
       }
 
+      if (data.mode === 'memos' || data.mode === 'linkding') {
+        const name = data.mode === 'memos' ? 'Memos' : 'Linkding';
+        const urlKey = data.mode === 'memos' ? STATE_KEYS.MEMOS_URL : STATE_KEYS.LINKDING_URL;
+        const tokenKey = data.mode === 'memos' ? STATE_KEYS.MEMOS_TOKEN : STATE_KEYS.LINKDING_TOKEN;
+
+        const container = createHTMLElement('div', { style: { padding: '16px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '12px' } });
+        container.appendChild(createHTMLElement('div', { textContent: `Configure ${name}`, style: { color: 'var(--omni-muted)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 'bold' } }));
+        
+        const inputStyle = { padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--omni-border)', background: 'var(--omni-input-bg)', color: 'var(--omni-text)', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box', fontFamily: 'monospace' };
+        
+        const urlInput = createHTMLElement('input', { type: 'text', value: FluxHubState.get(urlKey, ''), placeholder: `https://${data.mode}.domain.com`, style: inputStyle });
+        const tokenInput = createHTMLElement('input', { type: 'password', value: FluxHubState.get(tokenKey, ''), placeholder: 'API Token', style: inputStyle });
+
+        container.appendChild(urlInput);
+        container.appendChild(tokenInput);
+        
+        const actions = [FluxKit.ui.omni.Button('success', `Save ${name}`, (e) => {
+          e.stopPropagation();
+          FluxHubState.set(urlKey, urlInput.value.trim());
+          FluxHubState.set(tokenKey, tokenInput.value.trim());
+          FluxHubState.set('hub:integrations_updated_at', Date.now());
+          if (FluxKit.sync?.auto) AutoSync.notifyLocalChange();
+          FluxKit.ui.showNotification(`${name} configuration updated`);
+          FluxHub.ui.setInputVal('> config ');
+        })];
+        return FluxKit.ui.omni.DetailCard(container, actions);
+      }
+
       const saveConfig = (key, value) => { config[key] = value; SettingsState.save({ [key]: value }); };
 
       const createFormRow = (labelText, inputElement) => {
@@ -8082,16 +8198,28 @@
         eventListener: { change: (e) => saveConfig('ocrMode', e.target.value) }
       });
 
+      const updateIntegration = (key, val) => {
+        FluxHubState.set(key, val);
+        FluxHubState.set('hub:integrations_updated_at', Date.now());
+        if (FluxKit.sync?.auto) AutoSync.notifyLocalChange();
+      };
+
       const customSaavnInput = createHTMLElement('input', {
         type: 'text', value: FluxHubState.get(STATE_KEYS.CUSTOM_SAAVN_URL, ''), placeholder: 'https://your-api.vercel.app',
         style: { ...selectStyle, textAlign: 'left', cursor: 'text', width: '220px', fontFamily: 'monospace' },
-        eventListener: { input: (e) => FluxHubState.set(STATE_KEYS.CUSTOM_SAAVN_URL, e.target.value.trim()) }
+        eventListener: { input: (e) => updateIntegration(STATE_KEYS.CUSTOM_SAAVN_URL, e.target.value.trim()) }
       });
 
       const rapidApiKeyInput = createHTMLElement('input', {
         type: 'password', value: FluxHubState.get(STATE_KEYS.RAPIDAPI_KEY, ''), placeholder: 'RapidAPI Key',
         style: { ...selectStyle, textAlign: 'left', cursor: 'text', width: '220px', fontFamily: 'monospace' },
-        eventListener: { input: (e) => FluxHubState.set(STATE_KEYS.RAPIDAPI_KEY, e.target.value.trim()) }
+        eventListener: { input: (e) => updateIntegration(STATE_KEYS.RAPIDAPI_KEY, e.target.value.trim()) }
+      });
+
+      const buildCredentialInput = (key, placeholder, isPassword = false) => createHTMLElement('input', {
+        type: isPassword ? 'password' : 'text', value: FluxHubState.get(key, ''), placeholder,
+        style: { ...selectStyle, textAlign: 'left', cursor: 'text', width: '220px', fontFamily: 'monospace' },
+        eventListener: { input: (e) => updateIntegration(key, e.target.value.trim()) }
       });
 
       const hotkeyInput = createHTMLElement('input', {
@@ -8136,9 +8264,14 @@
           createHTMLElement('div', { style: { fontSize: '18px', fontWeight: 'bold', marginBottom: '8px' }, textContent: 'Preferences' }),
           createFormRow('Theme Engine', themeSelect),
           createFormRow('OCR Capture Mode', ocrSelect),
+          createFormRow('Launcher Shortcut', hotkeyInput),
+          createHTMLElement('div', { style: { fontSize: '18px', fontWeight: 'bold', margin: '16px 0 8px 0' }, textContent: 'Integrations' }),
+          createFormRow('Memos Instance URL', buildCredentialInput(STATE_KEYS.MEMOS_URL, 'https://memos.domain.com')),
+          createFormRow('Memos API Token', buildCredentialInput(STATE_KEYS.MEMOS_TOKEN, 'Token', true)),
+          createFormRow('Linkding Instance URL', buildCredentialInput(STATE_KEYS.LINKDING_URL, 'https://links.domain.com')),
+          createFormRow('Linkding API Token', buildCredentialInput(STATE_KEYS.LINKDING_TOKEN, 'Token', true)),
           createFormRow('JioSaavn Base URL', customSaavnInput),
-          createFormRow('RapidAPI Key (Shazam)', rapidApiKeyInput),
-          createFormRow('Launcher Shortcut', hotkeyInput)
+          createFormRow('RapidAPI Key (Shazam)', rapidApiKeyInput)
         ]
       });
 
@@ -8155,6 +8288,11 @@
 
       if (sub === 'shazam' && val) {
         this.saveAndClose('shazam', val);
+        return;
+      }
+
+      if ((sub === 'memos' || sub === 'linkding') && val) {
+        this.saveAndClose(sub, val);
         return;
       }
 
@@ -10061,7 +10199,177 @@
           }
         });
       },
-    }
+    },
+    bookmarks: (function() {
+      const getCreds = () => ({
+        memosUrl: FluxHubState.get(STATE_KEYS.MEMOS_URL, '').replace(/\/$/, ''),
+        memosToken: FluxHubState.get(STATE_KEYS.MEMOS_TOKEN, ''),
+        linkdingUrl: FluxHubState.get(STATE_KEYS.LINKDING_URL, '').replace(/\/$/, ''),
+        linkdingToken: FluxHubState.get(STATE_KEYS.LINKDING_TOKEN, '')
+      });
+
+      const request = (method, url, headers, body = null) => {
+        return new Promise((resolve, reject) => {
+          GM_xmlhttpRequest({
+            method, url, headers,
+            data: body ? JSON.stringify(body) : null,
+            responseType: 'json',
+            onload: (res) => {
+              if (res.status >= 200 && res.status < 300) resolve(res.response || res.responseText);
+              else reject(new Error(`HTTP ${res.status}: ${res.responseText}`));
+            },
+            onerror: (e) => reject(e),
+            ontimeout: () => reject(new Error('Request timed out'))
+          });
+        });
+      };
+
+      return {
+        async syncUp(bookmark) {
+          const creds = getCreds();
+          let updated = { ...bookmark };
+          const bType = bookmark.type || (bookmark.url ? 'link' : 'text');
+
+          try {
+            if (bType === 'link' && creds.linkdingUrl && creds.linkdingToken) {
+              const headers = { 'Authorization': `Token ${creds.linkdingToken}`, 'Content-Type': 'application/json' };
+              const payload = { url: bookmark.url, title: bookmark.title || '', description: bookmark.notes || '', tag_names: bookmark.tags || [] };
+              
+              if (bookmark._linkdingId) {
+                await request('PUT', `${creds.linkdingUrl}/api/bookmarks/${bookmark._linkdingId}/`, headers, payload);
+              } else {
+                const res = await request('POST', `${creds.linkdingUrl}/api/bookmarks/`, headers, payload);
+                const parsed = typeof res === 'string' ? JSON.parse(res) : res;
+                if (parsed?.id) updated._linkdingId = parsed.id;
+              }
+            } else if (bType === 'text' && creds.memosUrl && creds.memosToken) {
+              const headers = { 'Authorization': `Bearer ${creds.memosToken}`, 'Content-Type': 'application/json' };
+              const tagStr = (bookmark.tags || []).map(t => `#${t}`).join(' ');
+              const titleStr = bookmark.title && bookmark.title !== bookmark.payload ? `**${bookmark.title}**\n\n` : '';
+              const notesStr = bookmark.notes ? `\n\n_${bookmark.notes}_` : '';
+              const content = `${titleStr}${bookmark.payload}${notesStr}\n\n${tagStr}`.trim();
+              
+              if (bookmark._memosId) {
+                await request('PATCH', `${creds.memosUrl}/api/v1/memos/${bookmark._memosId}`, headers, { content });
+              } else {
+                const res = await request('POST', `${creds.memosUrl}/api/v1/memos`, headers, { content });
+                const parsed = typeof res === 'string' ? JSON.parse(res) : res;
+                const id = parsed?.id || (parsed?.name ? parsed.name.split('/').pop() : null);
+                if (id) updated._memosId = id;
+              }
+            }
+          } catch (e) {
+            logError('[FluxKit] Bookmark Sync Up Failed:', e);
+            throw e;
+          }
+          return updated;
+        },
+
+        async syncDelete(bookmark) {
+          const creds = getCreds();
+          try {
+            if (bookmark._linkdingId && creds.linkdingUrl && creds.linkdingToken) {
+              await request('DELETE', `${creds.linkdingUrl}/api/bookmarks/${bookmark._linkdingId}/`, { 'Authorization': `Token ${creds.linkdingToken}` });
+            }
+            if (bookmark._memosId && creds.memosUrl && creds.memosToken) {
+              await request('DELETE', `${creds.memosUrl}/api/v1/memos/${bookmark._memosId}`, { 'Authorization': `Bearer ${creds.memosToken}` });
+            }
+          } catch (e) {
+            logError('[FluxKit] Bookmark Sync Delete Failed:', e);
+            throw e;
+          }
+        },
+
+        async reconcile() {
+          const creds = getCreds();
+          if (!creds.memosUrl && !creds.linkdingUrl) return;
+
+          const localItems = BookmarksState.getActive();
+          let stateModified = false;
+
+          try {
+            if (creds.linkdingUrl && creds.linkdingToken) {
+              const res = await request('GET', `${creds.linkdingUrl}/api/bookmarks/?limit=500`, { 'Authorization': `Token ${creds.linkdingToken}` });
+              const remoteLinks = res.results || [];
+              
+              for (const rl of remoteLinks) {
+                const existing = localItems.find(b => b._linkdingId === rl.id || b.url === rl.url);
+                if (!existing) {
+                  BookmarksState.save({ type: 'link', url: rl.url, payload: rl.url, title: rl.title || rl.url, notes: rl.description, tags: rl.tag_names || [], _linkdingId: rl.id }, true);
+                  stateModified = true;
+                } else if (!existing._linkdingId) {
+                  existing._linkdingId = rl.id;
+                  const all = BookmarksState.getAll();
+                  if (all[existing.id]) {
+                    all[existing.id]._linkdingId = rl.id;
+                    FluxHubState.set(STATE_KEYS.BOOKMARKS, all);
+                    stateModified = true;
+                  }
+                }
+              }
+            }
+
+            if (creds.memosUrl && creds.memosToken) {
+              const res = await request('GET', `${creds.memosUrl}/api/v1/memos?limit=500`, { 'Authorization': `Bearer ${creds.memosToken}` });
+              const remoteMemos = Array.isArray(res) ? res : (res.memos || []);
+              
+              for (const rm of remoteMemos) {
+                const id = rm.name ? rm.name.split('/').pop() : rm.id;
+                const existing = localItems.find(b => b._memosId === id || (b.payload && rm.content?.includes(b.payload)));
+                if (!existing && rm.content) {
+                  const contentStr = rm.content;
+                  const extractedTags = [...contentStr.matchAll(/(?:^|\s)#([\w\d-]+)/g)].map(m => m[1].toLowerCase());
+                  BookmarksState.save({ type: 'text', url: null, payload: contentStr.replace(/(?:^|\s)#[\w\d-]+/g, '').trim(), title: 'Imported Memo', tags: extractedTags, _memosId: id }, true);
+                  stateModified = true;
+                } else if (existing && !existing._memosId) {
+                  existing._memosId = id;
+                  const all = BookmarksState.getAll();
+                  if (all[existing.id]) {
+                    all[existing.id]._memosId = id;
+                    FluxHubState.set(STATE_KEYS.BOOKMARKS, all);
+                    stateModified = true;
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            logError('[FluxKit] Bookmark Pull Reconciliation Failed:', e);
+          }
+
+          if (stateModified && FluxKit.sync?.auto) AutoSync.notifyLocalChange();
+
+          const updatedLocalItems = BookmarksState.getActive();
+          const needsPush = updatedLocalItems.filter(b => {
+            const bType = b.type || (b.url ? 'link' : 'text');
+            return (bType === 'link' && !b._linkdingId && creds.linkdingUrl) || 
+                   (bType === 'text' && !b._memosId && creds.memosUrl);
+          });
+
+          if (needsPush.length === 0) return;
+
+          logMessage(`[FluxKit] Reconciler queueing ${needsPush.length} bookmarks for homelab backfill...`);
+          
+          for (let i = 0; i < needsPush.length; i++) {
+            const b = needsPush[i];
+            try {
+              const updated = await this.syncUp(b);
+              if (updated._linkdingId || updated._memosId) {
+                const all = BookmarksState.getAll();
+                if (all[b.id]) {
+                    all[b.id] = { ...all[b.id], ...updated, updatedAt: Date.now() };
+                    FluxHubState.set(STATE_KEYS.BOOKMARKS, all);
+                }
+              }
+            } catch (e) {
+              logWarning(`[FluxKit] Backfill failed for bookmark ${b.id}`, e);
+            }
+            await new Promise(r => setTimeout(r, 400));
+          }
+          
+          if (FluxKit.sync?.auto) AutoSync.notifyLocalChange();
+        }
+      };
+    })(),
   };
 
   FluxKit.media ??= (function() {
@@ -13688,6 +13996,7 @@
     constructor(query, context = null) {
       super(query, context);
       this.isListening = false;
+      this.isExpandable = false;
     }
 
     _fallbackCover() {
@@ -15743,6 +16052,18 @@
     MusicView, MusicStatsHubView, IdentifyMusicView
   ]);
 
+  FluxHub.engine.registerAction({
+    prefix: '> reload tabs',
+    title: 'Force Reload All Tabs',
+    description: 'Refreshes every open tab to apply the latest FluxHub update',
+    icon: 'refresh',
+    execute: () => {
+      FluxKit.ui.showNotification('Broadcasting reload signal to all tabs...', { icon: 'refresh' });
+      FluxKit.ipc.broadcast('force-page-reload', {}, true);
+      setTimeout(() => window.location.reload(), 500);
+    }
+  });
+  
   FluxHub.engine.registerAction({
     id: 'capture-snip', prefix: '> snip',
     title: 'Capture & Read Screen Region',

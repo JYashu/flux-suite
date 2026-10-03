@@ -2530,16 +2530,11 @@
 
       if (typeof target === 'string') {
         const found = document.querySelector(target);
-        if (found) {
-          styleTarget = found;
-          scrapeTarget = found;
-        }
+        if (found) { styleTarget = found; scrapeTarget = found; }
       } else if (target instanceof Element) {
-        styleTarget = target;
-        scrapeTarget = target;
+        styleTarget = target; scrapeTarget = target;
       } else if (target instanceof ShadowRoot) {
-        styleTarget = target.host;
-        scrapeTarget = target;
+        styleTarget = target.host; scrapeTarget = target;
       }
 
       const computedBody = window.getComputedStyle(styleTarget);
@@ -2562,51 +2557,110 @@
       if (isTransparent(siteBg)) siteBg = basePreset.bg;
       if (isTransparent(siteText)) siteText = basePreset.text;
 
+      let componentBg = siteBg;
+      const parsedBg = FluxKit.theme.parseColor(siteBg);
+      
+      if (parsedBg) {
+        let { r, g, b, a } = parsedBg;
+        if (resolvedIsDark) {
+          r = Math.min(255, r + 15); g = Math.min(255, g + 15); b = Math.min(255, b + 15);
+        } else {
+          r = Math.max(0, r - 10); g = Math.max(0, g - 10); b = Math.max(0, b - 10);
+        }
+        componentBg = `rgba(${r}, ${g}, ${b}, ${a})`;
+      }
+
       let { accentBg, accentText, btnTextColor } = basePreset;
 
       const rootStyles = window.getComputedStyle(document.documentElement);
       const cssVars = ['--primary-color', '--accent-color', '--brand-color', '--color-primary', '--color-accent'];
+      let foundAccent = false;
 
       for (const v of cssVars) {
         const val = rootStyles.getPropertyValue(v).trim();
         if (val && !isTransparent(val)) {
           accentBg = val;
-          accentText = val;
+          foundAccent = true;
           break;
         }
       }
 
-      if (scrapeDOM) {
-        const candidates = Array.from(
-          scrapeTarget.querySelectorAll('button, [class*="btn"], [role="button"]')
-        );
-
+      if (!foundAccent && scrapeDOM) {
+        const candidates = Array.from(scrapeTarget.querySelectorAll('button, [class*="btn"], [role="button"]'));
         candidates.some((el) => {
           if (ignoreSelector && el.closest(ignoreSelector)) return false;
-
           if (el.offsetParent === null) return false;
 
-          const computed = window.getComputedStyle(el);
-          const bg = computed.backgroundColor;
-
-          if (!isTransparent(bg)) {
+          const bg = window.getComputedStyle(el).backgroundColor;
+          if (!isTransparent(bg) && bg !== siteBg) {
             accentBg = bg;
-            accentText = bg;
-            btnTextColor = computed.color || btnTextColor;
+            btnTextColor = window.getComputedStyle(el).color || btnTextColor;
+            foundAccent = true;
             return true;
           }
           return false;
         });
       }
 
-      if (FluxKit.theme.getContrastYIQ(siteBg) === FluxKit.theme.getContrastYIQ(accentBg)) {
-        accentBg = basePreset.accentBg;
-        btnTextColor = basePreset.btnTextColor;
+      const contrastYIQBg = FluxKit.theme.getContrastYIQ(componentBg);
+      const contrastYIQAccent = FluxKit.theme.getContrastYIQ(accentBg);
+      const parsedAccent = FluxKit.theme.parseColor(accentBg);
+      let distance = 1000;
+      
+      if (parsedBg && parsedAccent) {
+        distance = FluxKit.theme.getColorDistance(componentBg, accentBg);
+      }
+
+      if (!foundAccent || contrastYIQBg === contrastYIQAccent || distance < 2000) {
+        if (parsedBg) {
+          let r = parsedBg.r / 255, g = parsedBg.g / 255, b = parsedBg.b / 255;
+          let max = Math.max(r, g, b), min = Math.min(r, g, b);
+          let h, s, l = (max + min) / 2;
+          
+          if (max === min) { h = s = 0; }
+          else {
+            let d = max - min;
+            s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+            switch (max) {
+              case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+              case g: h = (b - r) / d + 2; break;
+              case b: h = (r - g) / d + 4; break;
+            }
+            h = Math.round(h * 60);
+          }
+          
+          s = Math.round(s * 100);
+          l = Math.round(l * 100);
+
+          let generatedHsl;
+          if (s < 5) {
+            generatedHsl = resolvedIsDark ? 'hsl(215, 25%, 55%)' : 'hsl(215, 30%, 40%)';
+          } else {
+            let newH = h;
+            // Cap saturation to avoid jarring neon, maintaining a sophisticated depth
+            let newS = Math.min(Math.max(s + 35, 45), 75);
+            
+            let newL;
+            if (resolvedIsDark) {
+              // Target lightness between 45% and 60% for a rich, readable pop
+              newL = Math.min(Math.max(l + 30, 45), 60); 
+            } else {
+              // Drop lightness for contrast on bright backgrounds
+              newL = Math.max(Math.min(l - 35, 40), 25);
+            }
+            
+            generatedHsl = `hsl(${newH}, ${newS}%, ${newL}%)`;
+          }
+
+          accentBg = FluxKit.theme.getHexCode(generatedHsl) || generatedHsl;
+
+          btnTextColor = FluxKit.theme.getContrastYIQ(accentBg) === 'dark' ? '#111827' : '#ffffff';
+        }
       }
 
       btnTextColor = FluxKit.theme.ensureContrast(accentBg, btnTextColor, basePreset.btnTextColor);
-      accentText = FluxKit.theme.ensureContrast(siteBg, accentText, basePreset.accentText);
-      siteText = FluxKit.theme.ensureContrast(siteBg, siteText, basePreset.text);
+      siteText = FluxKit.theme.ensureContrast(componentBg, siteText, basePreset.text);
+      accentText = FluxKit.theme.ensureContrast(componentBg, accentBg, basePreset.accentText); 
 
       const dynamicBorder = FluxKit.theme.createAlphaColor(siteText, 0.12);
       const dynamicHoverBg = FluxKit.theme.createAlphaColor(siteText, 0.05);
@@ -2618,11 +2672,19 @@
 
       return {
         ...basePreset,
-        name: `Native Dynamic ${resolvedIsDark ? 'Dark' : 'Light'}`,
-        fontFamily, bg: siteBg, text: siteText, inputBg: dynamicInputBg,
-        accentBg, accentText, btnTextColor, border: `1px solid ${dynamicBorder}`,
-        hoverBg: dynamicHoverBg, hoverText: siteText,
-        separator: dynamicSeparator, btnHoverBg: dynamicBtnHoverBg,
+        name: `Harmonized ${resolvedIsDark ? 'Dark' : 'Light'}`,
+        fontFamily, 
+        bg: componentBg, 
+        text: siteText, 
+        inputBg: dynamicInputBg,
+        accentBg, 
+        accentText, 
+        btnTextColor, 
+        border: `1px solid ${dynamicBorder}`,
+        hoverBg: dynamicHoverBg, 
+        hoverText: siteText,
+        separator: dynamicSeparator, 
+        btnHoverBg: dynamicBtnHoverBg,
         progressGradient: dynamicProgressGradient
       };
     },
