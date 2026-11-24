@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Flux Hub
 // @namespace    https://github.com/JYashu/flux-suite
-// @version      2.1.0
+// @version      2.2.0
 // @description  Universal Command Palette and Search Engine. Press a hotkey to calculate, translate, convert, search the web, or control other Flux scripts instantly.
 // @icon         https://logo-bits.s3.us-east-2.amazonaws.com/flux-hub.svg
 // @author       JYashu
@@ -140,6 +140,8 @@
     MEMOS_TOKEN: 'hub:memos_token',
     LINKDING_URL: 'hub:linkding_url',
     LINKDING_TOKEN: 'hub:linkding_token',
+    KARAKEEP_URL: 'hub:karakeep_url',
+    KARAKEEP_TOKEN: 'hub:karakeep_token',
   };
 
   const FluxHubState = FluxKit.state.register('flux-hub');
@@ -288,7 +290,7 @@
       // Fire & Forget: Dispatch to Homelab ONLY if not silent
       if (!silent) {
         FluxKit.api.bookmarks.syncUp(bookmark).then(updated => {
-          if (updated._linkdingId || updated._memosId) {
+          if (updated._linkdingId || updated._memosId || updated._karakeepId) {
             const current = this.getAll();
             if (current[bookmark.id]) {
               current[bookmark.id] = { ...current[bookmark.id], ...updated, updatedAt: Date.now() };
@@ -526,7 +528,9 @@
       memosUrl: FluxHubState.get(STATE_KEYS.MEMOS_URL, ''),
       memosToken: FluxHubState.get(STATE_KEYS.MEMOS_TOKEN, ''),
       linkdingUrl: FluxHubState.get(STATE_KEYS.LINKDING_URL, ''),
-      linkdingToken: FluxHubState.get(STATE_KEYS.LINKDING_TOKEN, '')
+      linkdingToken: FluxHubState.get(STATE_KEYS.LINKDING_TOKEN, ''),
+      karakeepUrl: FluxHubState.get(STATE_KEYS.KARAKEEP_URL, ''),
+      karakeepToken: FluxHubState.get(STATE_KEYS.KARAKEEP_TOKEN, '')
     };
     const mergedIntegrations = integrationsWins && remote.integrations ? { ...localIntegrations, ...remote.integrations } : localIntegrations;
 
@@ -559,6 +563,8 @@
       if (mergedIntegrations.memosToken !== undefined) FluxHubState.set(STATE_KEYS.MEMOS_TOKEN, mergedIntegrations.memosToken);
       if (mergedIntegrations.linkdingUrl !== undefined) FluxHubState.set(STATE_KEYS.LINKDING_URL, mergedIntegrations.linkdingUrl);
       if (mergedIntegrations.linkdingToken !== undefined) FluxHubState.set(STATE_KEYS.LINKDING_TOKEN, mergedIntegrations.linkdingToken);
+      if (mergedIntegrations.karakeepUrl !== undefined) FluxHubState.set(STATE_KEYS.KARAKEEP_URL, mergedIntegrations.karakeepUrl);
+      if (mergedIntegrations.karakeepToken !== undefined) FluxHubState.set(STATE_KEYS.KARAKEEP_TOKEN, mergedIntegrations.karakeepToken);
     }
 
     FluxHubState.set(STATE_KEYS.CLIP_HISTORY, mergedClips);
@@ -577,7 +583,7 @@
 
     await FluxKit.sync.upload(profile, { [BACKUP_FILE]: { content: JSON.stringify(payload, null, 2) } }, BACKUP_FILE);
 
-    FluxHubState.set(STATE_KEYS.SYNC_BASELINE, { playlists: pl.merged, bangs: bg.merged, widgets: wg.merged });
+    FluxHubState.set(STATE_KEYS.SYNC_BASELINE, { playlists: pl.merged, bangs: bg.merged, widgets: wg.merged, bookmarks: bm.merged });
 
     // Fire and forget homelab background reconciliation[cite: 1]
     if (FluxKit.api.bookmarks && typeof FluxKit.api.bookmarks.reconcile === 'function') {
@@ -7874,7 +7880,12 @@
       this.listNodes = [];
       this.currentData = null;
       this.lastAutoExpandSub = null;
-      this.validSubs = ['theme', 'ocr', 'saavn', 'shazam', 'memos', 'linkding'];
+      this.validSubs = ['theme', 'ocr', 'saavn', 'shazam', 'karakeep', 'memos', 'linkding'];
+      this.bookmarkBackends = {
+        karakeep: { name: 'Karakeep', urlKey: STATE_KEYS.KARAKEEP_URL, tokenKey: STATE_KEYS.KARAKEEP_TOKEN, placeholder: 'https://keep.domain.com', tokenLabel: 'API Key' },
+        memos: { name: 'Memos', urlKey: STATE_KEYS.MEMOS_URL, tokenKey: STATE_KEYS.MEMOS_TOKEN, placeholder: 'https://memos.domain.com', tokenLabel: 'API Token' },
+        linkding: { name: 'Linkding', urlKey: STATE_KEYS.LINKDING_URL, tokenKey: STATE_KEYS.LINKDING_TOKEN, placeholder: 'https://links.domain.com', tokenLabel: 'API Token' }
+      };
     }
 
     static isAvailable = true;
@@ -7980,7 +7991,7 @@
       if (sub === 'shazam') {
         return { mode: 'shazam', val, config };
       }
-      if (sub === 'memos' || sub === 'linkding') {
+      if (this.bookmarkBackends[sub]) {
         return { mode: sub, val, config };
       }
 
@@ -7996,6 +8007,7 @@
       if (sub === 'shazam') return FluxKit.ui.omni.ListRow(val ? `Set RapidAPI Key: ${val}` : 'Configure Shazam API', 'note', val || 'Set RapidAPI Key for Music Recognition');
       if (sub === 'memos') return FluxKit.ui.omni.ListRow(val ? `Set Memos: ${val}` : 'Configure Memos Instance', 'server', val || 'Paste URL [space] Token');
       if (sub === 'linkding') return FluxKit.ui.omni.ListRow(val ? `Set Linkding: ${val}` : 'Configure Linkding Instance', 'bookmark', val || 'Paste URL [space] Token');
+      if (sub === 'karakeep') return FluxKit.ui.omni.ListRow(val ? `Set Karakeep: ${val}` : 'Configure Karakeep Instance', 'bookmark', val || 'Paste URL [space] API Key');
 
       return FluxKit.ui.omni.ListRow('Flux Settings', 'settings', 'Configure Theme & Shortcuts'); 
     }
@@ -8018,12 +8030,9 @@
         FluxHubState.set('hub:integrations_updated_at', Date.now());
         if (FluxKit.sync?.auto) AutoSync.notifyLocalChange();
         FluxKit.ui.showNotification(`RapidAPI Key updated`);
-      } else if (mode === 'memos' || mode === 'linkding') {
+      } else if (this.bookmarkBackends[mode]) {
+        const { name, urlKey, tokenKey } = this.bookmarkBackends[mode];
         const parts = (typeof item === 'string' ? item : '').split(' ').filter(Boolean);
-        const urlKey = mode === 'memos' ? STATE_KEYS.MEMOS_URL : STATE_KEYS.LINKDING_URL;
-        const tokenKey = mode === 'memos' ? STATE_KEYS.MEMOS_TOKEN : STATE_KEYS.LINKDING_TOKEN;
-        const name = mode === 'memos' ? 'Memos' : 'Linkding';
-        
         if (parts[0]) FluxHubState.set(urlKey, parts[0]);
         if (parts[1]) FluxHubState.set(tokenKey, parts[1]);
         FluxHubState.set('hub:integrations_updated_at', Date.now());
@@ -8144,22 +8153,15 @@
         return FluxKit.ui.omni.DetailCard(container, actions);
       }
 
-      if (data.mode === 'memos' || data.mode === 'linkding') {
-        const name = data.mode === 'memos' ? 'Memos' : 'Linkding';
-        const urlKey = data.mode === 'memos' ? STATE_KEYS.MEMOS_URL : STATE_KEYS.LINKDING_URL;
-        const tokenKey = data.mode === 'memos' ? STATE_KEYS.MEMOS_TOKEN : STATE_KEYS.LINKDING_TOKEN;
-
+      if (this.bookmarkBackends[data.mode]) {
+        const { name, urlKey, tokenKey, placeholder, tokenLabel } = this.bookmarkBackends[data.mode];
         const container = createHTMLElement('div', { style: { padding: '16px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '12px' } });
         container.appendChild(createHTMLElement('div', { textContent: `Configure ${name}`, style: { color: 'var(--omni-muted)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 'bold' } }));
-        
         const inputStyle = { padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--omni-border)', background: 'var(--omni-input-bg)', color: 'var(--omni-text)', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box', fontFamily: 'monospace' };
-        
-        const urlInput = createHTMLElement('input', { type: 'text', value: FluxHubState.get(urlKey, ''), placeholder: `https://${data.mode}.domain.com`, style: inputStyle });
-        const tokenInput = createHTMLElement('input', { type: 'password', value: FluxHubState.get(tokenKey, ''), placeholder: 'API Token', style: inputStyle });
-
+        const urlInput = createHTMLElement('input', { type: 'text', value: FluxHubState.get(urlKey, ''), placeholder, style: inputStyle });
+        const tokenInput = createHTMLElement('input', { type: 'password', value: FluxHubState.get(tokenKey, ''), placeholder: tokenLabel, style: inputStyle });
         container.appendChild(urlInput);
         container.appendChild(tokenInput);
-        
         const actions = [FluxKit.ui.omni.Button('success', `Save ${name}`, (e) => {
           e.stopPropagation();
           FluxHubState.set(urlKey, urlInput.value.trim());
@@ -8266,9 +8268,11 @@
           createFormRow('OCR Capture Mode', ocrSelect),
           createFormRow('Launcher Shortcut', hotkeyInput),
           createHTMLElement('div', { style: { fontSize: '18px', fontWeight: 'bold', margin: '16px 0 8px 0' }, textContent: 'Integrations' }),
-          createFormRow('Memos Instance URL', buildCredentialInput(STATE_KEYS.MEMOS_URL, 'https://memos.domain.com')),
+          createFormRow('Karakeep Instance URL', buildCredentialInput(STATE_KEYS.KARAKEEP_URL, 'https://keep.example.in')),
+          createFormRow('Karakeep API Key', buildCredentialInput(STATE_KEYS.KARAKEEP_TOKEN, 'API Key', true)),
+          createFormRow('Memos Instance URL', buildCredentialInput(STATE_KEYS.MEMOS_URL, 'https://memos.example.com')),
           createFormRow('Memos API Token', buildCredentialInput(STATE_KEYS.MEMOS_TOKEN, 'Token', true)),
-          createFormRow('Linkding Instance URL', buildCredentialInput(STATE_KEYS.LINKDING_URL, 'https://links.domain.com')),
+          createFormRow('Linkding Instance URL', buildCredentialInput(STATE_KEYS.LINKDING_URL, 'https://links.example.com')),
           createFormRow('Linkding API Token', buildCredentialInput(STATE_KEYS.LINKDING_TOKEN, 'Token', true)),
           createFormRow('JioSaavn Base URL', customSaavnInput),
           createFormRow('RapidAPI Key (Shazam)', rapidApiKeyInput)
@@ -8291,7 +8295,7 @@
         return;
       }
 
-      if ((sub === 'memos' || sub === 'linkding') && val) {
+      if (this.bookmarkBackends[sub] && val) {
         this.saveAndClose(sub, val);
         return;
       }
@@ -10202,6 +10206,8 @@
     },
     bookmarks: (function() {
       const getCreds = () => ({
+        karakeepUrl: FluxHubState.get(STATE_KEYS.KARAKEEP_URL, '').replace(/\/$/, ''),
+        karakeepToken: FluxHubState.get(STATE_KEYS.KARAKEEP_TOKEN, ''),
         memosUrl: FluxHubState.get(STATE_KEYS.MEMOS_URL, '').replace(/\/$/, ''),
         memosToken: FluxHubState.get(STATE_KEYS.MEMOS_TOKEN, ''),
         linkdingUrl: FluxHubState.get(STATE_KEYS.LINKDING_URL, '').replace(/\/$/, ''),
@@ -10215,8 +10221,15 @@
             data: body ? JSON.stringify(body) : null,
             responseType: 'json',
             onload: (res) => {
-              if (res.status >= 200 && res.status < 300) resolve(res.response || res.responseText);
-              else reject(new Error(`HTTP ${res.status}: ${res.responseText}`));
+              if (res.status >= 200 && res.status < 300) {
+                let data = res.response;
+                if (!data && res.responseText) {
+                  try { data = JSON.parse(res.responseText); } catch { data = res.responseText; }
+                }
+                resolve(data);
+              } else {
+                reject(new Error(`HTTP ${res.status}: ${res.responseText}`));
+              }
             },
             onerror: (e) => reject(e),
             ontimeout: () => reject(new Error('Request timed out'))
@@ -10224,56 +10237,185 @@
         });
       };
 
+      const saveRemoteId = (localId, patch) => {
+        const all = BookmarksState.getAll();
+        if (all[localId]) {
+          all[localId] = { ...all[localId], ...patch };
+          FluxHubState.set(STATE_KEYS.BOOKMARKS, all);
+          return true;
+        }
+        return false;
+      };
+
+      const karakeep = {
+        isReady: (c) => Boolean(c.karakeepUrl && c.karakeepToken),
+        headers: (c, withJson = false) => ({
+          'Authorization': `Bearer ${c.karakeepToken}`,
+          ...(withJson ? { 'Content-Type': 'application/json' } : {})
+        }),
+        async syncTags(c, id, tags) {
+          if (!tags?.length) return;
+          await request('POST', `${c.karakeepUrl}/api/v1/bookmarks/${id}/tags`, this.headers(c, true), {
+            tags: tags.map((tagName) => ({ tagName }))
+          });
+        },
+        async syncUp(c, bookmark, bType) {
+          let updated = { ...bookmark };
+          if (bookmark._karakeepId) {
+            const patch = {
+              title: bookmark.title || null,
+              note: bookmark.notes || null,
+              ...(bType === 'text' ? { text: bookmark.payload } : {})
+            };
+            await request('PATCH', `${c.karakeepUrl}/api/v1/bookmarks/${bookmark._karakeepId}`, this.headers(c, true), patch);
+            await this.syncTags(c, bookmark._karakeepId, bookmark.tags);
+          } else {
+            const payload = bType === 'link'
+              ? { type: 'link', url: bookmark.url, title: bookmark.title || undefined, note: bookmark.notes || undefined }
+              : { type: 'text', text: bookmark.payload, title: bookmark.title || undefined, note: bookmark.notes || undefined };
+            const res = await request('POST', `${c.karakeepUrl}/api/v1/bookmarks`, this.headers(c, true), payload);
+            if (res?.id) {
+              updated._karakeepId = res.id;
+              await this.syncTags(c, res.id, bookmark.tags);
+            }
+          }
+          return updated;
+        },
+        async syncDelete(c, bookmark) {
+          if (bookmark._karakeepId) {
+            await request('DELETE', `${c.karakeepUrl}/api/v1/bookmarks/${bookmark._karakeepId}`, this.headers(c));
+          }
+        },
+        async pull(c, localItems) {
+          let modified = false;
+          let cursor = null;
+          for (let page = 0; page < 10; page++) {
+            const qs = cursor ? `?limit=100&cursor=${encodeURIComponent(cursor)}` : '?limit=100';
+            const res = await request('GET', `${c.karakeepUrl}/api/v1/bookmarks${qs}`, this.headers(c));
+            for (const rb of (res?.bookmarks || [])) {
+              const content = rb.content || {};
+              if (content.type !== 'link' && content.type !== 'text') continue;
+              const isLink = content.type === 'link';
+              const tags = (rb.tags || []).map((t) => (t.name || '').toLowerCase()).filter(Boolean);
+              const existing = localItems.find((b) =>
+                b._karakeepId === rb.id ||
+                (isLink && content.url && b.url === content.url) ||
+                (!isLink && content.text && b.payload === content.text)
+              );
+              if (!existing) {
+                const rawPayload = isLink ? content.url : (content.text || '');
+                if (!rawPayload) continue;
+                BookmarksState.save({
+                  type: isLink ? 'link' : 'text',
+                  url: isLink ? content.url : null,
+                  payload: rawPayload,
+                  title: rb.title || content.title || (isLink ? content.url : rawPayload.slice(0, 60)),
+                  notes: rb.note || '',
+                  tags,
+                  _karakeepId: rb.id
+                }, true);
+                modified = true;
+              } else if (!existing._karakeepId) {
+                existing._karakeepId = rb.id;
+                if (saveRemoteId(existing.id, { _karakeepId: rb.id })) modified = true;
+              }
+            }
+            cursor = res?.nextCursor || null;
+            if (!cursor) break;
+          }
+          return modified;
+        }
+      };
+
+      const legacy = {
+        async syncUp(c, bookmark, bType) {
+          let updated = { ...bookmark };
+          if (bType === 'link' && c.linkdingUrl && c.linkdingToken) {
+            const headers = { 'Authorization': `Token ${c.linkdingToken}`, 'Content-Type': 'application/json' };
+            const payload = { url: bookmark.url, title: bookmark.title || '', description: bookmark.notes || '', tag_names: bookmark.tags || [] };
+            if (bookmark._linkdingId) {
+              await request('PUT', `${c.linkdingUrl}/api/bookmarks/${bookmark._linkdingId}/`, headers, payload);
+            } else {
+              const res = await request('POST', `${c.linkdingUrl}/api/bookmarks/`, headers, payload);
+              if (res?.id) updated._linkdingId = res.id;
+            }
+          } else if (bType === 'text' && c.memosUrl && c.memosToken) {
+            const headers = { 'Authorization': `Bearer ${c.memosToken}`, 'Content-Type': 'application/json' };
+            const tagStr = (bookmark.tags || []).map((t) => `#${t}`).join(' ');
+            const titleStr = bookmark.title && bookmark.title !== bookmark.payload ? `**${bookmark.title}**\n\n` : '';
+            const notesStr = bookmark.notes ? `\n\n_${bookmark.notes}_` : '';
+            const content = `${titleStr}${bookmark.payload}${notesStr}\n\n${tagStr}`.trim();
+            if (bookmark._memosId) {
+              await request('PATCH', `${c.memosUrl}/api/v1/memos/${bookmark._memosId}`, headers, { content });
+            } else {
+              const res = await request('POST', `${c.memosUrl}/api/v1/memos`, headers, { content });
+              const id = res?.id || (res?.name ? res.name.split('/').pop() : null);
+              if (id) updated._memosId = id;
+            }
+          }
+          return updated;
+        },
+        async syncDelete(c, bookmark) {
+          if (bookmark._linkdingId && c.linkdingUrl && c.linkdingToken) {
+            await request('DELETE', `${c.linkdingUrl}/api/bookmarks/${bookmark._linkdingId}/`, { 'Authorization': `Token ${c.linkdingToken}` });
+          }
+          if (bookmark._memosId && c.memosUrl && c.memosToken) {
+            await request('DELETE', `${c.memosUrl}/api/v1/memos/${bookmark._memosId}`, { 'Authorization': `Bearer ${c.memosToken}` });
+          }
+        },
+        async pull(c, localItems) {
+          let modified = false;
+          if (c.linkdingUrl && c.linkdingToken) {
+            const res = await request('GET', `${c.linkdingUrl}/api/bookmarks/?limit=500`, { 'Authorization': `Token ${c.linkdingToken}` });
+            for (const rl of (res?.results || [])) {
+              const existing = localItems.find((b) => b._linkdingId === rl.id || b.url === rl.url);
+              if (!existing) {
+                BookmarksState.save({ type: 'link', url: rl.url, payload: rl.url, title: rl.title || rl.url, notes: rl.description, tags: rl.tag_names || [], _linkdingId: rl.id }, true);
+                modified = true;
+              } else if (!existing._linkdingId) {
+                existing._linkdingId = rl.id;
+                if (saveRemoteId(existing.id, { _linkdingId: rl.id })) modified = true;
+              }
+            }
+          }
+          if (c.memosUrl && c.memosToken) {
+            const res = await request('GET', `${c.memosUrl}/api/v1/memos?limit=500`, { 'Authorization': `Bearer ${c.memosToken}` });
+            for (const rm of (Array.isArray(res) ? res : (res?.memos || []))) {
+              const id = rm.name ? rm.name.split('/').pop() : rm.id;
+              const existing = localItems.find((b) => b._memosId === id || (b.payload && rm.content?.includes(b.payload)));
+              if (!existing && rm.content) {
+                const extractedTags = [...rm.content.matchAll(/(?:^|\s)#([\w\d-]+)/g)].map((m) => m[1].toLowerCase());
+                BookmarksState.save({ type: 'text', url: null, payload: rm.content.replace(/(?:^|\s)#[\w\d-]+/g, '').trim(), title: 'Imported Memo', tags: extractedTags, _memosId: id }, true);
+                modified = true;
+              } else if (existing && !existing._memosId) {
+                existing._memosId = id;
+                if (saveRemoteId(existing.id, { _memosId: id })) modified = true;
+              }
+            }
+          }
+          return modified;
+        }
+      };
+
       return {
         async syncUp(bookmark) {
           const creds = getCreds();
-          let updated = { ...bookmark };
           const bType = bookmark.type || (bookmark.url ? 'link' : 'text');
-
           try {
-            if (bType === 'link' && creds.linkdingUrl && creds.linkdingToken) {
-              const headers = { 'Authorization': `Token ${creds.linkdingToken}`, 'Content-Type': 'application/json' };
-              const payload = { url: bookmark.url, title: bookmark.title || '', description: bookmark.notes || '', tag_names: bookmark.tags || [] };
-              
-              if (bookmark._linkdingId) {
-                await request('PUT', `${creds.linkdingUrl}/api/bookmarks/${bookmark._linkdingId}/`, headers, payload);
-              } else {
-                const res = await request('POST', `${creds.linkdingUrl}/api/bookmarks/`, headers, payload);
-                const parsed = typeof res === 'string' ? JSON.parse(res) : res;
-                if (parsed?.id) updated._linkdingId = parsed.id;
-              }
-            } else if (bType === 'text' && creds.memosUrl && creds.memosToken) {
-              const headers = { 'Authorization': `Bearer ${creds.memosToken}`, 'Content-Type': 'application/json' };
-              const tagStr = (bookmark.tags || []).map(t => `#${t}`).join(' ');
-              const titleStr = bookmark.title && bookmark.title !== bookmark.payload ? `**${bookmark.title}**\n\n` : '';
-              const notesStr = bookmark.notes ? `\n\n_${bookmark.notes}_` : '';
-              const content = `${titleStr}${bookmark.payload}${notesStr}\n\n${tagStr}`.trim();
-              
-              if (bookmark._memosId) {
-                await request('PATCH', `${creds.memosUrl}/api/v1/memos/${bookmark._memosId}`, headers, { content });
-              } else {
-                const res = await request('POST', `${creds.memosUrl}/api/v1/memos`, headers, { content });
-                const parsed = typeof res === 'string' ? JSON.parse(res) : res;
-                const id = parsed?.id || (parsed?.name ? parsed.name.split('/').pop() : null);
-                if (id) updated._memosId = id;
-              }
-            }
+            return karakeep.isReady(creds)
+              ? await karakeep.syncUp(creds, bookmark, bType)
+              : await legacy.syncUp(creds, bookmark, bType);
           } catch (e) {
             logError('[FluxKit] Bookmark Sync Up Failed:', e);
             throw e;
           }
-          return updated;
         },
 
         async syncDelete(bookmark) {
           const creds = getCreds();
           try {
-            if (bookmark._linkdingId && creds.linkdingUrl && creds.linkdingToken) {
-              await request('DELETE', `${creds.linkdingUrl}/api/bookmarks/${bookmark._linkdingId}/`, { 'Authorization': `Token ${creds.linkdingToken}` });
-            }
-            if (bookmark._memosId && creds.memosUrl && creds.memosToken) {
-              await request('DELETE', `${creds.memosUrl}/api/v1/memos/${bookmark._memosId}`, { 'Authorization': `Bearer ${creds.memosToken}` });
-            }
+            if (karakeep.isReady(creds)) await karakeep.syncDelete(creds, bookmark);
+            else await legacy.syncDelete(creds, bookmark);
           } catch (e) {
             logError('[FluxKit] Bookmark Sync Delete Failed:', e);
             throw e;
@@ -10282,90 +10424,44 @@
 
         async reconcile() {
           const creds = getCreds();
-          if (!creds.memosUrl && !creds.linkdingUrl) return;
+          const useKarakeep = karakeep.isReady(creds);
+          if (!useKarakeep && !creds.memosUrl && !creds.linkdingUrl) return;
 
           const localItems = BookmarksState.getActive();
           let stateModified = false;
 
           try {
-            if (creds.linkdingUrl && creds.linkdingToken) {
-              const res = await request('GET', `${creds.linkdingUrl}/api/bookmarks/?limit=500`, { 'Authorization': `Token ${creds.linkdingToken}` });
-              const remoteLinks = res.results || [];
-              
-              for (const rl of remoteLinks) {
-                const existing = localItems.find(b => b._linkdingId === rl.id || b.url === rl.url);
-                if (!existing) {
-                  BookmarksState.save({ type: 'link', url: rl.url, payload: rl.url, title: rl.title || rl.url, notes: rl.description, tags: rl.tag_names || [], _linkdingId: rl.id }, true);
-                  stateModified = true;
-                } else if (!existing._linkdingId) {
-                  existing._linkdingId = rl.id;
-                  const all = BookmarksState.getAll();
-                  if (all[existing.id]) {
-                    all[existing.id]._linkdingId = rl.id;
-                    FluxHubState.set(STATE_KEYS.BOOKMARKS, all);
-                    stateModified = true;
-                  }
-                }
-              }
-            }
-
-            if (creds.memosUrl && creds.memosToken) {
-              const res = await request('GET', `${creds.memosUrl}/api/v1/memos?limit=500`, { 'Authorization': `Bearer ${creds.memosToken}` });
-              const remoteMemos = Array.isArray(res) ? res : (res.memos || []);
-              
-              for (const rm of remoteMemos) {
-                const id = rm.name ? rm.name.split('/').pop() : rm.id;
-                const existing = localItems.find(b => b._memosId === id || (b.payload && rm.content?.includes(b.payload)));
-                if (!existing && rm.content) {
-                  const contentStr = rm.content;
-                  const extractedTags = [...contentStr.matchAll(/(?:^|\s)#([\w\d-]+)/g)].map(m => m[1].toLowerCase());
-                  BookmarksState.save({ type: 'text', url: null, payload: contentStr.replace(/(?:^|\s)#[\w\d-]+/g, '').trim(), title: 'Imported Memo', tags: extractedTags, _memosId: id }, true);
-                  stateModified = true;
-                } else if (existing && !existing._memosId) {
-                  existing._memosId = id;
-                  const all = BookmarksState.getAll();
-                  if (all[existing.id]) {
-                    all[existing.id]._memosId = id;
-                    FluxHubState.set(STATE_KEYS.BOOKMARKS, all);
-                    stateModified = true;
-                  }
-                }
-              }
-            }
+            stateModified = useKarakeep
+              ? await karakeep.pull(creds, localItems)
+              : await legacy.pull(creds, localItems);
           } catch (e) {
             logError('[FluxKit] Bookmark Pull Reconciliation Failed:', e);
           }
 
           if (stateModified && FluxKit.sync?.auto) AutoSync.notifyLocalChange();
 
-          const updatedLocalItems = BookmarksState.getActive();
-          const needsPush = updatedLocalItems.filter(b => {
+          const needsPush = BookmarksState.getActive().filter((b) => {
+            if (useKarakeep) return !b._karakeepId;
             const bType = b.type || (b.url ? 'link' : 'text');
-            return (bType === 'link' && !b._linkdingId && creds.linkdingUrl) || 
+            return (bType === 'link' && !b._linkdingId && creds.linkdingUrl) ||
                    (bType === 'text' && !b._memosId && creds.memosUrl);
           });
 
           if (needsPush.length === 0) return;
 
-          logMessage(`[FluxKit] Reconciler queueing ${needsPush.length} bookmarks for homelab backfill...`);
-          
-          for (let i = 0; i < needsPush.length; i++) {
-            const b = needsPush[i];
+          logMessage(`[FluxKit] Reconciler queueing ${needsPush.length} bookmarks for backfill...`);
+          for (const b of needsPush) {
             try {
               const updated = await this.syncUp(b);
-              if (updated._linkdingId || updated._memosId) {
-                const all = BookmarksState.getAll();
-                if (all[b.id]) {
-                    all[b.id] = { ...all[b.id], ...updated, updatedAt: Date.now() };
-                    FluxHubState.set(STATE_KEYS.BOOKMARKS, all);
-                }
+              if (updated._karakeepId || updated._linkdingId || updated._memosId) {
+                saveRemoteId(b.id, { ...updated, updatedAt: Date.now() });
               }
             } catch (e) {
               logWarning(`[FluxKit] Backfill failed for bookmark ${b.id}`, e);
             }
-            await new Promise(r => setTimeout(r, 400));
+            await new Promise((r) => setTimeout(r, 400));
           }
-          
+
           if (FluxKit.sync?.auto) AutoSync.notifyLocalChange();
         }
       };

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FluxKit Core
 // @namespace    https://github.com/JYashu
-// @version      1.3.1
+// @version      1.3.2
 // @description  A high-performance UI toolkit.
 // @author       JYashu
 // @license      Apache-2.0
@@ -86,6 +86,7 @@
   FluxKit.ui.icons ??= {
     ban: `<svg ${ICON}><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM4.93 4.93l14.14 14.14" /></svg>`,
     bell: `<svg ${ICON}><path d="M 12 4 A 4 4 0 0 0 8 8 C 8 13 4 14 4 16 A 1 1 0 0 0 5 17 H 19 A 1 1 0 0 0 20 16 C 20 14 16 13 16 8 M 15 5 v .01 M 10 17 A 2 2 0 0 0 14 17"/></svg>`,
+    bike: `<svg ${ICON}><path stroke-width="2" d="M 8 17 A 3 3 0 1 0 2 17 A 3 3 0 1 0 8 17 M 22 17 A 3 3 0 1 0 16 17 A 3 3 0 1 0 22 17 M 13.5 5 H 15.5 L 19 17"/><path stroke-width="1.5" d="M 2.5 13 A 4.5 4.5 0 0 1 8.5 11.5 H 16 M 10 11.5 Q 12 7.5 16 8.5 M 8 16.5 H 13.5 L 16 9.5 M 17 8.5 H 18.5"/></svg>`,
     bold: `<svg ${ICON}><path d="M 9 4 H 12 A 4 4 0 0 1 12 12 H 6 V 8 M 6 12 V 20 H 14 A 4 4 0 0 0 14 12 H 12" /></svg>`,
     book: `<svg ${ICON}><path d="M 12 7 V 20.5 M 6 18.5 A 1.5 1.5 0 0 1 4.5 17 V 6.5 A 1.5 1.5 0 0 1 6 5 L 12 7 M 12 20.5 L 18 18.5 A 1.5 1.5 0 0 0 19.5 17 V 6.5 A 1.5 1.5 0 0 0 18 5 L 12 7" /></svg>`,
     bookmark: `<svg ${ICON}><path d="M 18 17 V 5 A 2 2 0 0 0 16 3 H 8 A 2 2 0 0 0 6 5 V 21 L 12 16 L 18 21" /></svg>`,
@@ -93,6 +94,7 @@
     calendar: `<svg ${ICON}><path d="M 20 15 V 5 A 2 2 0 0 0 18 3 M 14 3 H 10 M 6 3 A 2 2 0 0 0 4 5 V 19 A 2 2 0 0 0 6 21 H 14 M 16 1 V 4 M 8 1 V 4 M 4 8 H 20 M 8 13 v .01 M 12 13 v .01 M 16 13 v .01 M 8 16.5 v .01 M 12 16.5 v .01 M 16 16.5 v .01"/></svg>`,
     calendarDay: `<svg ${ICON}><path d="M 20 15 V 5 A 2 2 0 0 0 18 3 M 14 3 H 10 M 6 3 A 2 2 0 0 0 4 5 V 19 A 2 2 0 0 0 6 21 H 14 M 16 1 V 4 M 8 1 V 4 M 4 8 H 20 M 10.5 13.5 L 12 12 V 17 M 10 17 H 14"/></svg>`,
     camera: `<svg ${ICON}><circle cx="12" cy="11.5" r="6"/><path d="M 17 7 H 20 A 2 2 0 0 1 22 9 V 18 A 2 2 0 0 1 20 20 H 4 A 2 2 0 0 1 2 18 V 9 A 2 2 0 0 1 4 7 H 7 M 3.5 4.5 H 5.5"/></svg>`,
+    car: `<svg ${ICON}><path d="M 5 11 L 6.5 6.5 Q 7 5 8.5 5 H 15.5 Q 17 5 17.5 6.5 L 19 11 M 5 11 H 19 A 2 2 0 0 1 21 13 V 19 A 1 1 0 0 1 20 20 H 18 A 1 1 0 0 1 17 19 V 17 H 7 V 19 A 1 1 0 0 1 6 20 H 4 A 1 1 0 0 1 3 19 V 13 A 2 2 0 0 1 5 11 Z M 6.5 14 H 8 M 16 14 H 17.5"/></svg>`,
     checkSquare: `<svg ${ICON}><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11M9 11l3 3 10-10" /></svg>`,
     chevronDown: `<svg ${ICON}><path d="M 6 9 L 12 15 L 18 9"/></svg>`,
     chevronLeft: `<svg ${ICON}><path d="M 15 18 L 9 12 L 15 6"/></svg>`,
@@ -118,6 +120,7 @@
     externalLink: `<svg ${ICON}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" /></svg>`,
     fileAdd: `<svg ${ICON}><path d="M 14 3 H 7 A 2 2 0 0 0 5 5 V 19 A 2 2 0 0 0 7 21 H 11 M 14 3 L 19 8 V 13 M 14 3 V 7 A 1 1 0 0 0 15 8 H 19 M 13 18 H 19 M 16 15 V 21" /></svg>`,
     fileDelete: `<svg ${ICON}><path d="M 14 3 H 7 A 2 2 0 0 0 5 5 V 19 A 2 2 0 0 0 7 21 H 10 M 14 3 L 19 8 V 12 M 14 3 V 7 A 1 1 0 0 0 15 8 H 19 M 13.5 15.5 L 18.5 20.5 M 18.5 15.5 L 13.5 20.5" /></svg>`,
+    flame: `<svg ${ICON}><path stroke-width="2" d="M 11 3 C 11 6.5 5 9.5 5 14 A 7 7 0 0 0 19 14 Q 19 10 17 7 Q 15.5 9.2 14 9.2 Q 14.5 6 11 3 Z"/><path stroke-width="1.5" d="M 14.5 14.5 A 2.5 2.5 0 0 1 9.5 14.5 Q 9.5 12 11 10.5"/></svg>`,
     focus: `<svg ${ICON}><circle cx="12" cy="12" r="3"></circle><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path></svg>`,
     folder: `<svg ${ICON}><path d="M 5 4 H 8 L 11 7 H 19 A 2 2 0 0 1 21 9 V 18 A 2 2 0 0 1 19 20 H 5 A 2 2 0 0 1 3 18 V 6 A 2 2 0 0 1 5 4 Z"/></svg>`,
     google: `<svg ${ICON}><path d="M 17 6 A 8 8 0 1 0 20 12 H 12"/></svg>`,
@@ -127,6 +130,7 @@
     heart: `<svg ${ICON}><path d="M 12 21 C 7 18 2 14 2 7 A 5 5 0 0 1 12 7 A 5 5 0 0 1 22 7 C 22 14 17 18 12 21 Z"/></svg>`,
     heartFilled: `<svg ${ICON}><path fill="currentColor" d="M 12 21 C 7 18 2 14 2 7 A 5 5 0 0 1 12 7 A 5 5 0 0 1 22 7 C 22 14 17 18 12 21 Z"/></svg>`,
     history: `<svg ${ICON}><path d="M 2 9 L 4 12 L 7 10 M 12 20 A 8 8 0 1 0 4 12 M 12 8 V 12 L 15 15"/></svg>`,
+    home: `<svg ${ICON}><path stroke-width="2.5" d="M 2 12 L 12 3 L 22 12"/><path stroke-width="1.5" d="M 5 13.5 V 19 A 2 2 0 0 0 7 21 H 17 A 2 2 0 0 0 19 19 V 13.5 M 9.5 21 V 14 A 1 1 0 0 1 10.5 13 H 13.5 A 1 1 0 0 1 14.5 14 V 21"/></svg>`,
     hourglass: `<svg ${ICON}><path d="M5 22h14 M5 2h14 M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22 M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2" /><path d="M 12 15 L 8 17 V 21 H 16 V 17 Z" fill="currentColor" fill-opacity="0.6" stroke="none" /></svg>`,
     hourglassSpin: `
       <svg ${ICON}>
@@ -142,6 +146,7 @@
     info: `<svg ${ICON}><path d="M12 12v3a1 1 0 0 0 1 1M12 8v.01M17 3.34A10 10 0 1 1 7 3.34" /></svg>`,
     italic: `<svg ${ICON}><path d="M19 4h-9m5 0-6 16m5 0H5" /></svg>`,
     json: `<svg ${ICON}><path d="M 7 4 Q 5 4 5 7 Q 5 11 2 12 Q 5 13 5 17 Q 5 20 7 20 M 17 4 Q 19 4 19 7 Q 19 11 22 12 Q 19 13 19 17 Q 19 20 17 20 M 9 8 H 15 M 9 12 H 13 M 9 16 H 16"/></svg>`,
+    landmark: `<svg ${ICON}><path d="M 4 10 V 7 L 12 3 L 20 7 V 10 Z M 12 6.8 v .01 M 6 10 V 17 M 10 10 V 17 M 14 10 V 17 M 18 10 V 17 M 4 17 H 20 L 21 21 H 3 Z"/></svg>`,
     line: `<svg ${ICON}><path d="M5 19L19 5" /></svg>`,
     link: `<svg ${ICON}><path d="M 10 13 a 5 5 0 0 0 7.54 .54 l 3 -3 a 5 5 0 0 0 -7.07 -7.07 l -1.72 1.71 m 2.25 4.82 a 5 5 0 0 0 -7.54 -.54 l -3 3 a 5 5 0 0 0 7.07 7.07 l 1.71 -1.71" /></svg>`,
     listOl: `<svg ${ICON}><path d="M10 6h11M10 12h11M10 18h11M4 6h1v4M4 10h2M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" /></svg>`,
@@ -161,6 +166,7 @@
     palette: `<svg ${ICON}><path d="M 20 12 A 8 8 0 0 0 4 12 C 4 21 11 21 15 18 C 13 15 20 16 20 12 Z M 7 12 v .01 M 8.5 8.5 v .01 M 12 7 v .01 M 15.5 8.5 v .01 M 17 12 v .01"/></svg>`,
     paperclip: `<svg ${ICON}><path d="M 10 17 L 17 10 A 3.5 3.5 0 0 0 12 5 L 5 12 A 5.5 5.5 0 0 0 12.8 19.8 L 19.5 13" /></svg>`,
     pause: `<svg ${ICON}><path d="M 9 6 V 18 M 15 6 V 18"/></svg>`,
+    pieChart: `<svg ${ICON}><path d="M 21.21 15.89 A 10 10 0 1 1 8 2.83" /><path d="M 22 12 A 10 10 0 0 0 12 2 V 12 Z" /></svg>`,
     pin: `<svg ${ICON}><path d="M 12 21 V 17 M 10 15 H 8 V 13 A 2 2 0 0 1 10 11 L 9 7 A 3 3 0 0 1 15 7 L 14 11 A 2 2 0 0 1 16 13 V 15 H 14" /></svg>`,
     pinned: `<svg ${ICON}><path fill="currentColor" d="M 12 21 V 17 M 10 15 H 8 V 13 A 2 2 0 0 1 10 11 L 9 7 A 3 3 0 0 1 15 7 L 14 11 A 2 2 0 0 1 16 13 V 15 H 14" /></svg>`,
     play: `<svg ${ICON}><path d="M 8 6 V 18 L 18 12 Z"/></svg>`,
@@ -169,6 +175,7 @@
     plus: `<svg ${ICON}><path d="M12 5v14M5 12h14" /></svg>`,
     pointer: `<svg ${ICON}><path d="M 4 4 L 10.5 20.5 L 13 13 L 20.5 10.5 Z" /></svg>`,
     pomodoro: `<svg ${ICON}><path d="M 9.5 5.4 A 8 8 0 1 0 19 9.1 M 12 2 V 5 Q 17 2 19 6 Q 16 9 12 5 M 12 13 L 9 16"/></svg>`,
+    power: `<svg ${ICON}><path d="M 18.36 6.64 A 9 9 0 1 1 5.64 6.64 M 12 2 V 12" /></svg>`,
     prev: `<svg ${ICON}><path d="M 17 7 V 17 L 9 12 Z M 6 7 V 17"/></svg>`,
     preview: `<svg ${ICON}><path d="M 4 14.3 A 12 12 0 0 1 2 12 A 12 12 0 0 1 17 7.7 M 20 9.7 A 12 12 0 0 1 22 12 A 12 12 0 0 1 7 16.3 M 14 10.5 A 2.5 2.5 0 1 1 10 10.5" /></svg>`,
     question: `<svg ${ICON}><path d="M 17 3.34 A 10 10 0 1 1 7 3.34 M 12 17 V 17.01 M 9 9 A 3 3 0 0 1 15 9 C 15 11.5 12 11.5 12 14" /></svg>`,
@@ -207,6 +214,7 @@
     unit: `<svg ${ICON}><path d="M 4 10 V 6 A 2 2 0 0 1 6 4 H 18 A 2 2 0 0 1 20 6 V 10 M 8 4 V 7 M 12 4 V 6 M 16 4 V 7 M 4 16 H 20 M 17 13 L 20 16 L 17 19"/></svg>`,
     user: `<svg ${ICON}><path d="M 12 11 A 4 4 0 1 0 12 3 A 4 4 0 0 0 12 11 Z M 4 21 V 17 C 4 14 8 14 12 14 C 16 14 20 14 20 17 V 21"/></svg>`,
     video: `<svg ${ICON}><path d="M 5 6 H 19 A 2 2 0 0 1 21 8 V 16 A 2 2 0 0 1 19 18 H 5 A 2 2 0 0 1 3 16 V 8 A 2 2 0 0 1 5 6 Z M 10.5 9.5 V 14.5 L 14.5 12 Z"/></svg>`,
+    wallet: `<svg ${ICON}><path d="M 20 9 V 8 A 3 3 0 0 0 17 5 H 7 A 4 4 0 0 0 3 9 V 15 A 4 4 0 0 0 7 19 H 17 A 3 3 0 0 0 20 16 V 15 M 17 9 H 20 A 1 1 0 0 1 21 10 V 14 A 1 1 0 0 1 20 15 H 17 A 3 3 0 0 1 17 9 Z M 17 12 v .01 M 7 9 V 15"/></svg>`,
     warning: `<svg ${ICON}><path d="M12 9v4m0 4v.01M10.27 3.51a2 2 0 0 1 3.46 0l8 14A2 2 0 0 1 20 21H4a2 2 0 0 1-1.73-3Z" /></svg>`,
     wikipedia: `<svg ${ICON}><path d="M 2 6 L 8 18 L 14 6 M 10 6 L 16 18 L 22 6"/></svg>`,
     windowMinimize: `<svg ${ICON}><line x1="4" y1="12" x2="20" y2="12"></line></svg>`,
